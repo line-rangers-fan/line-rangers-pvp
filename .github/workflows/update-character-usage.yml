@@ -26,7 +26,7 @@ concurrency:
 jobs:
   scrape-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     environment:
       name: github-pages
@@ -48,8 +48,8 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Install Chromium
-        run: python -m playwright install chromium
+      - name: Install Chromium with dependencies
+        run: playwright install --with-deps chromium
 
       - name: Run scraper
         env:
