@@ -744,3 +744,160 @@ function detectLanguage() {
 
   return "en";
 }
+
+function renderSummary() {
+  if (!state.data) return;
+
+  elements.league.textContent = translateLeague(state.data.league);
+  elements.players.textContent = formatUnit(state.data.sampled_players, "players");
+  elements.slots.textContent = formatUnit(state.data.character_slots, "occurrence");
+  elements.characters.textContent = formatUnit(state.data.unique_characters, "characters");
+  elements.updated.textContent = formatDate(state.data.updated_at);
+}
+
+function renderTable() {
+  if (!elements.body) return;
+
+  elements.body.innerHTML = "";
+
+  if (!state.characters || state.characters.length === 0) {
+    elements.resultCount.textContent = t("noData");
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  state.characters.forEach((char, index) => {
+    const tr = document.createElement("tr");
+
+    // 順位
+    const tdRank = document.createElement("td");
+    tdRank.textContent = char.rank || index + 1;
+    tr.appendChild(tdRank);
+
+    // キャラクター画像
+    const tdChar = document.createElement("td");
+    const container = document.createElement("div");
+    container.className = "character-cell";
+
+    const img = document.createElement("img");
+    img.src = char.image || "";
+    img.alt = `${char.rank || index + 1}${t("rankImage")}`;
+    img.width = 40;
+    img.height = 40;
+    img.loading = "lazy";
+    container.appendChild(img);
+
+    tdChar.appendChild(container);
+    tr.appendChild(tdChar);
+
+    // 編成数
+    const tdOccurrence = document.createElement("td");
+    tdOccurrence.textContent = formatUnit(char.occurrence_count, "occurrence");
+    tr.appendChild(tdOccurrence);
+
+    // 採用人数
+    const tdPlayers = document.createElement("td");
+    tdPlayers.textContent = formatUnit(char.player_count, "players");
+    tr.appendChild(tdPlayers);
+
+    // 採用率
+    const tdRate = document.createElement("td");
+    tdRate.textContent = `${Number(char.adoption_rate || 0).toFixed(1)}%`;
+    tr.appendChild(tdRate);
+
+    fragment.appendChild(tr);
+  });
+
+  elements.body.appendChild(fragment);
+  elements.resultCount.textContent = `${state.characters.length} ${t("units").characters || "件"}`;
+}
+
+function downloadCSV() {
+  if (!state.characters || state.characters.length === 0) return;
+
+  const headers = [
+    t("rank"),
+    t("character"),
+    t("occurrence"),
+    t("playerCount"),
+    t("rate"),
+  ];
+
+  const rows = [headers.join(",")];
+
+  state.characters.forEach((char, index) => {
+    const row = [
+      char.rank || index + 1,
+      `"${String(char.name || "").replace(/"/g, '""')}"`,
+      char.occurrence_count || 0,
+      char.player_count || 0,
+      char.adoption_rate || 0,
+    ];
+    rows.push(row.join(","));
+  });
+
+  const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `line_rangers_legend_ranking_${state.language}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function loadData() {
+  try {
+    elements.status.textContent = t("loading");
+    elements.status.hidden = false;
+    elements.summary.hidden = true;
+    elements.rankingSection.hidden = true;
+
+    const response = await fetch(DATA_PATH);
+    if (!response.ok) {
+      throw new Error(t("fetchError"));
+    }
+
+    const data = await response.json();
+    
+    // データ検証
+    if (!data || typeof data !== "object") {
+      throw new Error(t("dataError"));
+    }
+
+    state.data = data;
+    state.characters = Array.isArray(data.characters) ? data.characters : [];
+
+    elements.status.hidden = true;
+    elements.summary.hidden = false;
+    elements.rankingSection.hidden = false;
+
+    applyTranslations();
+  } catch (error) {
+    console.error(error);
+    elements.status.textContent = t("loadError");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const initialLang = detectLanguage();
+  setLanguage(initialLang);
+
+  loadData();
+
+  // 言語切り替えボタンのイベントリスナー
+  document.querySelectorAll("[data-language]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const lang = button.getAttribute("data-language");
+      if (lang) {
+        setLanguage(lang);
+      }
+    });
+  });
+
+  if (elements.csvButton) {
+    elements.csvButton.addEventListener("click", downloadCSV);
+  }
+});
