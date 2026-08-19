@@ -3,13 +3,11 @@ name: scrape-and-deploy
 on:
   workflow_dispatch:
   schedule:
-    # 毎日 UTC 18:00 (JST 3:00) に実行。頻度は用途に合わせて調整してください。
-    - cron: "0 18 * * *"
+    # 10分ごとに実行
+    - cron: "*/10 * * * *"
 
 # ワークフロー全体のデフォルト権限。
 # GitHub Pages の作成・更新には pages:write と id-token:write が必須。
-# これが無い(または contents:read のみ)と
-# "Resource not accessible by integration" で失敗する。
 permissions:
   contents: read
   pages: write
@@ -22,11 +20,7 @@ concurrency:
 jobs:
   scrape-and-deploy:
     runs-on: ubuntu-latest
-    # 公式のPlaywright用Dockerイメージを使うと、Chromium本体と
-    # apt依存ライブラリが最初から入っているため、
-    # 毎回の "playwright install --with-deps" が丸ごと不要になり大幅に高速化する。
-    # イメージのバージョンタグは、下の requirements.txt (playwright==1.57.0) と
-    # 必ず一致させること。ズレるとブラウザ実行ファイルが見つからずエラーになる。
+    # Playwright用Dockerイメージを使用（高速化のため）
     container:
       image: mcr.microsoft.com/playwright/python:v1.57.0-noble
     environment:
@@ -36,18 +30,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # actions/setup-python は使わない。
-      # コンテナ(mcr.microsoft.com/playwright/python)には既にPlaywrightと
-      # バージョンが対応したPythonが入っており、setup-pythonを併用すると
-      # pipでインストールした場所と実行時のpythonが食い違い、
-      # "ModuleNotFoundError: No module named 'playwright'" の原因になる。
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install playwright==1.57.0
-          # ブラウザ本体・システム依存は既にイメージに含まれているため
-          # apt install は不要。Playwright側の内部レジストリだけ更新する。
           playwright install chromium
 
       - name: Run scraper
@@ -56,7 +42,7 @@ jobs:
           MIN_REQUIRED_PLAYERS: "50"
         run: python scripts/scrape_character_usage.py
 
-      # docs/data/character_usage.json が生成されている前提。
+      # docs/data/character_usage.json が生成されている前提
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
