@@ -13,6 +13,39 @@ const LANGUAGES = [
   "ko",
 ];
 
+// 言語ごとの代表タイムゾーン（国旗と対応させています）
+const TIMEZONES = {
+  ja: "Asia/Tokyo",
+  en: "America/New_York",
+  zh: "Asia/Taipei",
+  th: "Asia/Bangkok",
+  id: "Asia/Jakarta",
+  vi: "Asia/Ho_Chi_Minh",
+  ko: "Asia/Seoul",
+};
+
+// 「◯位の画像」の文言は言語ごとに語順が違うため関数で管理
+const RANK_IMAGE_LABEL = {
+  ja: (rank) => `${rank}位のキャラクター画像`,
+  en: (rank) => `Rank ${rank} character image`,
+  zh: (rank) => `第${rank}名角色圖片`,
+  th: (rank) => `รูปตัวละครอันดับที่ ${rank}`,
+  id: (rank) => `Gambar karakter peringkat ${rank}`,
+  vi: (rank) => `Hình ảnh nhân vật hạng ${rank}`,
+  ko: (rank) => `${rank}위 캐릭터 이미지`,
+};
+
+// 件数表示も言語ごとに単位付きの完全な文を関数で組み立てる
+const RESULT_COUNT_LABEL = {
+  ja: (n) => `${n}件`,
+  en: (n) => `${n} characters`,
+  zh: (n) => `${n}項`,
+  th: (n) => `${n} รายการ`,
+  id: (n) => `${n} karakter`,
+  vi: (n) => `${n} nhân vật`,
+  ko: (n) => `${n}건`,
+};
+
 const translations = {
   ja: {
     title: "LINEレンジャー レジェンド帯キャラ集計",
@@ -44,7 +77,7 @@ const translations = {
     method5:
       "採用率は「採用人数 ÷ 集計人数」で計算します。",
     method6:
-      "GitHub Actions의混雑により、更新時刻が遅れる場合があります。",
+      "GitHub Actionsの混雑により、更新時刻が遅れる場合があります。",
     method7:
       "本サイトは非公式サイトであり、ゲーム運営元とは関係ありません。",
     source: "データ出典:",
@@ -66,7 +99,6 @@ const translations = {
     loadError: "集計データの読み込みに失敗しました。",
     notCollected: "未集計",
     unknown: "不明",
-    rankImage: "位のキャラクター画像",
     units: {
       occurrence: "体",
       players: "人",
@@ -128,7 +160,6 @@ const translations = {
     loadError: "Failed to load the statistics.",
     notCollected: "Not collected",
     unknown: "Unknown",
-    rankImage: "character image",
     units: {
       occurrence: "",
       players: "",
@@ -155,26 +186,17 @@ const translations = {
     playerCount: "使用人數",
     rate: "使用率",
     method: "統計方法",
-    method1:
-      "編成數是所有統計玩家防守隊伍中使用的角色總數。",
-    method2:
-      "如果同一玩家使用相同角色多次，每一隻都會分別計算。",
-    method3:
-      "使用人數是至少使用該角色一次的玩家人數。",
-    method4:
-      "即使同一玩家使用相同角色多次，使用人數仍只計算1人。",
-    method5:
-      "使用率 = 使用人數 ÷ 統計人數。",
-    method6:
-      "GitHub Actions 繁忙時，更新時間可能會延遲。",
-    method7:
-      "本網站為非官方粉絲製作，與遊戲營運商沒有關係。",
+    method1: "編成數是所有統計玩家防守隊伍中使用的角色總數。",
+    method2: "如果同一玩家使用相同角色多次，每一隻都會分別計算。",
+    method3: "使用人數是至少使用該角色一次的玩家人數。",
+    method4: "即使同一玩家使用相同角色多次，使用人數仍只計算1人。",
+    method5: "使用率 = 使用人數 ÷ 統計人數。",
+    method6: "GitHub Actions 繁忙時，更新時間可能會延遲。",
+    method7: "本網站為非官方粉絲製作，與遊戲營運商沒有關係。",
     source: "資料來源：",
     footer: "非官方・粉絲製作的統計頁面",
-    noData:
-      "目前還沒有統計資料。請執行 GitHub Actions。",
-    stale:
-      "距離最後更新已超過2天，統計程序可能已停止。",
+    noData: "目前還沒有統計資料。請執行 GitHub Actions。",
+    stale: "距離最後更新已超過2天，統計程序可能已停止。",
     dataError: "統計資料格式不正確。",
     charactersMissing: "找不到角色列表。",
     playersInvalid: "統計人數不正確。",
@@ -182,15 +204,12 @@ const translations = {
     imageInvalid: "角色圖片不正確。",
     occurrenceInvalid: "編成數不正確。",
     playerCountInvalid: "使用人數不正確。",
-    playerCountTooHigh:
-      "使用人數超過統計人數。",
-    occurrenceTooLow:
-      "編成數少於使用人數。",
+    playerCountTooHigh: "使用人數超過統計人數。",
+    occurrenceTooLow: "編成數少於使用人數。",
     fetchError: "無法取得統計資料。",
     loadError: "統計資料載入失敗。",
     notCollected: "尚未統計",
     unknown: "未知",
-    rankImage: "名角色圖片",
     units: {
       occurrence: "體",
       players: "人",
@@ -209,8 +228,7 @@ const translations = {
     characters: "จำนวนประเภทตัวละคร",
     updated: "อัปเดตล่าสุด",
     ranking: "อันดับตัวละคร",
-    rankingDescription:
-      "เรียงตามจำนวนการจัดทีมจากมากไปน้อย",
+    rankingDescription: "เรียงตามจำนวนการจัดทีมจากมากไปน้อย",
     csv: "ดาวน์โหลด CSV",
     rank: "อันดับ",
     character: "ตัวละคร",
@@ -226,16 +244,13 @@ const translations = {
       "จำนวนผู้ใช้คือจำนวนผู้เล่นที่ใช้ตัวละครนั้นอย่างน้อย 1 ตัว",
     method4:
       "แม้ผู้เล่นคนเดียวจะใช้ตัวละครเดียวกันหลายตัว จะนับเป็นผู้เล่นเพียง 1 คน",
-    method5:
-      "อัตราการใช้งาน = จำนวนผู้ใช้ ÷ จำนวนผู้เล่นที่รวบรวม",
-    method6:
-      "การทำงานที่หนาแน่นของ GitHub Actions อาจทำให้เวลาอัปเดตล่าช้า",
+    method5: "อัตราการใช้งาน = จำนวนผู้ใช้ ÷ จำนวนผู้เล่นที่รวบรวม",
+    method6: "การทำงานที่หนาแน่นของ GitHub Actions อาจทำให้เวลาอัปเดตล่าช้า",
     method7:
       "เว็บไซต์นี้เป็นเว็บไซต์แฟนเมดอย่างไม่เป็นทางการและไม่มีความเกี่ยวข้องกับผู้ให้บริการเกม",
     source: "แหล่งข้อมูล:",
     footer: "หน้าสถิติที่สร้างโดยแฟนคลับอย่างไม่เป็นทางการ",
-    noData:
-      "ยังไม่มีข้อมูลสถิติ กรุณาเรียกใช้ GitHub Actions",
+    noData: "ยังไม่มีข้อมูลสถิติ กรุณาเรียกใช้ GitHub Actions",
     stale:
       "ผ่านไปมากกว่า 2 วันนับจากการอัปเดตครั้งล่าสุด กระบวนการรวบรวมข้อมูลอาจหยุดทำงาน",
     dataError: "รูปแบบข้อมูลสถิติไม่ถูกต้อง",
@@ -245,15 +260,12 @@ const translations = {
     imageInvalid: "รูปภาพตัวละครไม่ถูกต้อง",
     occurrenceInvalid: "จำนวนการจัดทีมไม่ถูกต้อง",
     playerCountInvalid: "จำนวนผู้ใช้ไม่ถูกต้อง",
-    playerCountTooHigh:
-      "จำนวนผู้ใช้มากกว่าจำนวนผู้เล่นที่รวบรวม",
-    occurrenceTooLow:
-      "จำนวนการจัดทีมต่ำกว่าจำนวนผู้ใช้",
+    playerCountTooHigh: "จำนวนผู้ใช้มากกว่าจำนวนผู้เล่นที่รวบรวม",
+    occurrenceTooLow: "จำนวนการจัดทีมต่ำกว่าจำนวนผู้ใช้",
     fetchError: "ไม่สามารถรับข้อมูลสถิติได้",
     loadError: "ไม่สามารถโหลดข้อมูลสถิติได้",
     notCollected: "ยังไม่ได้รวบรวม",
     unknown: "ไม่ทราบ",
-    rankImage: "รูปตัวละครอันดับ",
     units: {
       occurrence: " ตัว",
       players: " คน",
@@ -272,8 +284,7 @@ const translations = {
     characters: "Jenis Karakter",
     updated: "Terakhir Diperbarui",
     ranking: "Peringkat Karakter",
-    rankingDescription:
-      "Diurutkan berdasarkan jumlah penggunaan.",
+    rankingDescription: "Diurutkan berdasarkan jumlah penggunaan.",
     csv: "Unduh CSV",
     rank: "Peringkat",
     character: "Karakter",
@@ -289,44 +300,31 @@ const translations = {
       "Pemain yang menggunakan adalah jumlah pemain yang menggunakan karakter tersebut setidaknya satu kali.",
     method4:
       "Meskipun satu pemain menggunakan karakter yang sama beberapa kali, pemain tersebut tetap dihitung satu orang.",
-    method5:
-      "Tingkat penggunaan = Pemain yang Menggunakan ÷ Jumlah Pemain.",
+    method5: "Tingkat penggunaan = Pemain yang Menggunakan ÷ Jumlah Pemain.",
     method6:
       "Kepadatan GitHub Actions dapat menyebabkan waktu pembaruan terlambat.",
     method7:
       "Situs ini adalah situs penggemar tidak resmi dan tidak berafiliasi dengan pengelola game.",
     source: "Sumber Data:",
     footer: "Halaman statistik buatan penggemar tidak resmi",
-    noData:
-      "Belum ada data statistik. Silakan jalankan GitHub Actions.",
+    noData: "Belum ada data statistik. Silakan jalankan GitHub Actions.",
     stale:
       "Sudah lebih dari 2 hari sejak pembaruan terakhir. Proses statistik mungkin berhenti.",
     dataError: "Format data statistik tidak valid.",
-    charactersMissing:
-      "Daftar karakter tidak ditemukan.",
+    charactersMissing: "Daftar karakter tidak ditemukan.",
     playersInvalid: "Jumlah pemain tidak valid.",
-    characterInvalid:
-      "Data karakter tidak valid.",
-    imageInvalid:
-      "Gambar karakter tidak valid.",
-    occurrenceInvalid:
-      "Jumlah penggunaan tidak valid.",
-    playerCountInvalid:
-      "Jumlah pemain tidak valid.",
+    characterInvalid: "Data karakter tidak valid.",
+    imageInvalid: "Gambar karakter tidak valid.",
+    occurrenceInvalid: "Jumlah penggunaan tidak valid.",
+    playerCountInvalid: "Jumlah pemain tidak valid.",
     playerCountTooHigh:
       "Jumlah pemain yang menggunakan melebihi jumlah pemain yang dihitung.",
     occurrenceTooLow:
       "Jumlah penggunaan lebih rendah daripada jumlah pemain yang menggunakan.",
-    fetchError:
-      "Tidak dapat mengambil data statistik.",
-    loadError:
-      "Gagal memuat data statistik.",
-    notCollected:
-      "Belum dikumpulkan",
-    unknown:
-      "Tidak diketahui",
-    rankImage:
-      "gambar karakter peringkat",
+    fetchError: "Tidak dapat mengambil data statistik.",
+    loadError: "Gagal memuat data statistik.",
+    notCollected: "Belum dikumpulkan",
+    unknown: "Tidak diketahui",
     units: {
       occurrence: "",
       players: "",
@@ -345,8 +343,7 @@ const translations = {
     characters: "Số loại nhân vật",
     updated: "Cập nhật lần cuối",
     ranking: "Xếp hạng nhân vật",
-    rankingDescription:
-      "Sắp xếp theo số lần xếp đội từ cao xuống thấp.",
+    rankingDescription: "Sắp xếp theo số lần xếp đội từ cao xuống thấp.",
     csv: "Tải CSV",
     rank: "Hạng",
     character: "Nhân vật",
@@ -362,47 +359,28 @@ const translations = {
       "Số người sử dụng là số người chơi sử dụng nhân vật đó ít nhất một lần.",
     method4:
       "Dù một người chơi sử dụng cùng một nhân vật nhiều lần, người chơi đó vẫn chỉ được tính là một người.",
-    method5:
-      "Tỷ lệ sử dụng = Số người sử dụng ÷ Số người được thống kê.",
-    method6:
-      "GitHub Actions quá tải có thể khiến thời gian cập nhật bị chậm.",
+    method5: "Tỷ lệ sử dụng = Số người sử dụng ÷ Số người được thống kê.",
+    method6: "GitHub Actions quá tải có thể khiến thời gian cập nhật bị chậm.",
     method7:
       "Đây là trang do người hâm mộ tạo ra, không chính thức và không liên quan đến nhà vận hành trò chơi.",
     source: "Nguồn dữ liệu:",
-    footer:
-      "Trang thống kê không chính thức do người hâm mộ tạo",
-    noData:
-      "Chưa có dữ liệu thống kê. Vui lòng chạy GitHub Actions.",
+    footer: "Trang thống kê không chính thức do người hâm mộ tạo",
+    noData: "Chưa có dữ liệu thống kê. Vui lòng chạy GitHub Actions.",
     stale:
       "Đã hơn 2 ngày kể từ lần cập nhật cuối. Quá trình thống kê có thể đã dừng.",
-    dataError:
-      "Định dạng dữ liệu thống kê không hợp lệ.",
-    charactersMissing:
-      "Không tìm thấy danh sách nhân vật.",
-    playersInvalid:
-      "Số người được thống kê không hợp lệ.",
-    characterInvalid:
-      "Dữ liệu nhân vật không hợp lệ.",
-    imageInvalid:
-      "Hình ảnh nhân vật không hợp lệ.",
-    occurrenceInvalid:
-      "Số lần xếp đội không hợp lệ.",
-    playerCountInvalid:
-      "Số người sử dụng không hợp lệ.",
-    playerCountTooHigh:
-      "Số người sử dụng vượt quá số người được thống kê.",
-    occurrenceTooLow:
-      "Số lần xếp đội thấp hơn số người sử dụng.",
-    fetchError:
-      "Không thể lấy dữ liệu thống kê.",
-    loadError:
-      "Không thể tải dữ liệu thống kê.",
-    notCollected:
-      "Chưa thống kê",
-    unknown:
-      "Không rõ",
-    rankImage:
-      "hình ảnh nhân vật hạng",
+    dataError: "Định dạng dữ liệu thống kê không hợp lệ.",
+    charactersMissing: "Không tìm thấy danh sách nhân vật.",
+    playersInvalid: "Số người được thống kê không hợp lệ.",
+    characterInvalid: "Dữ liệu nhân vật không hợp lệ.",
+    imageInvalid: "Hình ảnh nhân vật không hợp lệ.",
+    occurrenceInvalid: "Số lần xếp đội không hợp lệ.",
+    playerCountInvalid: "Số người sử dụng không hợp lệ.",
+    playerCountTooHigh: "Số người sử dụng vượt quá số người được thống kê.",
+    occurrenceTooLow: "Số lần xếp đội thấp hơn số người sử dụng.",
+    fetchError: "Không thể lấy dữ liệu thống kê.",
+    loadError: "Không thể tải dữ liệu thống kê.",
+    notCollected: "Chưa thống kê",
+    unknown: "Không rõ",
     units: {
       occurrence: "",
       players: "",
@@ -421,8 +399,7 @@ const translations = {
     characters: "캐릭터 종류 수",
     updated: "최종 업데이트",
     ranking: "캐릭터 순위",
-    rankingDescription:
-      "편성 수가 많은 순서로 표시합니다.",
+    rankingDescription: "편성 수가 많은 순서로 표시합니다.",
     csv: "CSV 다운로드",
     rank: "순위",
     character: "캐릭터",
@@ -434,50 +411,29 @@ const translations = {
       "편성 수는 집계된 모든 플레이어의 방어팀에서 사용된 캐릭터의 총 수입니다.",
     method2:
       "한 플레이어가 같은 캐릭터를 여러 번 사용하면 사용한 개수만큼 각각 계산합니다.",
-    method3:
-      "사용 인원은 해당 캐릭터를 1개 이상 사용한 플레이어 수입니다.",
+    method3: "사용 인원은 해당 캐릭터를 1개 이상 사용한 플레이어 수입니다.",
     method4:
       "한 플레이어가 같은 캐릭터를 여러 개 사용해도 사용 인원에서는 1명으로 계산합니다.",
-    method5:
-      "사용률 = 사용 인원 ÷ 집계 인원",
-    method6:
-      "GitHub Actions가 혼잡할 경우 업데이트 시간이 지연될 수 있습니다.",
-    method7:
-      "이 사이트는 비공식 팬 제작 사이트이며 게임 운영사와 관련이 없습니다.",
+    method5: "사용률 = 사용 인원 ÷ 집계 인원",
+    method6: "GitHub Actions가 혼잡할 경우 업데이트 시간이 지연될 수 있습니다.",
+    method7: "이 사이트는 비공식 팬 제작 사이트이며 게임 운영사와 관련이 없습니다.",
     source: "데이터 출처:",
     footer: "비공식 팬 제작 통계 페이지",
-    noData:
-      "아직 통계 데이터가 없습니다. GitHub Actions를 실행해 주세요.",
-    stale:
-      "마지막 업데이트 후 2일 이상 지났습니다. 통계 처리가 중단되었을 수 있습니다.",
-    dataError:
-      "통계 데이터 형식이 올바르지 않습니다.",
-    charactersMissing:
-      "캐릭터 목록이 없습니다.",
-    playersInvalid:
-      "집계 인원이 올바르지 않습니다.",
-    characterInvalid:
-      "캐릭터 데이터가 올바르지 않습니다.",
-    imageInvalid:
-      "캐릭터 이미지가 올바르지 않습니다.",
-    occurrenceInvalid:
-      "편성 수가 올바르지 않습니다.",
-    playerCountInvalid:
-      "사용 인원이 올바르지 않습니다.",
-    playerCountTooHigh:
-      "사용 인원이 집계 인원을 초과했습니다.",
-    occurrenceTooLow:
-      "편성 수가 사용 인원보다 적습니다.",
-    fetchError:
-      "통계 데이터를 가져올 수 없습니다.",
-    loadError:
-      "통계 데이터를 불러오지 못했습니다.",
-    notCollected:
-      "집계되지 않음",
-    unknown:
-      "알 수 없음",
-    rankImage:
-      "위 캐릭터 이미지",
+    noData: "아직 통계 데이터가 없습니다. GitHub Actions를 실행해 주세요.",
+    stale: "마지막 업데이트 후 2일 이상 지났습니다. 통계 처리가 중단되었을 수 있습니다.",
+    dataError: "통계 데이터 형식이 올바르지 않습니다.",
+    charactersMissing: "캐릭터 목록이 없습니다.",
+    playersInvalid: "집계 인원이 올바르지 않습니다.",
+    characterInvalid: "캐릭터 데이터가 올바르지 않습니다.",
+    imageInvalid: "캐릭터 이미지가 올바르지 않습니다.",
+    occurrenceInvalid: "편성 수가 올바르지 않습니다.",
+    playerCountInvalid: "사용 인원이 올바르지 않습니다.",
+    playerCountTooHigh: "사용 인원이 집계 인원을 초과했습니다.",
+    occurrenceTooLow: "편성 수가 사용 인원보다 적습니다.",
+    fetchError: "통계 데이터를 가져올 수 없습니다.",
+    loadError: "통계 데이터를 불러오지 못했습니다.",
+    notCollected: "집계되지 않음",
+    unknown: "알 수 없음",
     units: {
       occurrence: "개",
       players: "명",
@@ -529,6 +485,7 @@ function formatInteger(value) {
   return new Intl.NumberFormat(getLocale()).format(Number(value) || 0);
 }
 
+// 選択中の言語に応じたタイムゾーンで表示する
 function formatDate(value) {
   if (!value) {
     return t("notCollected");
@@ -543,7 +500,8 @@ function formatDate(value) {
   return new Intl.DateTimeFormat(getLocale(), {
     dateStyle: "medium",
     timeStyle: "short",
-    timeZone: "Asia/Tokyo",
+    timeZone: TIMEZONES[state.language] || "UTC",
+    timeZoneName: "short",
   }).format(date);
 }
 
@@ -576,6 +534,23 @@ function translateLeague(value) {
   }
 
   return league;
+}
+
+// 画像URLのファイル名からラベルを作る（データにキャラクター名が無いため）
+function characterLabel(character) {
+  if (!character || !character.image) {
+    return t("unknown");
+  }
+
+  try {
+    const url = new URL(character.image, window.location.href);
+    const filename = url.pathname.split("/").pop() || "";
+    const base = filename.replace(/\.[a-zA-Z0-9]+$/, "");
+
+    return base || t("unknown");
+  } catch {
+    return t("unknown");
+  }
 }
 
 function applyTranslations() {
@@ -629,6 +604,7 @@ function applyTranslations() {
   if (state.data) {
     renderSummary();
     renderTable();
+    updateStaleWarning();
   }
 }
 
@@ -649,7 +625,7 @@ function setLanguage(language) {
   try {
     localStorage.setItem("line-rangers-language", language);
   } catch {
-    // 
+    //
   }
 
   applyTranslations();
@@ -680,6 +656,36 @@ function detectLanguage() {
   return "en";
 }
 
+// updated_at から2日以上経過しているかチェックし、警告バナーの表示を切り替える
+function updateStaleWarning() {
+  if (!elements.summary) return;
+
+  let banner = document.querySelector("#stale-warning");
+  const updatedAt = state.data?.updated_at;
+  const updatedTime = updatedAt ? new Date(updatedAt).getTime() : NaN;
+  const isStale =
+    !Number.isNaN(updatedTime) &&
+    Date.now() - updatedTime > 1000 * 60 * 60 * 48;
+
+  if (!isStale) {
+    if (banner) {
+      banner.hidden = true;
+    }
+    return;
+  }
+
+  if (!banner) {
+    banner = document.createElement("p");
+    banner.id = "stale-warning";
+    banner.className = "message message-warning";
+    banner.setAttribute("role", "status");
+    elements.summary.insertAdjacentElement("beforebegin", banner);
+  }
+
+  banner.textContent = t("stale");
+  banner.hidden = false;
+}
+
 function renderSummary() {
   if (!state.data) return;
 
@@ -701,26 +707,26 @@ function renderTable() {
   }
 
   const fragment = document.createDocumentFragment();
-  const maxOccurrence = state.characters[0]?.occurrence_count || 1;
+  const barsToAnimate = [];
 
   state.characters.forEach((char, index) => {
     const tr = document.createElement("tr");
     const rank = char.rank || index + 1;
 
-    // 順位セル（CSSの .rank-cell や data-rank を活用）
+    // 順位セル
     const tdRank = document.createElement("td");
     tdRank.className = "rank-cell";
     tdRank.setAttribute("data-rank", rank);
     tdRank.textContent = rank;
     tr.appendChild(tdRank);
 
-    // キャラクターセル（CSSの .character-cell と .character-image を活用して枠を復活！）
+    // キャラクターセル
     const tdChar = document.createElement("td");
     tdChar.className = "character-cell";
 
     const img = document.createElement("img");
     img.src = char.image || "";
-    img.alt = `${rank}${t("rankImage")}`;
+    img.alt = RANK_IMAGE_LABEL[state.language](rank);
     img.className = "character-image";
     img.loading = "lazy";
     tdChar.appendChild(img);
@@ -736,10 +742,9 @@ function renderTable() {
     const tdPlayers = document.createElement("td");
     tdPlayers.className = "number-cell";
     tdPlayers.textContent = formatUnit(char.player_count, "players");
-    tr.api ? null : (tdPlayers.className = "number-cell");
     tr.appendChild(tdPlayers);
 
-    // 採用率（プログレスバー付きのデザインを復元）
+    // 採用率（プログレスバー）
     const tdRate = document.createElement("td");
     tdRate.className = "rate-cell";
 
@@ -758,7 +763,8 @@ function renderTable() {
 
     const bar = document.createElement("span");
     bar.className = "rate-bar";
-    bar.style.width = `${Math.min(Math.max(rateValue, 0), 100)}%`;
+    // 最初は0%にしておき、後でアニメーションさせる
+    bar.style.width = "0%";
 
     track.appendChild(bar);
     rateContainer.appendChild(spanVal);
@@ -766,11 +772,27 @@ function renderTable() {
     tdRate.appendChild(rateContainer);
     tr.appendChild(tdRate);
 
+    barsToAnimate.push({
+      element: bar,
+      width: Math.min(Math.max(rateValue, 0), 100),
+    });
+
     fragment.appendChild(tr);
   });
 
   elements.body.appendChild(fragment);
-  elements.resultCount.textContent = `${state.characters.length} ${t("units").characters || "件"}`;
+
+  // DOM挿入後に2フレーム待ってから幅を変更すると、CSSのtransitionが効く
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      barsToAnimate.forEach(({ element, width }) => {
+        element.style.width = `${width}%`;
+      });
+    });
+  });
+
+  const label = RESULT_COUNT_LABEL[state.language] || RESULT_COUNT_LABEL.en;
+  elements.resultCount.textContent = label(formatInteger(state.characters.length));
 }
 
 function downloadCSV() {
@@ -789,7 +811,7 @@ function downloadCSV() {
   state.characters.forEach((char, index) => {
     const row = [
       char.rank || index + 1,
-      `"${String(char.name || "").replace(/"/g, '""')}"`,
+      `"${characterLabel(char).replace(/"/g, '""')}"`,
       char.occurrence_count || 0,
       char.player_count || 0,
       char.adoption_rate || 0,
@@ -808,6 +830,53 @@ function downloadCSV() {
   URL.revokeObjectURL(url);
 }
 
+// データの形が正しいかチェックする。おかしければ具体的なエラーを投げる
+function validateData(data) {
+  if (!data || typeof data !== "object") {
+    throw new Error(t("dataError"));
+  }
+
+  if (!Array.isArray(data.characters)) {
+    throw new Error(t("charactersMissing"));
+  }
+
+  const sampled = Number(data.sampled_players);
+
+  if (!Number.isFinite(sampled) || sampled <= 0) {
+    throw new Error(t("playersInvalid"));
+  }
+
+  data.characters.forEach((char) => {
+    if (!char || typeof char !== "object") {
+      throw new Error(t("characterInvalid"));
+    }
+
+    if (typeof char.image !== "string" || char.image.length === 0) {
+      throw new Error(t("imageInvalid"));
+    }
+
+    const occurrence = Number(char.occurrence_count);
+
+    if (!Number.isFinite(occurrence) || occurrence < 0) {
+      throw new Error(t("occurrenceInvalid"));
+    }
+
+    const players = Number(char.player_count);
+
+    if (!Number.isFinite(players) || players < 0) {
+      throw new Error(t("playerCountInvalid"));
+    }
+
+    if (players > sampled) {
+      throw new Error(t("playerCountTooHigh"));
+    }
+
+    if (occurrence < players) {
+      throw new Error(t("occurrenceTooLow"));
+    }
+  });
+}
+
 async function loadData() {
   try {
     elements.status.textContent = t("loading");
@@ -821,10 +890,8 @@ async function loadData() {
     }
 
     const data = await response.json();
-    
-    if (!data || typeof data !== "object") {
-      throw new Error(t("dataError"));
-    }
+
+    validateData(data);
 
     state.data = data;
     state.characters = Array.isArray(data.characters) ? data.characters : [];
@@ -836,7 +903,15 @@ async function loadData() {
     applyTranslations();
   } catch (error) {
     console.error(error);
-    elements.status.textContent = t("loadError");
+
+    const currentTranslations = translations[state.language];
+    const knownMessages = Object.values(currentTranslations).filter(
+      (value) => typeof value === "string"
+    );
+
+    elements.status.textContent = knownMessages.includes(error?.message)
+      ? error.message
+      : t("loadError");
   }
 }
 
