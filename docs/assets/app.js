@@ -209,7 +209,8 @@ const translations = {
     characters: "จำนวนประเภทตัวละคร",
     updated: "อัปเดตล่าสุด",
     ranking: "อันดับตัวละคร",
-    rankingDescription: "เรียงตามจำนวนการจัดทีมจากมากไปน้อย",
+    rankingDescription:
+      "เรียงตามจำนวนการจัดทีมจากมากไปน้อย",
     csv: "ดาวน์โหลด CSV",
     rank: "อันดับ",
     character: "ตัวละคร",
@@ -271,7 +272,8 @@ const translations = {
     characters: "Jenis Karakter",
     updated: "Terakhir Diperbarui",
     ranking: "Peringkat Karakter",
-    rankingDescription: "Diurutkan berdasarkan jumlah penggunaan.",
+    rankingDescription:
+      "Diurutkan berdasarkan jumlah penggunaan.",
     csv: "Unduh CSV",
     rank: "Peringkat",
     character: "Karakter",
@@ -300,21 +302,31 @@ const translations = {
     stale:
       "Sudah lebih dari 2 hari sejak pembaruan terakhir. Proses statistik mungkin berhenti.",
     dataError: "Format data statistik tidak valid.",
-    charactersMissing: "Daftar karakter tidak ditemukan.",
+    charactersMissing:
+      "Daftar karakter tidak ditemukan.",
     playersInvalid: "Jumlah pemain tidak valid.",
-    characterInvalid: "Data karakter tidak valid.",
-    imageInvalid: "Gambar karakter tidak valid.",
-    occurrenceInvalid: "Jumlah penggunaan tidak valid.",
-    playerCountInvalid: "Jumlah pemain tidak valid.",
+    characterInvalid:
+      "Data karakter tidak valid.",
+    imageInvalid:
+      "Gambar karakter tidak valid.",
+    occurrenceInvalid:
+      "Jumlah penggunaan tidak valid.",
+    playerCountInvalid:
+      "Jumlah pemain tidak valid.",
     playerCountTooHigh:
       "Jumlah pemain yang menggunakan melebihi jumlah pemain yang dihitung.",
     occurrenceTooLow:
       "Jumlah penggunaan lebih rendah daripada jumlah pemain yang menggunakan.",
-    fetchError: "Tidak dapat mengambil data statistik.",
-    loadError: "Gagal memuat data statistik.",
-    notCollected: "Belum dikumpulkan",
-    unknown: "Tidak diketahui",
-    rankImage: "gambar karakter peringkat",
+    fetchError:
+      "Tidak dapat mengambil data statistik.",
+    loadError:
+      "Gagal memuat data statistik.",
+    notCollected:
+      "Belum dikumpulkan",
+    unknown:
+      "Tidak diketahui",
+    rankImage:
+      "gambar karakter peringkat",
     units: {
       occurrence: "",
       players: "",
@@ -333,7 +345,8 @@ const translations = {
     characters: "Số loại nhân vật",
     updated: "Cập nhật lần cuối",
     ranking: "Xếp hạng nhân vật",
-    rankingDescription: "Sắp xếp theo số lần xếp đội từ cao xuống thấp.",
+    rankingDescription:
+      "Sắp xếp theo số lần xếp đội từ cao xuống thấp.",
     csv: "Tải CSV",
     rank: "Hạng",
     character: "Nhân vật",
@@ -356,27 +369,40 @@ const translations = {
     method7:
       "Đây là trang do người hâm mộ tạo ra, không chính thức và không liên quan đến nhà vận hành trò chơi.",
     source: "Nguồn dữ liệu:",
-    footer: "Trang thống kê không chính thức do người hâm mộ tạo",
+    footer:
+      "Trang thống kê không chính thức do người hâm mộ tạo",
     noData:
       "Chưa có dữ liệu thống kê. Vui lòng chạy GitHub Actions.",
     stale:
       "Đã hơn 2 ngày kể từ lần cập nhật cuối. Quá trình thống kê có thể đã dừng.",
-    dataError: "Định dạng dữ liệu thống kê không hợp lệ.",
-    charactersMissing: "Không tìm thấy danh sách nhân vật.",
-    playersInvalid: "Số người được thống kê không hợp lệ.",
-    characterInvalid: "Dữ liệu nhân vật không hợp lệ.",
-    imageInvalid: "Hình ảnh nhân vật không hợp lệ.",
-    occurrenceInvalid: "Số lần xếp đội không hợp lệ.",
-    playerCountInvalid: "Số người sử dụng không hợp lệ.",
+    dataError:
+      "Định dạng dữ liệu thống kê không hợp lệ.",
+    charactersMissing:
+      "Không tìm thấy danh sách nhân vật.",
+    playersInvalid:
+      "Số người được thống kê không hợp lệ.",
+    characterInvalid:
+      "Dữ liệu nhân vật không hợp lệ.",
+    imageInvalid:
+      "Hình ảnh nhân vật không hợp lệ.",
+    occurrenceInvalid:
+      "Số lần xếp đội không hợp lệ.",
+    playerCountInvalid:
+      "Số người sử dụng không hợp lệ.",
     playerCountTooHigh:
       "Số người sử dụng vượt quá số người được thống kê.",
     occurrenceTooLow:
       "Số lần xếp đội thấp hơn số người sử dụng.",
-    fetchError: "Không thể lấy dữ liệu thống kê.",
-    loadError: "Không thể tải dữ liệu thống kê.",
-    notCollected: "Chưa thống kê",
-    unknown: "Không rõ",
-    rankImage: "hình ảnh nhân vật hạng",
+    fetchError:
+      "Không thể lấy dữ liệu thống kê.",
+    loadError:
+      "Không thể tải dữ liệu thống kê.",
+    notCollected:
+      "Chưa thống kê",
+    unknown:
+      "Không rõ",
+    rankImage:
+      "hình ảnh nhân vật hạng",
     units: {
       occurrence: "",
       players: "",
@@ -395,7 +421,8 @@ const translations = {
     characters: "캐릭터 종류 수",
     updated: "최종 업데이트",
     ranking: "캐릭터 순위",
-    rankingDescription: "편성 수가 많은 순서로 표시합니다.",
+    rankingDescription:
+      "편성 수가 많은 순서로 표시합니다.",
     csv: "CSV 다운로드",
     rank: "순위",
     character: "캐릭터",
@@ -423,22 +450,34 @@ const translations = {
       "아직 통계 데이터가 없습니다. GitHub Actions를 실행해 주세요.",
     stale:
       "마지막 업데이트 후 2일 이상 지났습니다. 통계 처리가 중단되었을 수 있습니다.",
-    dataError: "통계 데이터 형식이 올바르지 않습니다.",
-    charactersMissing: "캐릭터 목록이 없습니다.",
-    playersInvalid: "집계 인원이 올바르지 않습니다.",
-    characterInvalid: "캐릭터 데이터가 올바르지 않습니다.",
-    imageInvalid: "캐릭터 이미지가 올바르지 않습니다.",
-    occurrenceInvalid: "편성 수가 올바르지 않습니다.",
-    playerCountInvalid: "사용 인원이 올바르지 않습니다.",
+    dataError:
+      "통계 데이터 형식이 올바르지 않습니다.",
+    charactersMissing:
+      "캐릭터 목록이 없습니다.",
+    playersInvalid:
+      "집계 인원이 올바르지 않습니다.",
+    characterInvalid:
+      "캐릭터 데이터가 올바르지 않습니다.",
+    imageInvalid:
+      "캐릭터 이미지가 올바르지 않습니다.",
+    occurrenceInvalid:
+      "편성 수가 올바르지 않습니다.",
+    playerCountInvalid:
+      "사용 인원이 올바르지 않습니다.",
     playerCountTooHigh:
       "사용 인원이 집계 인원을 초과했습니다.",
     occurrenceTooLow:
       "편성 수가 사용 인원보다 적습니다.",
-    fetchError: "통계 데이터를 가져올 수 없습니다.",
-    loadError: "통계 데이터를 불러오지 못했습니다.",
-    notCollected: "집계되지 않음",
-    unknown: "알 수 없음",
-    rankImage: "위 캐릭터 이미지",
+    fetchError:
+      "통계 데이터를 가져올 수 없습니다.",
+    loadError:
+      "통계 데이터를 불러오지 못했습니다.",
+    notCollected:
+      "집계되지 않음",
+    unknown:
+      "알 수 없음",
+    rankImage:
+      "위 캐릭터 이미지",
     units: {
       occurrence: "개",
       players: "명",
@@ -456,16 +495,21 @@ const state = {
 const elements = {
   status: document.querySelector("#status-message"),
   summary: document.querySelector("#summary"),
-  rankingSection: document.querySelector("#ranking-section"),
+  rankingSection:
+    document.querySelector("#ranking-section"),
   league: document.querySelector("#summary-league"),
   players: document.querySelector("#summary-players"),
   slots: document.querySelector("#summary-slots"),
-  characters: document.querySelector("#summary-characters"),
+  characters:
+    document.querySelector("#summary-characters"),
   updated: document.querySelector("#summary-updated"),
   body: document.querySelector("#ranking-body"),
-  resultCount: document.querySelector("#result-count"),
-  csvButton: document.querySelector("#csv-button"),
-  sourceLink: document.querySelector("#source-link"),
+  resultCount:
+    document.querySelector("#result-count"),
+  csvButton:
+    document.querySelector("#csv-button"),
+  sourceLink:
+    document.querySelector("#source-link"),
 };
 
 function t(key) {
@@ -515,8 +559,8 @@ function formatDate(value) {
 
 function formatUnit(value, unit) {
   const formatted = formatInteger(value);
-  const suffix = translations[state.language]
-    .units[unit];
+  const suffix =
+    translations[state.language].units[unit];
 
   return `${formatted}${suffix}`;
 }
@@ -555,87 +599,75 @@ function applyTranslations() {
 
   document.title = tr.title;
 
-  document.querySelector("#page-title")
-    .textContent = tr.title;
+  setText("#page-title", tr.title);
+  setText("#page-description", tr.description);
 
-  document.querySelector("#page-description")
-    .textContent = tr.description;
+  setText("#label-league", tr.league);
+  setText("#label-players", tr.players);
+  setText("#label-slots", tr.slots);
+  setText("#label-characters", tr.characters);
+  setText("#label-updated", tr.updated);
 
-  document.querySelector("#label-league")
-    .textContent = tr.league;
+  setText("#ranking-title", tr.ranking);
+  setText(
+    "#ranking-description",
+    tr.rankingDescription,
+  );
 
-  document.querySelector("#label-players")
-    .textContent = tr.players;
-
-  document.querySelector("#label-slots")
-    .textContent = tr.slots;
-
-  document.querySelector("#label-characters")
-    .textContent = tr.characters;
-
-  document.querySelector("#label-updated")
-    .textContent = tr.updated;
-
-  document.querySelector("#ranking-title")
-    .textContent = tr.ranking;
-
-  document.querySelector("#ranking-description")
-    .textContent = tr.rankingDescription;
-
-  elements.csvButton.textContent = tr.csv;
-
-  document.querySelector("#ranking-caption")
-    .textContent = tr.ranking;
-
-  document.querySelector("#th-rank")
-    .textContent = tr.rank;
-
-  document.querySelector("#th-character")
-    .textContent = tr.character;
-
-  document.querySelector("#th-occurrence")
-    .textContent = tr.occurrence;
-
-  document.querySelector("#th-players")
-    .textContent = tr.playerCount;
-
-  document.querySelector("#th-rate")
-    .textContent = tr.rate;
-
-  document.querySelector("#method-title")
-    .textContent = tr.method;
-
-  for (let i = 1; i <= 7; i += 1) {
-    document.querySelector(`#method-${i}`)
-      .textContent = tr[`method${i}`];
+  if (elements.csvButton) {
+    elements.csvButton.textContent = tr.csv;
   }
 
-  document.querySelector("#source-label")
-    .textContent = tr.source;
+  setText("#ranking-caption", tr.ranking);
 
-  document.querySelector("#footer-text")
-    .textContent = tr.footer;
+  setText("#th-rank", tr.rank);
+  setText("#th-character", tr.character);
+  setText("#th-occurrence", tr.occurrence);
+  setText("#th-players", tr.playerCount);
+  setText("#th-rate", tr.rate);
 
-  document.querySelectorAll(
-    "[data-language]",
-  ).forEach((button) => {
-    const active =
-      button.dataset.language === state.language;
+  setText("#method-title", tr.method);
 
-    button.classList.toggle(
-      "language-active",
-      active,
+  for (let i = 1; i <= 7; i += 1) {
+    setText(
+      `#method-${i}`,
+      tr[`method${i}`],
     );
+  }
 
-    button.setAttribute(
-      "aria-pressed",
-      String(active),
-    );
-  });
+  setText("#source-label", tr.source);
+  setText("#footer-text", tr.footer);
+
+  document
+    .querySelectorAll("[data-language]")
+    .forEach((button) => {
+      const active =
+        button.dataset.language ===
+        state.language;
+
+      button.classList.toggle(
+        "language-active",
+        active,
+      );
+
+      button.setAttribute(
+        "aria-pressed",
+        String(active),
+      );
+    });
 
   if (state.data) {
     renderSummary();
     renderTable();
+  }
+}
+
+function setText(selector, value) {
+  const element =
+    document.querySelector(selector);
+
+  if (element) {
+    element.textContent = value;
   }
 }
 
@@ -646,19 +678,29 @@ function setLanguage(language) {
 
   state.language = language;
 
-  localStorage.setItem(
-    "line-rangers-language",
-    language,
-  );
+  try {
+    localStorage.setItem(
+      "line-rangers-language",
+      language,
+    );
+  } catch {
+    // localStorage が使えない環境でも動作させる
+  }
 
   applyTranslations();
 }
 
 function detectLanguage() {
-  const saved =
-    localStorage.getItem(
-      "line-rangers-language",
-    );
+  let saved = null;
+
+  try {
+    saved =
+      localStorage.getItem(
+        "line-rangers-language",
+      );
+  } catch {
+    saved = null;
+  }
 
   if (LANGUAGES.includes(saved)) {
     return saved;
@@ -684,6 +726,10 @@ function detectLanguage() {
     return "zh";
   }
 
+  if (browser.startsWith("zh")) {
+    return "zh";
+  }
+
   if (browser.startsWith("id")) {
     return "id";
   }
@@ -696,32 +742,23 @@ function detectLanguage() {
     return "ko";
   }
 
-  return "en";
-}
-
-function isStale(value) {
-  if (!value) {
-    return false;
+  if (browser.startsWith("en")) {
+    return "en";
   }
 
-  const updatedAt =
-    new Date(value).getTime();
-
-  if (Number.isNaN(updatedAt)) {
-    return false;
-  }
-
-  const twoDays =
-    2 * 24 * 60 * 60 * 1000;
-
-  return Date.now() - updatedAt > twoDays;
+  return "ja";
 }
 
-function setStatus(
+function showStatus(
   message,
   type = "normal",
 ) {
+  if (!elements.status) {
+    return;
+  }
+
   elements.status.textContent = message;
+
   elements.status.className = "message";
 
   if (type === "error") {
@@ -740,184 +777,572 @@ function setStatus(
 }
 
 function hideStatus() {
+  if (!elements.status) {
+    return;
+  }
+
   elements.status.hidden = true;
 }
 
-function getOccurrenceCount(character) {
-  return Number(
-    character.occurrence_count || 0,
-  );
+function showContent() {
+  if (elements.summary) {
+    elements.summary.hidden = false;
+  }
+
+  if (elements.rankingSection) {
+    elements.rankingSection.hidden = false;
+  }
+}
+
+function hideContent() {
+  if (elements.summary) {
+    elements.summary.hidden = true;
+  }
+
+  if (elements.rankingSection) {
+    elements.rankingSection.hidden = true;
+  }
+}
+
+function getNumber(value) {
+  if (
+    typeof value === "number"
+    && Number.isFinite(value)
+  ) {
+    return value;
+  }
+
+  if (
+    typeof value === "string"
+    && value.trim() !== ""
+  ) {
+    const number = Number(value);
+
+    if (Number.isFinite(number)) {
+      return number;
+    }
+  }
+
+  return null;
+}
+
+function getInteger(value) {
+  const number = getNumber(value);
+
+  if (
+    number === null
+    || !Number.isInteger(number)
+  ) {
+    return null;
+  }
+
+  return number;
+}
+
+function getCharacterId(character) {
+  if (!character || typeof character !== "object") {
+    return null;
+  }
+
+  const candidates = [
+    character.id,
+    character.characterId,
+    character.character_id,
+    character.name,
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      candidate !== undefined
+      && candidate !== null
+      && String(candidate).trim() !== ""
+    ) {
+      return String(candidate);
+    }
+  }
+
+  return null;
+}
+
+function getCharacterName(character) {
+  if (!character || typeof character !== "object") {
+    return null;
+  }
+
+  const candidates = [
+    character.name,
+    character.characterName,
+    character.character_name,
+    character.displayName,
+    character.display_name,
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      candidate !== undefined
+      && candidate !== null
+      && String(candidate).trim() !== ""
+    ) {
+      return String(candidate);
+    }
+  }
+
+  return null;
+}
+
+function getCharacterImage(character) {
+  if (!character || typeof character !== "object") {
+    return null;
+  }
+
+  const candidates = [
+    character.image,
+    character.imageUrl,
+    character.image_url,
+    character.icon,
+    character.iconUrl,
+    character.icon_url,
+    character.src,
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      candidate !== undefined
+      && candidate !== null
+      && String(candidate).trim() !== ""
+    ) {
+      return String(candidate);
+    }
+  }
+
+  return null;
+}
+
+function getOccurrence(character) {
+  if (!character || typeof character !== "object") {
+    return null;
+  }
+
+  const candidates = [
+    character.occurrence,
+    character.count,
+    character.usageCount,
+    character.usage_count,
+  ];
+
+  for (const candidate of candidates) {
+    const value = getInteger(candidate);
+
+    if (value !== null) {
+      return value;
+    }
+  }
+
+  return null;
 }
 
 function getPlayerCount(character) {
-  return Number(
-    character.player_count || 0,
-  );
+  if (!character || typeof character !== "object") {
+    return null;
+  }
+
+  const candidates = [
+    character.playerCount,
+    character.player_count,
+    character.players,
+    character.users,
+    character.userCount,
+    character.user_count,
+  ];
+
+  for (const candidate of candidates) {
+    const value = getInteger(candidate);
+
+    if (value !== null) {
+      return value;
+    }
+  }
+
+  return null;
 }
 
-function getAdoptionRate(character) {
-  const sampledPlayers = Number(
-    state.data?.sampled_players || 0,
-  );
-
-  if (sampledPlayers <= 0) {
+function getRate(character, sampledPlayers) {
+  if (!character || typeof character !== "object") {
     return 0;
   }
 
+  const explicitRate =
+    character.rate ??
+    character.usageRate ??
+    character.usage_rate;
+
+  const number = getNumber(explicitRate);
+
+  if (
+    number !== null
+    && number >= 0
+  ) {
+    /*
+     * 0～1 の値なら割合、
+     * 1より大きい値ならパーセント値として扱う。
+     */
+    if (number <= 1) {
+      return number;
+    }
+
+    if (number <= 100) {
+      return number / 100;
+    }
+  }
+
+  const playerCount =
+    getPlayerCount(character);
+
+  if (
+    playerCount !== null
+    && sampledPlayers > 0
+  ) {
+    return playerCount / sampledPlayers;
+  }
+
+  return 0;
+}
+
+function getSampledPlayers(data) {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const candidates = [
+    data.players,
+    data.playerCount,
+    data.player_count,
+    data.sampledPlayers,
+    data.sampled_players,
+    data.totalPlayers,
+    data.total_players,
+  ];
+
+  for (const candidate of candidates) {
+    const value = getInteger(candidate);
+
+    if (
+      value !== null
+      && value >= 0
+    ) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function getLeague(data) {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
   return (
-    getPlayerCount(character)
-    / sampledPlayers
-    * 100
+    data.league ??
+    data.tier ??
+    data.rank ??
+    data.leagueName ??
+    data.league_name ??
+    null
   );
 }
 
+function getUpdatedAt(data) {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  return (
+    data.updatedAt ??
+    data.updated_at ??
+    data.lastUpdated ??
+    data.last_updated ??
+    data.timestamp ??
+    data.generatedAt ??
+    data.generated_at ??
+    null
+  );
+}
+
+function getCharacterList(data) {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const candidates = [
+    data.characters,
+    data.character,
+    data.ranking,
+    data.results,
+    data.data,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function validateData(data) {
-  if (
-    !data
-    || typeof data !== "object"
-  ) {
-    throw new Error(t("dataError"));
+  if (!data || typeof data !== "object") {
+    return {
+      valid: false,
+      message: t("dataError"),
+    };
   }
 
-  if (!Array.isArray(data.characters)) {
-    throw new Error(
-      t("charactersMissing"),
-    );
-  }
-
-  const sampledPlayers =
-    Number(data.sampled_players);
+  const players =
+    getSampledPlayers(data);
 
   if (
-    !Number.isInteger(sampledPlayers)
-    || sampledPlayers < 0
+    players === null
+    || players < 0
   ) {
-    throw new Error(
-      t("playersInvalid"),
-    );
+    return {
+      valid: false,
+      message: t("playersInvalid"),
+    };
   }
 
-  for (const character of data.characters) {
+  const characters =
+    getCharacterList(data);
+
+  if (!Array.isArray(characters)) {
+    return {
+      valid: false,
+      message: t("charactersMissing"),
+    };
+  }
+
+  for (const character of characters) {
     if (
       !character
       || typeof character !== "object"
     ) {
-      throw new Error(
-        t("characterInvalid"),
-      );
+      return {
+        valid: false,
+        message: t("characterInvalid"),
+      };
     }
+
+    const id =
+      getCharacterId(character);
+
+    if (!id) {
+      return {
+        valid: false,
+        message: t("characterInvalid"),
+      };
+    }
+
+    const image =
+      getCharacterImage(character);
 
     if (
-      typeof character.image !== "string"
-      || !character.image
+      image !== null
+      && typeof image !== "string"
     ) {
-      throw new Error(
-        t("imageInvalid"),
-      );
+      return {
+        valid: false,
+        message: t("imageInvalid"),
+      };
     }
 
-    const occurrenceCount =
-      getOccurrenceCount(character);
+    const occurrence =
+      getOccurrence(character);
+
+    if (
+      occurrence === null
+      || occurrence < 0
+    ) {
+      return {
+        valid: false,
+        message: t("occurrenceInvalid"),
+      };
+    }
 
     const playerCount =
       getPlayerCount(character);
 
     if (
-      !Number.isInteger(occurrenceCount)
-      || occurrenceCount < 0
-    ) {
-      throw new Error(
-        t("occurrenceInvalid"),
-      );
-    }
-
-    if (
-      !Number.isInteger(playerCount)
+      playerCount === null
       || playerCount < 0
     ) {
-      throw new Error(
-        t("playerCountInvalid"),
-      );
+      return {
+        valid: false,
+        message: t("playerCountInvalid"),
+      };
     }
 
-    if (
-      playerCount > sampledPlayers
-    ) {
-      throw new Error(
-        t("playerCountTooHigh"),
-      );
+    if (playerCount > players) {
+      return {
+        valid: false,
+        message: t("playerCountTooHigh"),
+      };
     }
 
-    if (
-      occurrenceCount < playerCount
-    ) {
-      throw new Error(
-        t("occurrenceTooLow"),
-      );
+    if (occurrence < playerCount) {
+      return {
+        valid: false,
+        message: t("occurrenceTooLow"),
+      };
     }
   }
+
+  return {
+    valid: true,
+  };
 }
 
-function getSortedCharacters() {
-  return [...state.characters].sort(
-    (left, right) => {
-      return (
-        getOccurrenceCount(right)
-        - getOccurrenceCount(left)
-        || getPlayerCount(right)
-        - getPlayerCount(left)
-        || String(left.image).localeCompare(
-          String(right.image),
-        )
+function normalizeCharacter(character) {
+  return {
+    id: getCharacterId(character),
+    name:
+      getCharacterName(character)
+      || getCharacterId(character)
+      || t("unknown"),
+    image: getCharacterImage(character),
+    occurrence:
+      getOccurrence(character) ?? 0,
+    playerCount:
+      getPlayerCount(character) ?? 0,
+  };
+}
+
+function normalizeData(data) {
+  const players =
+    getSampledPlayers(data) ?? 0;
+
+  const characters =
+    getCharacterList(data) || [];
+
+  const normalizedCharacters =
+    characters.map(normalizeCharacter);
+
+  normalizedCharacters.sort(
+    (a, b) => {
+      if (
+        b.occurrence
+        !== a.occurrence
+      ) {
+        return (
+          b.occurrence
+          - a.occurrence
+        );
+      }
+
+      if (
+        b.playerCount
+        !== a.playerCount
+      ) {
+        return (
+          b.playerCount
+          - a.playerCount
+        );
+      }
+
+      return a.name.localeCompare(
+        b.name,
+        getLocale(),
       );
     },
   );
+
+  return {
+    league: getLeague(data),
+    players,
+    updatedAt: getUpdatedAt(data),
+    characters:
+      normalizedCharacters,
+  };
 }
 
 function renderSummary() {
+  if (!state.data) {
+    return;
+  }
+
   const data = state.data;
 
-  elements.league.textContent =
-    translateLeague(data.league);
-
-  elements.players.textContent =
-    formatUnit(
-      data.sampled_players,
-      "players",
-    );
-
-  elements.slots.textContent =
-    formatUnit(
-      data.character_slots,
-      "occurrence",
-    );
-
-  elements.characters.textContent =
-    formatUnit(
-      data.characters.length,
-      "characters",
-    );
-
-  elements.updated.textContent =
-    formatDate(data.updated_at);
-
-  if (data.source?.url) {
-    elements.sourceLink.href =
-      data.source.url;
+  if (elements.league) {
+    elements.league.textContent =
+      translateLeague(data.league);
   }
 
-  if (data.source?.name) {
-    elements.sourceLink.textContent =
-      data.source.name;
+  if (elements.players) {
+    elements.players.textContent =
+      formatUnit(
+        data.players,
+        "players",
+      );
   }
 
-  elements.summary.hidden = false;
+  if (elements.slots) {
+    const totalSlots =
+      data.characters.reduce(
+        (sum, character) =>
+          sum + character.occurrence,
+        0,
+      );
+
+    elements.slots.textContent =
+      formatUnit(
+        totalSlots,
+        "occurrence",
+      );
+  }
+
+  if (elements.characters) {
+    elements.characters.textContent =
+      formatUnit(
+        data.characters.length,
+        "characters",
+      );
+  }
+
+  if (elements.updated) {
+    elements.updated.textContent =
+      formatDate(data.updatedAt);
+  }
 }
 
-function createCharacterImage(
+function createElement(
+  tag,
+  className,
+  text,
+) {
+  const element =
+    document.createElement(tag);
+
+  if (className) {
+    element.className = className;
+  }
+
+  if (text !== undefined) {
+    element.textContent = text;
+  }
+
+  return element;
+}
+
+function createImageCell(
   character,
   rank,
 ) {
+  const cell =
+    createElement(
+      "td",
+      "character-cell",
+    );
+
   const image =
     document.createElement("img");
 
@@ -927,351 +1352,513 @@ function createCharacterImage(
   image.loading = "lazy";
   image.decoding = "async";
 
-  image.alt =
+  const alt =
     `${rank}${t("rankImage")}`;
 
-  image.width = 72;
-  image.height = 72;
-  image.src = character.image;
+  image.alt = alt;
 
-  image.addEventListener(
-    "error",
-    () => {
-      image.hidden = true;
-    },
-  );
+  if (character.image) {
+    image.src = character.image;
 
-  return image;
-}
-
-function createRateCell(rate) {
-  const cell =
-    document.createElement("td");
-
-  cell.className = "rate-cell";
-
-  const normalizedRate =
-    Math.min(
-      100,
-      Math.max(
-        0,
-        Number(rate) || 0,
-      ),
+    image.addEventListener(
+      "error",
+      () => {
+        image.removeAttribute("src");
+        image.alt =
+          `${character.name} - ${t("imageInvalid")}`;
+      },
+      { once: true },
     );
+  } else {
+    image.alt =
+      `${character.name} - ${t("imageInvalid")}`;
+  }
 
-  const value =
-    document.createElement("span");
-
-  value.className =
-    "rate-value";
-
-  value.textContent =
-    `${normalizedRate.toFixed(1)}%`;
-
-  const track =
-    document.createElement("span");
-
-  track.className =
-    "rate-track";
-
-  track.setAttribute(
-    "aria-hidden",
-    "true",
-  );
-
-  const bar =
-    document.createElement("span");
-
-  bar.className = "rate-bar";
-  bar.style.width =
-    `${normalizedRate}%`;
-
-  track.append(bar);
-  cell.append(value, track);
+  cell.appendChild(image);
 
   return cell;
 }
 
-function createTableRow(
+function createRateCell(
   character,
-  rank,
 ) {
-  const row =
-    document.createElement("tr");
+  const cell =
+    createElement(
+      "td",
+      "rate-cell",
+    );
 
-  const rankCell =
-    document.createElement("td");
-
-  rankCell.className =
-    "rank-cell";
-
-  rankCell.dataset.rank =
-    String(rank);
-
-  rankCell.textContent =
-    String(rank);
-
-  const characterCell =
-    document.createElement("td");
-
-  const characterLayout =
-    document.createElement("div");
-
-  characterLayout.className =
-    "character-cell";
-
-  characterLayout.append(
-    createCharacterImage(
+  const rate =
+    getRate(
       character,
-      rank,
+      state.data?.players || 0,
+    );
+
+  const percentage =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        rate * 100,
+      ),
+    );
+
+  const value =
+    createElement(
+      "span",
+      "rate-value",
+      `${percentage.toLocaleString(
+        getLocale(),
+        {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        },
+      )}%`,
+    );
+
+  const track =
+    createElement(
+      "span",
+      "rate-track",
+    );
+
+  track.setAttribute(
+    "role",
+    "progressbar",
+  );
+
+  track.setAttribute(
+    "aria-valuemin",
+    "0",
+  );
+
+  track.setAttribute(
+    "aria-valuemax",
+    "100",
+  );
+
+  track.setAttribute(
+    "aria-valuenow",
+    String(
+      percentage,
     ),
   );
 
-  characterCell.append(
-    characterLayout,
+  track.setAttribute(
+    "aria-label",
+    `${t("rate")}: ${percentage}%`,
   );
 
-  const occurrenceCell =
-    document.createElement("td");
-
-  occurrenceCell.className =
-    "number-cell";
-
-  occurrenceCell.textContent =
-    formatUnit(
-      getOccurrenceCount(character),
-      "occurrence",
+  const bar =
+    createElement(
+      "span",
+      "rate-bar",
     );
 
-  const playerCell =
-    document.createElement("td");
+  bar.style.width =
+    `${percentage}%`;
 
-  playerCell.className =
-    "number-cell";
+  track.appendChild(bar);
 
-  playerCell.textContent =
-    formatUnit(
-      getPlayerCount(character),
-      "players",
-    );
+  cell.appendChild(value);
+  cell.appendChild(track);
 
-  row.append(
-    rankCell,
-    characterCell,
-    occurrenceCell,
-    playerCell,
-    createRateCell(
-      getAdoptionRate(character),
-    ),
-  );
-
-  return row;
+  return cell;
 }
 
 function renderTable() {
-  const characters =
-    getSortedCharacters();
+  if (!elements.body || !state.data) {
+    return;
+  }
 
-  const fragment =
-    document.createDocumentFragment();
+  const data = state.data;
 
-  elements.body.replaceChildren();
+  elements.body.textContent = "";
 
-  characters.forEach(
+  data.characters.forEach(
     (character, index) => {
-      fragment.append(
-        createTableRow(
+      const rank = index + 1;
+
+      const row =
+        document.createElement("tr");
+
+      const rankCell =
+        createElement(
+          "td",
+          "rank-cell",
+          String(rank),
+        );
+
+      rankCell.dataset.rank =
+        String(rank);
+
+      const imageCell =
+        createImageCell(
           character,
-          index + 1,
-        ),
-      );
+          rank,
+        );
+
+      const nameCell =
+        createElement(
+          "td",
+          "character-name-cell",
+          character.name,
+        );
+
+      const occurrenceCell =
+        createElement(
+          "td",
+          "number-cell",
+          formatUnit(
+            character.occurrence,
+            "occurrence",
+          ),
+        );
+
+      const playerCell =
+        createElement(
+          "td",
+          "number-cell",
+          formatUnit(
+            character.playerCount,
+            "players",
+          ),
+        );
+
+      const rateCell =
+        createRateCell(character);
+
+      row.appendChild(rankCell);
+      row.appendChild(imageCell);
+      row.appendChild(nameCell);
+      row.appendChild(occurrenceCell);
+      row.appendChild(playerCell);
+      row.appendChild(rateCell);
+
+      elements.body.appendChild(row);
     },
   );
 
-  elements.body.append(fragment);
-
-  elements.resultCount.textContent =
-    formatUnit(
-      characters.length,
-      "characters",
-    );
-
-  elements.rankingSection.hidden =
-    false;
+  if (elements.resultCount) {
+    elements.resultCount.textContent =
+      formatUnit(
+        data.characters.length,
+        "characters",
+      );
+  }
 }
 
-function escapeCsvCell(value) {
-  const text =
+function escapeCsv(value) {
+  const string =
     String(value ?? "");
 
-  if (
-    text.includes(",")
-    || text.includes("\"")
-    || text.includes("\n")
-  ) {
-    return `"${text.replaceAll(
-      "\"",
-      "\"\"",
-    )}"`;
-  }
-
-  return text;
+  return `"${string.replace(
+    /"/g,
+    '""',
+  )}"`;
 }
 
-function downloadCsv() {
+function buildCsv() {
+  if (!state.data) {
+    return "";
+  }
+
   const tr =
     translations[state.language];
 
-  const rows = [
-    [
-      tr.rank,
-      "Image URL",
-      tr.occurrence,
-      tr.playerCount,
-      tr.rate,
-      tr.league,
-      tr.players,
-      tr.slots,
-      tr.updated,
-    ],
+  const headers = [
+    tr.rank,
+    tr.character,
+    tr.occurrence,
+    tr.playerCount,
+    tr.rate,
   ];
 
-  getSortedCharacters().forEach(
+  const rows = [
+    headers.map(escapeCsv).join(","),
+  ];
+
+  state.data.characters.forEach(
     (character, index) => {
-      rows.push([
-        index + 1,
-        character.image,
-        getOccurrenceCount(character),
-        getPlayerCount(character),
-        getAdoptionRate(character)
-          .toFixed(1),
-        state.data.league,
-        state.data.sampled_players,
-        state.data.character_slots,
-        state.data.updated_at,
-      ]);
+      const rate =
+        getRate(
+          character,
+          state.data.players,
+        );
+
+      const percentage =
+        rate * 100;
+
+      rows.push(
+        [
+          index + 1,
+          character.name,
+          character.occurrence,
+          character.playerCount,
+          `${percentage.toFixed(1)}%`,
+        ]
+          .map(escapeCsv)
+          .join(","),
+      );
     },
   );
 
-  const csv = rows
-    .map((row) => {
-      return row
-        .map(escapeCsvCell)
-        .join(",");
-    })
-    .join("\r\n");
+  return rows.join("\r\n");
+}
 
-  const blob = new Blob(
-    [`\uFEFF${csv}`],
-    {
-      type: "text/csv;charset=utf-8",
-    },
-  );
+function downloadCsv() {
+  const csv = buildCsv();
 
-  const objectUrl =
+  if (!csv) {
+    return;
+  }
+
+  /*
+   * UTF-8 BOMを付けることで、
+   * Excelでも日本語などが文字化けしにくくなる。
+   */
+  const blob =
+    new Blob(
+      [
+        "\uFEFF",
+        csv,
+      ],
+      {
+        type:
+          "text/csv;charset=utf-8",
+      },
+    );
+
+  const url =
     URL.createObjectURL(blob);
 
-  const anchor =
+  const link =
     document.createElement("a");
 
-  anchor.href = objectUrl;
+  link.href = url;
 
-  anchor.download =
-    "line-rangers-legend-usage.csv";
+  const date =
+    new Date()
+      .toISOString()
+      .slice(0, 10);
 
-  document.body.append(anchor);
+  link.download =
+    `line-rangers-character-usage-${date}.csv`;
 
-  anchor.click();
+  document.body.appendChild(link);
 
-  anchor.remove();
+  link.click();
 
-  URL.revokeObjectURL(objectUrl);
+  link.remove();
+
+  setTimeout(
+    () => {
+      URL.revokeObjectURL(url);
+    },
+    1000,
+  );
+}
+
+function isStale(updatedAt) {
+  if (!updatedAt) {
+    return false;
+  }
+
+  const date =
+    new Date(updatedAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  const age =
+    Date.now()
+    - date.getTime();
+
+  const twoDays =
+    2 * 24 * 60 * 60 * 1000;
+
+  return age > twoDays;
+}
+
+async function fetchData() {
+  const response =
+    await fetch(
+      `${DATA_PATH}?v=${Date.now()}`,
+      {
+        cache: "no-store",
+        headers: {
+          Accept:
+            "application/json",
+        },
+      },
+    );
+
+  if (!response.ok) {
+    throw new Error(
+      `HTTP ${response.status}`,
+    );
+  }
+
+  return response.json();
 }
 
 async function loadData() {
-  try {
-    const response =
-      await fetch(
-        `${DATA_PATH}?v=${Date.now()}`,
-        {
-          cache: "no-store",
-        },
-      );
+  hideContent();
 
-    if (!response.ok) {
+  showStatus(
+    t("loading"),
+  );
+
+  try {
+    const data =
+      await fetchData();
+
+    const validation =
+      validateData(data);
+
+    if (!validation.valid) {
       throw new Error(
-        `${t("fetchError")} HTTP ${response.status}`,
+        validation.message,
       );
     }
 
-    const data =
-      await response.json();
-
-    validateData(data);
-
-    state.data = data;
-
-    state.characters = [
-      ...data.characters,
-    ];
+    state.data =
+      normalizeData(data);
 
     renderSummary();
     renderTable();
 
+    showContent();
+
+    hideStatus();
+
     if (
-      data.characters.length === 0
+      isStale(
+        state.data.updatedAt,
+      )
     ) {
-      setStatus(
-        t("noData"),
-        "warning",
-      );
-
-      return;
-    }
-
-    if (isStale(data.updated_at)) {
-      setStatus(
+      showStatus(
         t("stale"),
         "warning",
       );
-
-      return;
     }
-
-    hideStatus();
   } catch (error) {
-    console.error(error);
-
-    setStatus(
-      error instanceof Error
-        ? error.message
-        : t("loadError"),
-      "error",
+    console.error(
+      "Failed to load statistics:",
+      error,
     );
+
+    hideContent();
+
+    const message =
+      error?.message
+      || t("loadError");
+
+    /*
+     * 独自の検証エラーならそのまま表示。
+     * それ以外は取得・読み込みエラーとして表示。
+     */
+    if (
+      message === t("dataError")
+      || message ===
+        t("charactersMissing")
+      || message ===
+        t("playersInvalid")
+      || message ===
+        t("characterInvalid")
+      || message ===
+        t("imageInvalid")
+      || message ===
+        t("occurrenceInvalid")
+      || message ===
+        t("playerCountInvalid")
+      || message ===
+        t("playerCountTooHigh")
+      || message ===
+        t("occurrenceTooLow")
+    ) {
+      showStatus(
+        message,
+        "error",
+      );
+    } else {
+      showStatus(
+        `${t("fetchError")} ${t("loadError")}`,
+        "error",
+      );
+    }
   }
 }
 
-document
-  .querySelectorAll("[data-language]")
-  .forEach((button) => {
-    button.addEventListener(
-      "click",
-      () => {
-        setLanguage(
-          button.dataset.language,
-        );
-      },
-    );
-  });
+function setupLanguageButtons() {
+  document
+    .querySelectorAll(
+      "[data-language]",
+    )
+    .forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => {
+          setLanguage(
+            button.dataset.language,
+          );
+        },
+      );
+    });
+}
 
-elements.csvButton.addEventListener(
-  "click",
-  downloadCsv,
-);
+function setupCsvButton() {
+  if (!elements.csvButton) {
+    return;
+  }
 
-state.language =
-  detectLanguage();
+  elements.csvButton.addEventListener(
+    "click",
+    downloadCsv,
+  );
+}
 
-applyTranslations();
+function setupSourceLink() {
+  if (!elements.sourceLink) {
+    return;
+  }
 
-loadData();
+  /*
+   * HTML側にhrefが設定されている場合は、
+   * そのまま利用する。
+   */
+  elements.sourceLink.target =
+    "_blank";
+
+  elements.sourceLink.rel =
+    "noopener noreferrer";
+}
+
+function initialize() {
+  state.language =
+    detectLanguage();
+
+  setupLanguageButtons();
+  setupCsvButton();
+  setupSourceLink();
+
+  applyTranslations();
+
+  loadData();
+}
+
+if (
+  document.readyState ===
+  "loading"
+) {
+  document.addEventListener(
+    "DOMContentLoaded",
+    initialize,
+    {
+      once: true,
+    },
+  );
+} else {
+  initialize();
+}
