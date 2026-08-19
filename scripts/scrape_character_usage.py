@@ -46,8 +46,9 @@ MIN_REQUIRED_PLAYERS = int(
     os.environ.get("MIN_REQUIRED_PLAYERS", "50")
 )
 
+# 10体に満たないプレイヤーは集計から除外し、遅延読み込みを待つように変更
 MIN_CHARACTERS_PER_PLAYER = int(
-    os.environ.get("MIN_CHARACTERS_PER_PLAYER", "5")
+    os.environ.get("MIN_CHARACTERS_PER_PLAYER", "10")
 )
 
 MAX_CHARACTERS_PER_PLAYER = int(
@@ -482,7 +483,7 @@ def filter_character_images(images: list[dict]) -> list[dict]:
                 "image": src,
                 "width": width,
                 "height": height,
-                "index": image.get("index"),
+                "index": image.get("index"),  # 重複判定用にindexを保持
             }
         )
 
@@ -490,17 +491,7 @@ def filter_character_images(images: list[dict]) -> list[dict]:
 
 
 def select_team_images(row: dict) -> list[dict]:
-    # 1. 行全体の画像 (all_images) が指定範囲 (5〜15体) であれば全10体を優先取得
-    all_images = row.get("all_images", [])
-
-    if (
-        MIN_CHARACTERS_PER_PLAYER
-        <= len(all_images)
-        <= MAX_CHARACTERS_PER_PLAYER
-    ):
-        return all_images
-
-    # 2. コンテナが分離している場合 (Aチーム5体/Bチーム5体など) は要素indexで重複排除しつつ結合
+    # 1. 最優先: コンテナが分離している場合 (Aチーム/Bチームなど) を結合して評価
     combined_images = []
     seen_indices = set()
 
@@ -518,7 +509,7 @@ def select_team_images(row: dict) -> list[dict]:
     ):
         return combined_images
 
-    # 3. フォールバック: 条件を満たす単一グループのうち最大要素数のものを取得
+    # 2. フォールバック: 単一グループで条件を満たす最大のもの
     valid_groups = []
 
     for images in row.get("groups", []):
@@ -531,6 +522,16 @@ def select_team_images(row: dict) -> list[dict]:
 
     if valid_groups:
         return max(valid_groups, key=len)
+
+    # 3. 最後の手段: 行全体の画像 (UIアイコン等が混ざるリスクがあるため最後に評価)
+    all_images = row.get("all_images", [])
+
+    if (
+        MIN_CHARACTERS_PER_PLAYER
+        <= len(all_images)
+        <= MAX_CHARACTERS_PER_PLAYER
+    ):
+        return all_images
 
     return []
 
