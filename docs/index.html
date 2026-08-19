@@ -45,15 +45,29 @@
 <body>
   <header class="site-header">
     <div class="header-inner">
+
+      <div class="language-switcher">
+        <button type="button" data-language="ja">🇯🇵 日本語</button>
+        <button type="button" data-language="en">🇺🇸 English</button>
+        <button type="button" data-language="zh">🇹🇼 繁體中文</button>
+        <button type="button" data-language="th">🇹🇭 ไทย</button>
+        <button type="button" data-language="id">🇮🇩 Indonesia</button>
+        <button type="button" data-language="vi">🇻🇳 Tiếng Việt</button>
+        <button type="button" data-language="ko">🇰🇷 한국어</button>
+      </div>
+
       <p class="eyebrow">
         UNOFFICIAL STATISTICS
       </p>
 
-      <h1>
+      <h1 id="page-title">
         レジェンド帯 キャラ集計
       </h1>
 
-      <p class="header-description">
+      <p
+        id="page-description"
+        class="header-description"
+      >
         レジェンド帯プレイヤーの防衛チームから、
         キャラクターの編成数と採用率を集計しています。
       </p>
@@ -61,8 +75,9 @@
   </header>
 
   <main class="main-content">
+
     <noscript>
-      <p class="message message-error">
+      <p class="message message-error" id="noscript-message">
         表示するにはJavaScriptを有効にしてください。
       </p>
     </noscript>
@@ -82,7 +97,10 @@
       hidden
     >
       <article class="summary-card">
-        <span class="summary-label">
+        <span
+          class="summary-label"
+          id="label-league"
+        >
           リーグ
         </span>
 
@@ -92,7 +110,10 @@
       </article>
 
       <article class="summary-card">
-        <span class="summary-label">
+        <span
+          class="summary-label"
+          id="label-players"
+        >
           集計人数
         </span>
 
@@ -102,7 +123,10 @@
       </article>
 
       <article class="summary-card">
-        <span class="summary-label">
+        <span
+          class="summary-label"
+          id="label-slots"
+        >
           全編成キャラ数
         </span>
 
@@ -112,7 +136,10 @@
       </article>
 
       <article class="summary-card">
-        <span class="summary-label">
+        <span
+          class="summary-label"
+          id="label-characters"
+        >
           キャラ種類数
         </span>
 
@@ -122,7 +149,10 @@
       </article>
 
       <article class="summary-card">
-        <span class="summary-label">
+        <span
+          class="summary-label"
+          id="label-updated"
+        >
           最終更新
         </span>
 
@@ -139,11 +169,11 @@
     >
       <div class="table-heading">
         <div>
-          <h2>
+          <h2 id="ranking-title">
             キャラクターランキング
           </h2>
 
-          <p>
+          <p id="ranking-description">
             編成数が多い順に表示しています。
           </p>
         </div>
@@ -158,29 +188,47 @@
 
       <div class="table-wrapper">
         <table>
-          <caption class="visually-hidden">
+          <caption
+            class="visually-hidden"
+            id="ranking-caption"
+          >
             レジェンド帯キャラクター集計ランキング
           </caption>
 
           <thead>
             <tr>
-              <th scope="col">
+              <th
+                scope="col"
+                id="th-rank"
+              >
                 順位
               </th>
 
-              <th scope="col">
+              <th
+                scope="col"
+                id="th-character"
+              >
                 キャラクター
               </th>
 
-              <th scope="col">
+              <th
+                scope="col"
+                id="th-occurrence"
+              >
                 編成数
               </th>
 
-              <th scope="col">
+              <th
+                scope="col"
+                id="th-players"
+              >
                 採用人数
               </th>
 
-              <th scope="col">
+              <th
+                scope="col"
+                id="th-rate"
+              >
                 採用率
               </th>
             </tr>
@@ -197,51 +245,48 @@
     </section>
 
     <section class="notes">
-      <h2>
+      <h2 id="method-title">
         集計方法
       </h2>
 
       <ul>
-        <li>
+        <li id="method-1">
           編成数は、各プレイヤーの防衛チームに編成された
           キャラクターの総数です。
         </li>
 
-        <li>
+        <li id="method-2">
           同じプレイヤーが同一キャラクターを複数体使用している場合、
           編成数には使用された体数分を加算します。
         </li>
 
-        <li>
+        <li id="method-3">
           採用人数は、そのキャラクターを1体以上使用した
           プレイヤー数です。
         </li>
 
-        <li>
+        <li id="method-4">
           同じプレイヤーが同一キャラクターを複数体使用していても、
           採用人数では1人として計算します。
         </li>
 
-        <li>
+        <li id="method-5">
           採用率は「採用人数 ÷ 集計人数」で計算します。
         </li>
 
-      
-      
-
-        <li>
+        <li id="method-6">
           GitHub Actionsの混雑により、
           更新時刻が遅れる場合があります。
         </li>
 
-        <li>
+        <li id="method-7">
           本サイトは非公式サイトであり、
           ゲーム運営元とは関係ありません。
         </li>
       </ul>
 
       <p>
-        データ出典:
+        <span id="source-label">データ出典:</span>
 
         <a
           id="source-link"
@@ -256,7 +301,7 @@
   </main>
 
   <footer class="site-footer">
-    <p>
+    <p id="footer-text">
       非公式・ファン作成の統計ページ
     </p>
   </footer>
