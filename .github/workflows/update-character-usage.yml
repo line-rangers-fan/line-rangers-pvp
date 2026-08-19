@@ -36,10 +36,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      # actions/setup-python は使わない。
+      # コンテナ(mcr.microsoft.com/playwright/python)には既にPlaywrightと
+      # バージョンが対応したPythonが入っており、setup-pythonを併用すると
+      # pipでインストールした場所と実行時のpythonが食い違い、
+      # "ModuleNotFoundError: No module named 'playwright'" の原因になる。
 
       - name: Install dependencies
         run: |
