@@ -1,40 +1,37 @@
-# File: .github/workflows/update-character-usage.yml
-name: Update Character Usage
+name: scrape-and-deploy
 
 on:
-  schedule:
-    # 毎日午前0時（日本時間）に実行
-    - cron: "0 15 * * *"
-
   workflow_dispatch:
-    inputs:
-      debug:
-        description: "調査モード。公開データを更新せず、調査ファイルだけを保存する"
-        required: false
-        default: false
-        type: boolean
+  schedule:
+    # 毎日 UTC 18:00 (JST 3:00) に実行。頻度は用途に合わせて調整してください。
+    - cron: "0 18 * * *"
 
+# ワークフロー全体のデフォルト権限。
+# GitHub Pages の作成・更新には pages:write と id-token:write が必須。
+# これが無い(または contents:read のみ)と
+# "Resource not accessible by integration" で失敗する。
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
 concurrency:
-  group: update-character-usage
+  group: "pages"
   cancel-in-progress: false
 
 jobs:
   scrape-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    # 公式のPlaywright用Dockerイメージを使うと、Chromium本体と
+    # apt依存ライブラリが最初から入っているため、
+    # 毎回の "playwright install --with-deps" が丸ごと不要になり大幅に高速化する。
+    # イメージのバージョンタグは、下の requirements.txt (playwright==1.57.0) と
+    # 必ず一致させること。ズレるとブラウザ実行ファイルが見つからずエラーになる。
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.57.0-noble
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-
-    env:
-      DEBUG_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.debug == true && '1' || '0' }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -42,62 +39,31 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: pip
+          python-version: "3.12"
 
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
-      - name: Install Chromium with dependencies
-        run: playwright install --with-deps chromium
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright==1.57.0
+          # ブラウザ本体・システム依存は既にイメージに含まれているため
+          # apt install は不要。Playwright側の内部レジストリだけ更新する。
+          playwright install chromium
 
       - name: Run scraper
         env:
-          DEBUG: ${{ env.DEBUG_MODE }}
           TARGET_PLAYER_COUNT: "200"
           MIN_REQUIRED_PLAYERS: "50"
-          MIN_CHARACTERS_PER_PLAYER: "5"
-          MAX_CHARACTERS_PER_PLAYER: "15"
         run: python scripts/scrape_character_usage.py
 
-      - name: Upload debug files
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: scraper-debug-${{ github.run_id }}
-          path: .artifacts/debug/
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Commit updated data
-        if: env.DEBUG_MODE != '1'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add docs/data/character_usage.json
-
-          if git diff --staged --quiet; then
-            echo "集計データに変更はありません。"
-          else
-            git commit -m "Update legend character usage [skip ci]"
-            git pull --rebase origin "${GITHUB_REF_NAME}"
-            git push origin HEAD
-          fi
-
+      # docs/data/character_usage.json が生成されている前提。
       - name: Configure GitHub Pages
-        if: env.DEBUG_MODE != '1'
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload GitHub Pages artifact
-        if: env.DEBUG_MODE != '1'
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs
 
       - name: Deploy GitHub Pages
-        if: env.DEBUG_MODE != '1'
         id: deployment
         uses: actions/deploy-pages@v4
