@@ -44,7 +44,7 @@ const translations = {
     method5:
       "採用率は「採用人数 ÷ 集計人数」で計算します。",
     method6:
-      "GitHub Actionsの混雑により、更新時刻が遅れる場合があります。",
+      "GitHub Actions의混雑により、更新時刻が遅れる場合があります。",
     method7:
       "本サイトは非公式サイトであり、ゲーム運営元とは関係ありません。",
     source: "データ出典:",
@@ -495,21 +495,16 @@ const state = {
 const elements = {
   status: document.querySelector("#status-message"),
   summary: document.querySelector("#summary"),
-  rankingSection:
-    document.querySelector("#ranking-section"),
+  rankingSection: document.querySelector("#ranking-section"),
   league: document.querySelector("#summary-league"),
   players: document.querySelector("#summary-players"),
   slots: document.querySelector("#summary-slots"),
-  characters:
-    document.querySelector("#summary-characters"),
+  characters: document.querySelector("#summary-characters"),
   updated: document.querySelector("#summary-updated"),
   body: document.querySelector("#ranking-body"),
-  resultCount:
-    document.querySelector("#result-count"),
-  csvButton:
-    document.querySelector("#csv-button"),
-  sourceLink:
-    document.querySelector("#source-link"),
+  resultCount: document.querySelector("#result-count"),
+  csvButton: document.querySelector("#csv-button"),
+  sourceLink: document.querySelector("#source-link"),
 };
 
 function t(key) {
@@ -531,9 +526,7 @@ function getLocale() {
 }
 
 function formatInteger(value) {
-  return new Intl.NumberFormat(
-    getLocale(),
-  ).format(Number(value) || 0);
+  return new Intl.NumberFormat(getLocale()).format(Number(value) || 0);
 }
 
 function formatDate(value) {
@@ -547,20 +540,16 @@ function formatDate(value) {
     return t("unknown");
   }
 
-  return new Intl.DateTimeFormat(
-    getLocale(),
-    {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "Asia/Tokyo",
-    },
-  ).format(date);
+  return new Intl.DateTimeFormat(getLocale(), {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Tokyo",
+  }).format(date);
 }
 
 function formatUnit(value, unit) {
   const formatted = formatInteger(value);
-  const suffix =
-    translations[state.language].units[unit];
+  const suffix = translations[state.language].units[unit];
 
   return `${formatted}${suffix}`;
 }
@@ -593,9 +582,7 @@ function applyTranslations() {
   const tr = translations[state.language];
 
   document.documentElement.lang =
-    state.language === "zh"
-      ? "zh-TW"
-      : state.language;
+    state.language === "zh" ? "zh-TW" : state.language;
 
   document.title = tr.title;
 
@@ -609,10 +596,7 @@ function applyTranslations() {
   setText("#label-updated", tr.updated);
 
   setText("#ranking-title", tr.ranking);
-  setText(
-    "#ranking-description",
-    tr.rankingDescription,
-  );
+  setText("#ranking-description", tr.rankingDescription);
 
   if (elements.csvButton) {
     elements.csvButton.textContent = tr.csv;
@@ -629,32 +613,18 @@ function applyTranslations() {
   setText("#method-title", tr.method);
 
   for (let i = 1; i <= 7; i += 1) {
-    setText(
-      `#method-${i}`,
-      tr[`method${i}`],
-    );
+    setText(`#method-${i}`, tr[`method${i}`]);
   }
 
   setText("#source-label", tr.source);
   setText("#footer-text", tr.footer);
 
-  document
-    .querySelectorAll("[data-language]")
-    .forEach((button) => {
-      const active =
-        button.dataset.language ===
-        state.language;
+  document.querySelectorAll("[data-language]").forEach((button) => {
+    const active = button.dataset.language === state.language;
 
-      button.classList.toggle(
-        "language-active",
-        active,
-      );
-
-      button.setAttribute(
-        "aria-pressed",
-        String(active),
-      );
-    });
+    button.classList.toggle("language-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
 
   if (state.data) {
     renderSummary();
@@ -663,9 +633,7 @@ function applyTranslations() {
 }
 
 function setText(selector, value) {
-  const element =
-    document.querySelector(selector);
-
+  const element = document.querySelector(selector);
   if (element) {
     element.textContent = value;
   }
@@ -679,12 +647,9 @@ function setLanguage(language) {
   state.language = language;
 
   try {
-    localStorage.setItem(
-      "line-rangers-language",
-      language,
-    );
+    localStorage.setItem("line-rangers-language", language);
   } catch {
-    // localStorage が使えない環境でも動作させる
+    // 
   }
 
   applyTranslations();
@@ -694,10 +659,7 @@ function detectLanguage() {
   let saved = null;
 
   try {
-    saved =
-      localStorage.getItem(
-        "line-rangers-language",
-      );
+    saved = localStorage.getItem("line-rangers-language");
   } catch {
     saved = null;
   }
@@ -706,41 +668,14 @@ function detectLanguage() {
     return saved;
   }
 
-  const browser =
-    String(navigator.language || "")
-      .toLowerCase();
+  const browser = String(navigator.language || "").toLowerCase();
 
-  if (browser.startsWith("ja")) {
-    return "ja";
-  }
-
-  if (browser.startsWith("th")) {
-    return "th";
-  }
-
-  if (
-    browser.startsWith("zh-tw")
-    || browser.startsWith("zh-hk")
-    || browser.startsWith("zh-mo")
-  ) {
-    return "zh";
-  }
-
-  if (browser.startsWith("zh")) {
-    return "zh";
-  }
-
-  if (browser.startsWith("id")) {
-    return "id";
-  }
-
-  if (browser.startsWith("vi")) {
-    return "vi";
-  }
-
-  if (browser.startsWith("ko")) {
-    return "ko";
-  }
+  if (browser.startsWith("ja")) return "ja";
+  if (browser.startsWith("th")) return "th";
+  if (browser.startsWith("zh")) return "zh";
+  if (browser.startsWith("id")) return "id";
+  if (browser.startsWith("vi")) return "vi";
+  if (browser.startsWith("ko")) return "ko";
 
   return "en";
 }
@@ -766,44 +701,69 @@ function renderTable() {
   }
 
   const fragment = document.createDocumentFragment();
+  const maxOccurrence = state.characters[0]?.occurrence_count || 1;
 
   state.characters.forEach((char, index) => {
     const tr = document.createElement("tr");
+    const rank = char.rank || index + 1;
 
-    // 順位
+    // 順位セル（CSSの .rank-cell や data-rank を活用）
     const tdRank = document.createElement("td");
-    tdRank.textContent = char.rank || index + 1;
+    tdRank.className = "rank-cell";
+    tdRank.setAttribute("data-rank", rank);
+    tdRank.textContent = rank;
     tr.appendChild(tdRank);
 
-    // キャラクター画像
+    // キャラクターセル（CSSの .character-cell と .character-image を活用して枠を復活！）
     const tdChar = document.createElement("td");
-    const container = document.createElement("div");
-    container.className = "character-cell";
+    tdChar.className = "character-cell";
 
     const img = document.createElement("img");
     img.src = char.image || "";
-    img.alt = `${char.rank || index + 1}${t("rankImage")}`;
-    img.width = 40;
-    img.height = 40;
+    img.alt = `${rank}${t("rankImage")}`;
+    img.className = "character-image";
     img.loading = "lazy";
-    container.appendChild(img);
-
-    tdChar.appendChild(container);
+    tdChar.appendChild(img);
     tr.appendChild(tdChar);
 
     // 編成数
     const tdOccurrence = document.createElement("td");
+    tdOccurrence.className = "number-cell";
     tdOccurrence.textContent = formatUnit(char.occurrence_count, "occurrence");
     tr.appendChild(tdOccurrence);
 
     // 採用人数
     const tdPlayers = document.createElement("td");
+    tdPlayers.className = "number-cell";
     tdPlayers.textContent = formatUnit(char.player_count, "players");
+    tr.api ? null : (tdPlayers.className = "number-cell");
     tr.appendChild(tdPlayers);
 
-    // 採用率
+    // 採用率（プログレスバー付きのデザインを復元）
     const tdRate = document.createElement("td");
-    tdRate.textContent = `${Number(char.adoption_rate || 0).toFixed(1)}%`;
+    tdRate.className = "rate-cell";
+
+    const rateValue = Number(char.adoption_rate || 0);
+    const rateContainer = document.createElement("div");
+    rateContainer.style.display = "flex";
+    rateContainer.style.alignItems = "center";
+    rateContainer.style.gap = "0.75rem";
+
+    const spanVal = document.createElement("span");
+    spanVal.className = "rate-value";
+    spanVal.textContent = `${rateValue.toFixed(1)}%`;
+
+    const track = document.createElement("div");
+    track.className = "rate-track";
+
+    const bar = document.createElement("span");
+    bar.className = "rate-bar";
+    bar.style.width = `${Math.min(Math.max(rateValue, 0), 100)}%`;
+
+    track.appendChild(bar);
+    rateContainer.appendChild(spanVal);
+    rateContainer.appendChild(track);
+    tdRate.appendChild(rateContainer);
     tr.appendChild(tdRate);
 
     fragment.appendChild(tr);
@@ -862,7 +822,6 @@ async function loadData() {
 
     const data = await response.json();
     
-    // データ検証
     if (!data || typeof data !== "object") {
       throw new Error(t("dataError"));
     }
@@ -887,10 +846,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   loadData();
 
-  // 言語切り替えボタンのイベントリスナー
   document.querySelectorAll("[data-language]").forEach((button) => {
     button.addEventListener("click", () => {
-      const lang = button.getAttribute("data-language");
+      const lang = button.dataset.language;
       if (lang) {
         setLanguage(lang);
       }
