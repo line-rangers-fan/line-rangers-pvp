@@ -482,14 +482,43 @@ def filter_character_images(images: list[dict]) -> list[dict]:
                 "image": src,
                 "width": width,
                 "height": height,
+                "index": image.get("index"),
             }
         )
 
-    # 重複排除しない
     return results
 
 
 def select_team_images(row: dict) -> list[dict]:
+    # 1. 行全体の画像 (all_images) が指定範囲 (5〜15体) であれば全10体を優先取得
+    all_images = row.get("all_images", [])
+
+    if (
+        MIN_CHARACTERS_PER_PLAYER
+        <= len(all_images)
+        <= MAX_CHARACTERS_PER_PLAYER
+    ):
+        return all_images
+
+    # 2. コンテナが分離している場合 (Aチーム5体/Bチーム5体など) は要素indexで重複排除しつつ結合
+    combined_images = []
+    seen_indices = set()
+
+    for group in row.get("groups", []):
+        for img in group:
+            idx = img.get("index")
+            if idx is not None and idx not in seen_indices:
+                seen_indices.add(idx)
+                combined_images.append(img)
+
+    if (
+        MIN_CHARACTERS_PER_PLAYER
+        <= len(combined_images)
+        <= MAX_CHARACTERS_PER_PLAYER
+    ):
+        return combined_images
+
+    # 3. フォールバック: 条件を満たす単一グループのうち最大要素数のものを取得
     valid_groups = []
 
     for images in row.get("groups", []):
@@ -502,15 +531,6 @@ def select_team_images(row: dict) -> list[dict]:
 
     if valid_groups:
         return max(valid_groups, key=len)
-
-    all_images = row.get("all_images", [])
-
-    if (
-        MIN_CHARACTERS_PER_PLAYER
-        <= len(all_images)
-        <= MAX_CHARACTERS_PER_PLAYER
-    ):
-        return all_images
 
     return []
 
