@@ -1,0 +1,265 @@
+<!-- Output: html -->
+<!-- File: docs/index.html -->
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <meta
+    name="description"
+    content="LINEレンジャーのレジェンド帯キャラクター編成数と採用率を集計する非公式サイト"
+  >
+
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="
+      default-src 'self';
+      script-src 'self';
+      style-src 'self';
+      img-src 'self' https: data:;
+      connect-src 'self';
+      object-src 'none';
+      base-uri 'self';
+      frame-ancestors 'none';
+    "
+  >
+
+  <title>LINEレンジャー レジェンド帯キャラ集計</title>
+
+  <link
+    rel="stylesheet"
+    href="./assets/style.css"
+  >
+
+  <script
+    src="./assets/app.js"
+    defer
+  ></script>
+</head>
+
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <p class="eyebrow">
+        UNOFFICIAL STATISTICS
+      </p>
+
+      <h1>
+        レジェンド帯 キャラ集計
+      </h1>
+
+      <p class="header-description">
+        レジェンド帯プレイヤーの防衛チームから、
+        キャラクターの編成数と採用率を集計しています。
+      </p>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <noscript>
+      <p class="message message-error">
+        表示するにはJavaScriptを有効にしてください。
+      </p>
+    </noscript>
+
+    <section
+      id="status-message"
+      class="message"
+      aria-live="polite"
+    >
+      集計データを読み込んでいます。
+    </section>
+
+    <section
+      id="summary"
+      class="summary-grid"
+      aria-label="集計概要"
+      hidden
+    >
+      <article class="summary-card">
+        <span class="summary-label">
+          リーグ
+        </span>
+
+        <strong id="summary-league">
+          -
+        </strong>
+      </article>
+
+      <article class="summary-card">
+        <span class="summary-label">
+          集計人数
+        </span>
+
+        <strong id="summary-players">
+          -
+        </strong>
+      </article>
+
+      <article class="summary-card">
+        <span class="summary-label">
+          全編成キャラ数
+        </span>
+
+        <strong id="summary-slots">
+          -
+        </strong>
+      </article>
+
+      <article class="summary-card">
+        <span class="summary-label">
+          キャラ種類数
+        </span>
+
+        <strong id="summary-characters">
+          -
+        </strong>
+      </article>
+
+      <article class="summary-card">
+        <span class="summary-label">
+          最終更新
+        </span>
+
+        <strong id="summary-updated">
+          -
+        </strong>
+      </article>
+    </section>
+
+    <section
+      id="ranking-section"
+      class="ranking-section"
+      hidden
+    >
+      <div class="table-heading">
+        <div>
+          <h2>
+            キャラクターランキング
+          </h2>
+
+          <p>
+            編成数が多い順に表示しています。
+          </p>
+        </div>
+
+        <button
+          id="csv-button"
+          type="button"
+        >
+          CSVダウンロード
+        </button>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <caption class="visually-hidden">
+            レジェンド帯キャラクター集計ランキング
+          </caption>
+
+          <thead>
+            <tr>
+              <th scope="col">
+                順位
+              </th>
+
+              <th scope="col">
+                キャラクター
+              </th>
+
+              <th scope="col">
+                編成数
+              </th>
+
+              <th scope="col">
+                採用人数
+              </th>
+
+              <th scope="col">
+                採用率
+              </th>
+            </tr>
+          </thead>
+
+          <tbody id="ranking-body"></tbody>
+        </table>
+      </div>
+
+      <p
+        id="result-count"
+        class="result-count"
+      ></p>
+    </section>
+
+    <section class="notes">
+      <h2>
+        集計方法
+      </h2>
+
+      <ul>
+        <li>
+          編成数は、各プレイヤーの防衛チームに編成された
+          キャラクターの総数です。
+        </li>
+
+        <li>
+          同じプレイヤーが同一キャラクターを複数体使用している場合、
+          編成数には使用された体数分を加算します。
+        </li>
+
+        <li>
+          採用人数は、そのキャラクターを1体以上使用した
+          プレイヤー数です。
+        </li>
+
+        <li>
+          同じプレイヤーが同一キャラクターを複数体使用していても、
+          採用人数では1人として計算します。
+        </li>
+
+        <li>
+          採用率は「採用人数 ÷ 集計人数」で計算します。
+        </li>
+
+        <li>
+          集計は毎日、日本時間の午前0時頃に更新されます。
+        </li>
+
+        <li>
+          GitHub Actionsの混雑により、
+          更新時刻が遅れる場合があります。
+        </li>
+
+        <li>
+          本サイトは非公式サイトであり、
+          ゲーム運営元とは関係ありません。
+        </li>
+      </ul>
+
+      <p>
+        データ出典:
+
+        <a
+          id="source-link"
+          href="https://rangers.lerico.net/ja/pvp-tracker"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          LINE Rangers Handbook PvP Tracker
+        </a>
+      </p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      非公式・ファン作成の統計ページ
+    </p>
+  </footer>
+</body>
+</html>
