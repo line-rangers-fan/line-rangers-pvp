@@ -13,6 +13,9 @@
   --danger: #ff6b6b;
   --warning: #fdb022;
   --shadow: 0 18px 45px rgb(0 0 0 / 28%);
+  --radius-sm: 0.65rem;
+  --radius-md: 0.8rem;
+  --radius-lg: 1rem;
 }
 
 * {
@@ -22,6 +25,7 @@
 html {
   min-width: 320px;
   background: var(--background);
+  scroll-behavior: smooth;
 }
 
 body {
@@ -46,6 +50,8 @@ body {
     "Yu Gothic",
     sans-serif;
   line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button {
@@ -90,6 +96,7 @@ a:hover {
 }
 
 .language-switcher button {
+  flex: 0 0 auto;
   width: auto;
   min-height: 2.35rem;
   padding: 0.4rem 0.7rem;
@@ -105,14 +112,20 @@ a:hover {
     color 0.15s ease,
     background 0.15s ease,
     border-color 0.15s ease,
-    transform 0.15s ease;
+    transform 0.1s ease;
 }
 
-.language-switcher button:hover {
-  color: var(--text);
-  border-color: var(--accent-dark);
-  background: var(--surface-light);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .language-switcher button:hover {
+    color: var(--text);
+    border-color: var(--accent-dark);
+    background: var(--surface-light);
+    transform: translateY(-1px);
+  }
+}
+
+.language-switcher button:active {
+  transform: scale(0.96);
 }
 
 .language-switcher button:focus-visible {
@@ -120,12 +133,15 @@ a:hover {
   outline-offset: 2px;
 }
 
+/* 選択中の言語をハッキリ強調 */
 .language-switcher button.language-active {
   border-color: var(--accent);
-  color: var(--text);
-  background: var(--accent-dark);
+  color: #06251a;
+  background: var(--accent);
+  font-weight: 800;
   box-shadow:
-    0 0 0 1px rgb(50 213 131 / 15%);
+    0 0 0 3px rgb(50 213 131 / 20%),
+    0 4px 14px rgb(50 213 131 / 35%);
 }
 
 /* =========================================
@@ -162,11 +178,32 @@ h1 {
    ========================================= */
 
 .message {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
   padding: 1rem 1.25rem;
   border: 1px solid var(--border);
-  border-radius: 0.8rem;
+  border-radius: var(--radius-md);
   color: var(--muted);
   background: var(--surface);
+}
+
+/* 読み込み中のみスピナーを表示（エラー・警告時は出さない） */
+.message:not(.message-error):not(.message-warning)::before {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  content: "";
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .message-error {
@@ -192,10 +229,12 @@ h1 {
 }
 
 .summary-card {
+  position: relative;
   min-width: 0;
-  padding: 1.25rem;
+  padding: 1.4rem 1.25rem 1.25rem;
+  overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 1rem;
+  border-radius: var(--radius-lg);
   background:
     linear-gradient(
       145deg,
@@ -203,19 +242,56 @@ h1 {
       var(--surface)
     );
   box-shadow: var(--shadow);
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+/* カード上部にアクセントの帯を追加して、情報のまとまりを視覚化 */
+.summary-card::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background:
+    linear-gradient(
+      90deg,
+      var(--accent-dark),
+      var(--accent)
+    );
+  content: "";
+}
+
+@media (hover: hover) {
+  .summary-card:hover {
+    border-color: var(--accent-dark);
+    transform: translateY(-2px);
+  }
+}
+
+.summary-card:active {
+  transform: scale(0.98);
 }
 
 .summary-label {
   display: block;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.4rem;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 
+/* 数字を主役にする：大きく、太く、桁がブレないように */
 .summary-card strong {
   display: block;
   overflow-wrap: anywhere;
-  font-size: 1.25rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 /* =========================================
@@ -225,7 +301,7 @@ h1 {
 .ranking-section {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 1rem;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -259,19 +335,31 @@ button {
   padding: 0.65rem 1rem;
   cursor: pointer;
   border: 1px solid var(--accent-dark);
-  border-radius: 0.65rem;
+  border-radius: var(--radius-sm);
   color: var(--text);
   background: var(--accent-dark);
   font-weight: 700;
+  transition: background 0.15s ease, transform 0.1s ease;
 }
 
-button:hover {
-  background: #087b49;
+@media (hover: hover) {
+  button:hover {
+    background: #087b49;
+  }
+}
+
+button:active {
+  transform: scale(0.98);
 }
 
 button:focus-visible {
   outline: 3px solid rgb(50 213 131 / 35%);
   outline-offset: 2px;
+}
+
+#csv-button::before {
+  margin-right: 0.4rem;
+  content: "⬇";
 }
 
 /* =========================================
@@ -280,6 +368,7 @@ button:focus-visible {
 
 .table-wrapper {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -295,14 +384,35 @@ td {
   white-space: nowrap;
 }
 
-th {
+/* スクロールしてもヘッダーが常に見えるように固定 */
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   color: var(--muted);
-  background: rgb(7 17 31 / 55%);
+  background: #0a1729;
+  box-shadow: 0 1px 0 var(--border);
   font-size: 0.78rem;
   letter-spacing: 0.04em;
 }
 
+/* 偶数行をうっすら塗って視線がブレないように */
+tbody tr:nth-child(even) {
+  background: rgb(255 255 255 / 2.5%);
+}
+
+@media (hover: hover) {
+  tbody tr:hover {
+    background: var(--surface-light);
+  }
+}
+
+tbody tr:active {
+  background: var(--surface-light);
+}
+
 .rank-cell {
+  position: relative;
   width: 4.5rem;
   color: var(--muted);
   font-weight: 800;
@@ -321,6 +431,32 @@ th {
   color: #d69b64;
 }
 
+/* 上位3位のランク数字の背後にメダル風の丸を追加 */
+.rank-cell[data-rank="1"]::before,
+.rank-cell[data-rank="2"]::before,
+.rank-cell[data-rank="3"]::before {
+  position: absolute;
+  inset: 0.3rem;
+  z-index: -1;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+  opacity: 0.16;
+}
+
+/* 上位3位の行全体もうっすら色付け */
+tbody tr:has(.rank-cell[data-rank="1"]) {
+  background: rgb(255 209 102 / 6%);
+}
+
+tbody tr:has(.rank-cell[data-rank="2"]) {
+  background: rgb(216 225 235 / 5%);
+}
+
+tbody tr:has(.rank-cell[data-rank="3"]) {
+  background: rgb(214 155 100 / 6%);
+}
+
 .character-cell {
   display: flex;
   align-items: center;
@@ -332,7 +468,7 @@ th {
   width: 4.5rem;
   height: 4.5rem;
   border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-md);
   background: var(--background);
   object-fit: contain;
 }
@@ -373,6 +509,7 @@ th {
       var(--accent-dark),
       var(--accent)
     );
+  transition: width 0.6s ease;
 }
 
 .result-count {
@@ -391,7 +528,7 @@ th {
   margin-top: 2rem;
   padding: 1.5rem;
   border: 1px solid var(--border);
-  border-radius: 1rem;
+  border-radius: var(--radius-lg);
   color: var(--muted);
   background: var(--surface);
 }
@@ -402,8 +539,27 @@ th {
   font-size: 1.2rem;
 }
 
+.notes ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  list-style: none;
+}
+
+.notes li {
+  position: relative;
+}
+
 .notes li + li {
-  margin-top: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+/* チェックマークの箇条書きに */
+.notes li::before {
+  position: absolute;
+  left: -1.5rem;
+  color: var(--accent);
+  font-weight: 800;
+  content: "✓";
 }
 
 /* =========================================
@@ -415,6 +571,10 @@ th {
   border-top: 1px solid var(--border);
   color: var(--muted);
   text-align: center;
+}
+
+.site-footer p + p {
+  margin-top: 0.5rem;
 }
 
 /* =========================================
@@ -450,15 +610,34 @@ th {
    ========================================= */
 
 @media (max-width: 700px) {
+  /* 折り返す代わりに、横スクロールの1本の帯に */
   .language-switcher {
+    flex-wrap: nowrap;
     justify-content: flex-start;
     gap: 0.35rem;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 12px,
+      black calc(100% - 12px),
+      transparent
+    );
+  }
+
+  .language-switcher::-webkit-scrollbar {
+    display: none;
   }
 
   .language-switcher button {
     min-height: 2.2rem;
     padding: 0.35rem 0.6rem;
     font-size: 0.72rem;
+    scroll-snap-align: start;
   }
 
   .summary-grid {
@@ -491,16 +670,22 @@ th {
     padding-top: 3rem;
   }
 
-  .language-switcher {
-    justify-content: flex-start;
-  }
-
   .language-switcher button {
     font-size: 0.68rem;
   }
 
   .summary-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+  }
+
+  .summary-card {
+    padding: 1rem 0.9rem 0.9rem;
+  }
+
+  .summary-card strong {
+    font-size: clamp(1.15rem, 5vw, 1.4rem);
   }
 
   th,
@@ -511,5 +696,22 @@ th {
   .character-image {
     width: 3.8rem;
     height: 3.8rem;
+  }
+}
+
+/* =========================================
+   Reduced Motion
+   ========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
