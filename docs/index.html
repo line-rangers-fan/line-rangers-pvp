@@ -16,7 +16,7 @@
   <meta
     http-equiv="Content-Security-Policy"
     content="
-      default-src 'self' 'unsafe-inline';
+      default-src 'self';
       script-src 'self';
       style-src 'self' 'unsafe-inline';
       img-src 'self' https: data:;
@@ -42,63 +42,22 @@
 
   <style>
     .summon-wrapper {
-      position: relative;
-      display: flex;
-      justify-content: center;
-      align-items: flex-end;
-      margin-top: 20px;
-      min-height: 120px;
+      text-align: center;
+      margin-top: 15px;
     }
-
+    
     .summon-video {
       width: 140px;
       height: auto;
       
-      /* 黒い背景を透明化 */
-      mix-blend-mode: screen;
+      /* カクカクの四角い枠を、円形にフワッとぼかして消す魔法 */
+      -webkit-mask-image: radial-gradient(circle, black 50%, transparent 75%);
+      mask-image: radial-gradient(circle, black 50%, transparent 75%);
       
-      /* 動画の下部をグラデーションで消す */
-      -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
-      mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
-      
-      /* 召喚＆浮遊アニメーション */
-      animation: 
-        summon-appear 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards,
-        summon-floating 4s ease-in-out infinite 1.5s;
-        
       pointer-events: none;
-      z-index: 2;
-    }
-
-    /* 足元のオーラ */
-    .summon-aura {
-      position: absolute;
-      bottom: 5px;
-      width: 80px;
-      height: 15px;
-      background: radial-gradient(ellipse, rgba(160, 120, 255, 0.5) 0%, transparent 70%);
-      border-radius: 50%;
-      animation: 
-        summon-appear 1.5s ease-out forwards,
-        aura-pulse 4s ease-in-out infinite 1.5s;
-      z-index: 1;
-    }
-
-    /* アニメーションの定義 */
-    @keyframes summon-appear {
-      0% { opacity: 0; transform: translateY(30px) scale(0.8); filter: blur(5px); }
-      100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-    }
-    @keyframes summon-floating {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-8px); }
-    }
-    @keyframes aura-pulse {
-      0%, 100% { transform: scale(1); opacity: 0.8; }
-      50% { transform: scale(0.7); opacity: 0.3; }
     }
   </style>
-  </head>
+</head>
 
 <body>
   <header class="site-header">
@@ -131,9 +90,8 @@
       </p>
 
       <div class="summon-wrapper">
-        <div class="summon-aura"></div>
         <video 
-          src="./kafka%20character%20preview.mov" 
+          src="./kafka character preview.mov" 
           autoplay loop muted playsinline 
           class="summon-video">
         </video>
