@@ -3,6 +3,16 @@
 
 const DATA_PATH = "./data/character_usage.json";
 
+// 【追加】効果音の読み込み
+// ※ 先ほどトリミングしたファイル名に合わせてください（例: sound.m4a）
+const clickSound = new Audio("./assets/sound.m4a");
+clickSound.volume = 0.5;
+
+function playClickSound() {
+  clickSound.currentTime = 0; // 連続で押されても頭から再生
+  clickSound.play().catch(() => {}); // ブラウザの自動再生ブロック対策
+}
+
 const LANGUAGES = [
   "ja",
   "en",
@@ -485,7 +495,7 @@ function formatInteger(value) {
   return new Intl.NumberFormat(getLocale()).format(Number(value) || 0);
 }
 
-// 選択中の言語に応じたタイムゾーンで表示する
+// 【修正箇所】dateStyle, timeStyleとtimeZoneNameは同時指定できないので、個別に設定
 function formatDate(value) {
   if (!value) {
     return t("notCollected");
@@ -498,8 +508,11 @@ function formatDate(value) {
   }
 
   return new Intl.DateTimeFormat(getLocale(), {
-    dateStyle: "medium",
-    timeStyle: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
     timeZone: TIMEZONES[state.language] || "UTC",
     timeZoneName: "short",
   }).format(date);
@@ -536,7 +549,6 @@ function translateLeague(value) {
   return league;
 }
 
-// 画像URLのファイル名からラベルを作る（データにキャラクター名が無いため）
 function characterLabel(character) {
   if (!character || !character.image) {
     return t("unknown");
@@ -656,7 +668,6 @@ function detectLanguage() {
   return "en";
 }
 
-// updated_at から2日以上経過しているかチェックし、警告バナーの表示を切り替える
 function updateStaleWarning() {
   if (!elements.summary) return;
 
@@ -763,7 +774,6 @@ function renderTable() {
 
     const bar = document.createElement("span");
     bar.className = "rate-bar";
-    // 最初は0%にしておき、後でアニメーションさせる
     bar.style.width = "0%";
 
     track.appendChild(bar);
@@ -782,7 +792,6 @@ function renderTable() {
 
   elements.body.appendChild(fragment);
 
-  // DOM挿入後に2フレーム待ってから幅を変更すると、CSSのtransitionが効く
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       barsToAnimate.forEach(({ element, width }) => {
@@ -830,7 +839,6 @@ function downloadCSV() {
   URL.revokeObjectURL(url);
 }
 
-// データの形が正しいかチェックする。おかしければ具体的なエラーを投げる
 function validateData(data) {
   if (!data || typeof data !== "object") {
     throw new Error(t("dataError"));
@@ -921,8 +929,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   loadData();
 
+  // 【追加】クリック時に playClickSound() が呼ばれるようにしました
   document.querySelectorAll("[data-language]").forEach((button) => {
     button.addEventListener("click", () => {
+      playClickSound(); // 音を鳴らす
       const lang = button.dataset.language;
       if (lang) {
         setLanguage(lang);
@@ -931,6 +941,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   if (elements.csvButton) {
-    elements.csvButton.addEventListener("click", downloadCSV);
+    elements.csvButton.addEventListener("click", () => {
+      playClickSound(); // 音を鳴らす
+      downloadCSV();
+    });
   }
 });
