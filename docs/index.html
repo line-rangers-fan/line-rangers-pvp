@@ -17,17 +17,25 @@
     http-equiv="Content-Security-Policy"
     content="
       default-src 'self';
-      script-src 'self';
+      script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com;
       style-src 'self' 'unsafe-inline';
-      img-src 'self' https: data:;
+      img-src 'self' https: data: https://www.google-analytics.com https://www.googletagmanager.com;
       media-src 'self';
-      connect-src 'self';
+      connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com;
       object-src 'none';
       base-uri 'self';
       frame-ancestors 'none';
     "
   >
 
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
   <title>LINEレンジャー レジェンド帯キャラ集計</title>
 
   <link
@@ -269,7 +277,7 @@
 
       <ul>
         <li id="method-1">
-          編成数は、各プレイヤーの防衛チームに編成された
+          編成수는、各プレイヤーの防衛チームに編成された
           キャラクターの総数です。
         </li>
 
