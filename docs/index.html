@@ -17,25 +17,17 @@
     http-equiv="Content-Security-Policy"
     content="
       default-src 'self';
-      script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com;
+      script-src 'self';
       style-src 'self' 'unsafe-inline';
-      img-src 'self' https: data: https://www.google-analytics.com https://www.googletagmanager.com;
+      img-src 'self' https: data:;
       media-src 'self';
-      connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com;
+      connect-src 'self';
       object-src 'none';
       base-uri 'self';
       frame-ancestors 'none';
     "
   >
 
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'G-XXXXXXXXXX');
-  </script>
   <title>LINEレンジャー レジェンド帯キャラ集計</title>
 
   <link
@@ -203,13 +195,6 @@
             編成数が多い順に表示しています。
           </p>
         </div>
-
-        <button
-          id="csv-button"
-          type="button"
-        >
-          CSVダウンロード
-        </button>
       </div>
 
       <div class="table-wrapper">

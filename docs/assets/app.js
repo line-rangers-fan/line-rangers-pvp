@@ -3,16 +3,6 @@
 
 const DATA_PATH = "./data/character_usage.json";
 
-// 【追加】効果音の読み込み
-// ※ 先ほどトリミングしたファイル名に合わせてください（例: sound.m4a）
-const clickSound = new Audio("./assets/sound.m4a");
-clickSound.volume = 0.5;
-
-function playClickSound() {
-  clickSound.currentTime = 0; // 連続で押されても頭から再生
-  clickSound.play().catch(() => {}); // ブラウザの自動再生ブロック対策
-}
-
 const LANGUAGES = [
   "ja",
   "en",
@@ -69,7 +59,6 @@ const translations = {
     updated: "最終更新",
     ranking: "キャラクターランキング",
     rankingDescription: "編成数が多い順に表示しています。",
-    csv: "CSVダウンロード",
     rank: "順位",
     character: "キャラクター",
     occurrence: "編成数",
@@ -128,7 +117,6 @@ const translations = {
     updated: "Last Updated",
     ranking: "Character Ranking",
     rankingDescription: "Sorted by team count.",
-    csv: "Download CSV",
     rank: "Rank",
     character: "Character",
     occurrence: "Team Count",
@@ -189,7 +177,6 @@ const translations = {
     updated: "最後更新",
     ranking: "角色排名",
     rankingDescription: "依編成數由高至低排列。",
-    csv: "下載 CSV",
     rank: "排名",
     character: "角色",
     occurrence: "編成數",
@@ -239,7 +226,6 @@ const translations = {
     updated: "อัปเดตล่าสุด",
     ranking: "อันดับตัวละคร",
     rankingDescription: "เรียงตามจำนวนการจัดทีมจากมากไปน้อย",
-    csv: "ดาวน์โหลด CSV",
     rank: "อันดับ",
     character: "ตัวละคร",
     occurrence: "จำนวนการจัดทีม",
@@ -295,7 +281,6 @@ const translations = {
     updated: "Terakhir Diperbarui",
     ranking: "Peringkat Karakter",
     rankingDescription: "Diurutkan berdasarkan jumlah penggunaan.",
-    csv: "Unduh CSV",
     rank: "Peringkat",
     character: "Karakter",
     occurrence: "Jumlah Penggunaan",
@@ -354,7 +339,6 @@ const translations = {
     updated: "Cập nhật lần cuối",
     ranking: "Xếp hạng nhân vật",
     rankingDescription: "Sắp xếp theo số lần xếp đội từ cao xuống thấp.",
-    csv: "Tải CSV",
     rank: "Hạng",
     character: "Nhân vật",
     occurrence: "Số lần xếp đội",
@@ -410,7 +394,6 @@ const translations = {
     updated: "최종 업데이트",
     ranking: "캐릭터 순위",
     rankingDescription: "편성 수가 많은 순서로 표시합니다.",
-    csv: "CSV 다운로드",
     rank: "순위",
     character: "캐릭터",
     occurrence: "편성 수",
@@ -469,7 +452,6 @@ const elements = {
   updated: document.querySelector("#summary-updated"),
   body: document.querySelector("#ranking-body"),
   resultCount: document.querySelector("#result-count"),
-  csvButton: document.querySelector("#csv-button"),
   sourceLink: document.querySelector("#source-link"),
 };
 
@@ -584,10 +566,6 @@ function applyTranslations() {
 
   setText("#ranking-title", tr.ranking);
   setText("#ranking-description", tr.rankingDescription);
-
-  if (elements.csvButton) {
-    elements.csvButton.textContent = tr.csv;
-  }
 
   setText("#ranking-caption", tr.ranking);
 
@@ -804,41 +782,6 @@ function renderTable() {
   elements.resultCount.textContent = label(formatInteger(state.characters.length));
 }
 
-function downloadCSV() {
-  if (!state.characters || state.characters.length === 0) return;
-
-  const headers = [
-    t("rank"),
-    t("character"),
-    t("occurrence"),
-    t("playerCount"),
-    t("rate"),
-  ];
-
-  const rows = [headers.join(",")];
-
-  state.characters.forEach((char, index) => {
-    const row = [
-      char.rank || index + 1,
-      `"${characterLabel(char).replace(/"/g, '""')}"`,
-      char.occurrence_count || 0,
-      char.player_count || 0,
-      char.adoption_rate || 0,
-    ];
-    rows.push(row.join(","));
-  });
-
-  const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `line_rangers_legend_ranking_${state.language}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 function validateData(data) {
   if (!data || typeof data !== "object") {
     throw new Error(t("dataError"));
@@ -929,21 +872,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   loadData();
 
-  // 【追加】クリック時に playClickSound() が呼ばれるようにしました
   document.querySelectorAll("[data-language]").forEach((button) => {
     button.addEventListener("click", () => {
-      playClickSound(); // 音を鳴らす
       const lang = button.dataset.language;
       if (lang) {
         setLanguage(lang);
       }
     });
   });
-
-  if (elements.csvButton) {
-    elements.csvButton.addEventListener("click", () => {
-      playClickSound(); // 音を鳴らす
-      downloadCSV();
-    });
-  }
 });
