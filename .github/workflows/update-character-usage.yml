@@ -2,6 +2,14 @@ name: scrape-and-deploy
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "scripts/**"
+      - "requirements.txt"
+      - ".github/workflows/update-character-usage.yml"
   schedule:
     # 10分ごとに実行
     - cron: "*/10 * * * *"
