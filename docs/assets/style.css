@@ -758,3 +758,14 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
     scroll-behavior: auto !important;
   }
 }
+
+
+.character-image { cursor: pointer; }
+.equipment-dialog { width: min(680px, calc(100% - 2rem)); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.equipment-dialog::backdrop { background: rgb(0 0 0 / 70%); }
+.equipment-close { float: right; min-height: 2rem; padding: .25rem .65rem; }
+.equipment-dialog section { display: inline-block; vertical-align: top; width: 32%; padding: .5rem; }
+.equipment-dialog ol { padding-left: 1.4rem; }
+.equipment-dialog li { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; font-size: .8rem; }
+.equipment-dialog li img { width: 2rem; height: 2rem; object-fit: contain; }
+@media (max-width: 600px) { .equipment-dialog section { display: block; width: 100%; } }
