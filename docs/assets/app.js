@@ -881,3 +881,38 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
+
+
+function renderEquipment(character) {
+  const dialog = document.querySelector("#equipment-dialog");
+  const content = document.querySelector("#equipment-content");
+  if (!dialog || !content) return;
+  content.innerHTML = "";
+  const rankings = character && character.equipment_rankings;
+  if (!rankings) { content.textContent = t("unknown"); dialog.showModal(); return; }
+  ["WEAPON", "ARMOR", "ACC"].forEach((kind) => {
+    const section = document.createElement("section");
+    const heading = document.createElement("h3"); heading.textContent = kind;
+    section.appendChild(heading);
+    const list = document.createElement("ol");
+    (rankings[kind] || []).forEach((item) => {
+      const li = document.createElement("li");
+      const image = document.createElement("img"); image.src = item.image || ""; image.alt = item.equipment_id || "";
+      const label = document.createElement("span"); label.textContent = `${item.equipment_id} — ${item.occurrence_count} / ${item.player_count}`;
+      li.append(image, label); list.appendChild(li);
+    });
+    section.appendChild(list); content.appendChild(section);
+  });
+  dialog.showModal();
+}
+
+document.addEventListener("click", (event) => {
+  const image = event.target.closest(".character-image");
+  if (image) {
+    const character = state.characters.find((item) => item.image === image.src || new URL(item.image, location.href).href === image.src);
+    renderEquipment(character);
+  }
+  if (event.target.matches("#equipment-close") || event.target === document.querySelector("#equipment-dialog")) {
+    document.querySelector("#equipment-dialog")?.close();
+  }
+});
