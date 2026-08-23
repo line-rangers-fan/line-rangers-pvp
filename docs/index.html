@@ -17,7 +17,7 @@
     http-equiv="Content-Security-Policy"
     content="
       default-src 'self';
-      script-src 'self';
+      script-src 'self' 'unsafe-inline';
       style-src 'self' 'unsafe-inline';
       img-src 'self' https: data:;
       media-src 'self';
@@ -89,14 +89,13 @@
         キャラクターの編成数と採用率を集計しています。
       </p>
 
-      <!-- ▼▼▼ ここから追加：日曜日限定の赤文字メッセージ ▼▼▼ -->
-      <div id="sunday-notice" style="display: none; color: #ff5252; font-size: 14px; margin-top: 12px; line-height: 1.5;">
+      <!-- 日曜日限定の赤文字メッセージ -->
+      <div id="sunday-notice" style="display: none; color: #ff5252; font-size: 14px; margin-top: 12px; line-height: 1.5; font-weight: bold;">
         ※土曜日にPVPランキングの初期化が行われ、レジェンド帯下位の方がマスター帯に移行となるため、集計の際分母が一時的に減りますがエラーによるものではありません。<br>
         ご理解の上ご覧ください。
       </div>
       <script>
         document.addEventListener("DOMContentLoaded", function() {
-          // 0 = 日曜日
           if (new Date().getDay() === 0) {
             var notice = document.getElementById("sunday-notice");
             if (notice) {
@@ -105,7 +104,6 @@
           }
         });
       </script>
-      <!-- ▲▲▲ ここまで追加 ▲▲▲ -->
 
     </div>
   </header>
