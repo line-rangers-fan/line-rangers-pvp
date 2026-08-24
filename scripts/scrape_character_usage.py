@@ -45,7 +45,6 @@ MIN_REQUIRED_PLAYERS = int(
     os.environ.get("MIN_REQUIRED_PLAYERS", "50")
 ) 
 
-# 1体でも編成されていれば集計対象とする
 MIN_CHARACTERS_PER_PLAYER = int(
     os.environ.get("MIN_CHARACTERS_PER_PLAYER", "1")
 ) 
@@ -60,9 +59,9 @@ OUTPUT_PATH = Path("docs/data/character_usage.json")
 DEBUG_DIR = Path(".artifacts/debug") 
 
 MAX_PAGES = 30
-MAX_LOAD_ATTEMPTS = 12  # 大幅短縮（高速化）
-STABLE_ATTEMPTS_LIMIT = 4  # 安定検出時の即時抜け
-LOAD_WAIT_MS = 150  # 待機時間を150msに短縮
+MAX_LOAD_ATTEMPTS = 50
+STABLE_ATTEMPTS_LIMIT = 10
+LOAD_WAIT_MS = 500 
 
 ROW_SELECTORS = [
     "table tbody tr",
@@ -142,6 +141,10 @@ EXCLUDED_SOURCE_WORDS = {
     "guild",
     "league",
     "logo",
+    "profile",
+    "rank",
+    "tier",
+    "user",
 } 
 
 EXCLUDED_CONTEXT_WORDS = {
@@ -151,6 +154,10 @@ EXCLUDED_CONTEXT_WORDS = {
     "flag",
     "guild",
     "league",
+    "player-icon",
+    "profile",
+    "rank-icon",
+    "user-icon",
 }
 
 
@@ -241,8 +248,8 @@ def dismiss_common_dialogs(page) -> None:
                 buttons.count() > 0
                 and buttons.first.is_visible()
             ):
-                buttons.first.click(timeout=1_000)
-                page.wait_for_timeout(50)
+                buttons.first.click(timeout=2_000)
+                page.wait_for_timeout(200)
         except PlaywrightError:
             continue
 
@@ -273,8 +280,8 @@ def select_legend_league(page) -> None:
                 if not candidate.is_visible():
                     continue 
 
-                candidate.click(timeout=1_500)
-                page.wait_for_timeout(500) 
+                candidate.click(timeout=3_000)
+                page.wait_for_timeout(1_500) 
 
                 print(
                     "[INFO] レジェンドリーグを選択しました。"
@@ -296,22 +303,29 @@ def extract_rows_from_dom(page, selector: str) -> list[dict]:
             """
             (rows, teamSelectors) => {
             function readImage(image, index) {
+            const rect = image.getBoundingClientRect();
+            const style = getComputedStyle(image);
             const context = image.closest(
             '[class], [data-team], [data-type], td, li'
             ); 
 
-            // 遅延読み込みURLもすべて網羅して取得
-            const src = image.currentSrc
+            return {
+            index: index,
+            src:
+            image.currentSrc
             || image.getAttribute('src')
             || image.getAttribute('data-src')
             || image.getAttribute('data-lazy-src')
             || image.getAttribute('data-original')
-            || (image.srcset ? image.srcset.split(' ')[0] : '')
-            || '';
-
-            return {
-            index: index,
-            src: src,
+            || '',
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+            visible:
+            rect.width > 0
+            && rect.height > 0
+            && style.display !== 'none'
+            && style.visibility !== 'hidden'
+            && Number(style.opacity || 1) !== 0,
             context:
             context
             && typeof context.className === 'string'
@@ -426,10 +440,15 @@ def filter_character_images(images: list[dict]) -> list[dict]:
     results = [] 
 
     for image in images:
+        if not image.get("visible"):
+            continue 
+
         src = clean_url(
             str(image.get("src") or "")
         ) 
 
+        width = int(image.get("width") or 0)
+        height = int(image.get("height") or 0)
         context = str(
             image.get("context") or ""
         ).lower() 
@@ -451,9 +470,17 @@ def filter_character_images(images: list[dict]) -> list[dict]:
         ):
             continue 
 
+        if width < 18 or height < 18:
+            continue 
+
+        if width > 220 or height > 220:
+            continue 
+
         results.append(
             {
                 "image": src,
+                "width": width,
+                "height": height,
                 "index": image.get("index"),
             }
         ) 
@@ -462,12 +489,6 @@ def filter_character_images(images: list[dict]) -> list[dict]:
 
 
 def select_team_images(row: dict) -> list[dict]:
-    # コンテナの分解漏れを防ぐため、row内のすべての抽出画像をまとめて取得
-    all_images = row.get("all_images", []) 
-
-    if len(all_images) >= MIN_CHARACTERS_PER_PLAYER:
-        return all_images[:MAX_CHARACTERS_PER_PLAYER] 
-
     combined_images = []
     seen_indices = set() 
 
@@ -478,8 +499,13 @@ def select_team_images(row: dict) -> list[dict]:
                 seen_indices.add(idx)
                 combined_images.append(img) 
 
-    if len(combined_images) >= MIN_CHARACTERS_PER_PLAYER:
+    if combined_images:
         return combined_images[:MAX_CHARACTERS_PER_PLAYER] 
+
+    all_images = row.get("all_images", []) 
+
+    if all_images:
+        return all_images[:MAX_CHARACTERS_PER_PLAYER] 
 
     return []
 
@@ -514,7 +540,10 @@ def find_best_row_selector(page) -> tuple[str | None, dict]:
         reverse=True,
     ) 
 
-    if not ranked or ranked[0][1]["valid_rows"] == 0:
+    if not ranked:
+        return None, diagnostics 
+
+    if ranked[0][1]["valid_rows"] == 0:
         return None, diagnostics 
 
     return ranked[0][0], diagnostics
@@ -530,7 +559,6 @@ def create_player_identity(
         "data-player-id",
         "data-user-id",
         "data-id",
-        "data-rank",
         "id",
     ] 
 
@@ -540,10 +568,7 @@ def create_player_identity(
         ).strip() 
 
         if value:
-            return (
-                f"page:{page_number}:"
-                f"{attribute_name}:{value}"
-            ) 
+            return f"{attribute_name}:{value}" 
 
     text = re.sub(
         r"\s+",
@@ -551,12 +576,15 @@ def create_player_identity(
         row.get("text") or "",
     ).strip() 
 
-    if text:
+    # 順位や数字の表記を除去してプレイヤー名テキストのみでIdentityを生成（同一プレイヤーの複数行を結合するため）
+    clean_text = re.sub(r"^\d+\s*", "", text).strip()
+
+    if clean_text:
         digest = hashlib.sha256(
-            text.encode("utf-8")
+            clean_text.encode("utf-8")
         ).hexdigest() 
 
-        return f"page:{page_number}:text:{digest}" 
+        return f"text:{digest}" 
 
     return (
         f"page:{page_number}:"
@@ -583,9 +611,9 @@ def click_load_more(page) -> bool:
                     continue 
 
                 candidate.scroll_into_view_if_needed(
-                    timeout=1_000
+                    timeout=3_000
                 )
-                candidate.click(timeout=1_500)
+                candidate.click(timeout=4_000)
                 page.wait_for_timeout(LOAD_WAIT_MS) 
 
                 print(
@@ -600,23 +628,47 @@ def click_load_more(page) -> bool:
 
 
 def scroll_dynamic_content(page) -> bool:
-    """【超高速・確実版】遅延ロード強制解除と一括高速スクロール"""
     try:
         page.evaluate("""
         () => {
-            // 遅延読み込み属性を強制解除
-            document.querySelectorAll('img').forEach(img => {
-                const lazySrc = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original');
-                if (lazySrc) {
-                    img.src = lazySrc;
-                }
-                img.setAttribute('loading', 'eager');
-            });
-            window.scrollTo(0, document.body.scrollHeight);
+        document.querySelectorAll('img[loading="lazy"]').forEach(img => {
+        img.setAttribute('loading', 'eager');
+        });
         }
         """) 
-        page.wait_for_timeout(200)
-        return True
+
+        result = page.evaluate(
+            """
+            async () => {
+            let moved = false;
+            const beforeWindow = window.scrollY; 
+
+            await new Promise((resolve) => {
+            let totalHeight = window.scrollY;
+            const distance = 400;
+            const timer = setInterval(() => {
+            const scrollHeight = document.documentElement.scrollHeight;
+            window.scrollBy(0, distance);
+            totalHeight += distance; 
+
+            if (totalHeight >= scrollHeight - window.innerHeight) {
+            clearInterval(timer);
+            resolve();
+            }
+            }, 100);
+            }); 
+
+            if (window.scrollY !== beforeWindow) {
+            moved = true;
+            } 
+
+            return moved;
+            }
+            """
+        ) 
+
+        page.wait_for_timeout(1500)
+        return bool(result)
     except PlaywrightError:
         return False
 
@@ -627,6 +679,21 @@ def reset_scroll(page) -> None:
             """
             () => {
             window.scrollTo(0, 0); 
+
+            for (const element of document.querySelectorAll('*')) {
+            const style = getComputedStyle(element); 
+
+            if (
+            element.scrollHeight
+            > element.clientHeight + 100
+            && (
+            style.overflowY === 'auto'
+            || style.overflowY === 'scroll'
+            )
+            ) {
+            element.scrollTop = 0;
+            }
+            }
             }
             """
         )
@@ -670,7 +737,13 @@ def collect_current_page(
                 page_number,
             ) 
 
+            # 同一プレイヤーの行が複数存在する場合は画像を結合（Aチーム+Bチーム）
             if identity in collected:
+                existing_urls = {img["image"] for img in collected[identity]["images"]}
+                for img in images:
+                    if img["image"] not in existing_urls:
+                        collected[identity]["images"].append(img)
+                        existing_urls.add(img["image"])
                 continue 
 
             collected[identity] = {
@@ -711,6 +784,9 @@ def collect_current_page(
             and not clicked
             and not moved
         ):
+            break 
+
+        if stable_attempts >= STABLE_ATTEMPTS_LIMIT + 3:
             break 
 
         page.wait_for_timeout(LOAD_WAIT_MS) 
@@ -768,11 +844,11 @@ def go_to_next_page(page, selector: str) -> bool:
                     continue 
 
                 candidate.scroll_into_view_if_needed(
-                    timeout=1_500
+                    timeout=4_000
                 )
-                candidate.click(timeout=2_000) 
+                candidate.click(timeout=5_000) 
 
-                page.wait_for_timeout(500)
+                page.wait_for_timeout(3_000)
                 scroll_dynamic_content(page) 
 
                 new_signature = page_signature(
@@ -813,6 +889,65 @@ def dump_debug(page, details: dict) -> None:
         page.screenshot(
             path=str(DEBUG_DIR / "screenshot.png"),
             full_page=True,
+        )
+    except PlaywrightError:
+        pass 
+
+    try:
+        images = page.locator("img").evaluate_all(
+            """
+            (images) => images.map((image) => {
+            const rect = image.getBoundingClientRect(); 
+
+            return {
+            src:
+            image.currentSrc
+            || image.getAttribute('src')
+            || image.getAttribute('data-src'),
+            alt: image.getAttribute('alt'),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+            outerHtml: image.outerHTML.slice(0, 1000)
+            };
+            })
+            """
+        ) 
+
+        save_json(
+            DEBUG_DIR / "images.json",
+            images,
+        )
+    except PlaywrightError:
+        pass 
+
+    try:
+        controls = page.locator(
+            "button, a, [role='button']"
+        ).evaluate_all(
+            """
+            (elements) => elements.map((element) => ({
+            text: (
+            element.innerText
+            || element.textContent
+            || ''
+            ).trim().slice(0, 200),
+            ariaLabel: element.getAttribute('aria-label'),
+            title: element.getAttribute('title'),
+            className:
+            typeof element.className === 'string'
+            ? element.className
+            : '',
+            disabled:
+            element.hasAttribute('disabled')
+            || element.getAttribute('aria-disabled') === 'true',
+            outerHtml: element.outerHTML.slice(0, 1000)
+            }))
+            """
+        ) 
+
+        save_json(
+            DEBUG_DIR / "controls.json",
+            controls,
         )
     except PlaywrightError:
         pass 
@@ -1117,7 +1252,7 @@ def main() -> None:
             try:
                 page.wait_for_load_state(
                     "networkidle",
-                    timeout=5_000,
+                    timeout=12_000,
                 )
             except PlaywrightTimeoutError:
                 print(
@@ -1125,10 +1260,10 @@ def main() -> None:
                     "タイムアウトしました。"
                 ) 
 
-            page.wait_for_timeout(500)
+            page.wait_for_timeout(2_000)
             dismiss_common_dialogs(page)
             select_legend_league(page)
-            page.wait_for_timeout(500) 
+            page.wait_for_timeout(1_500) 
 
             if DEBUG:
                 selector, diagnostics = (
