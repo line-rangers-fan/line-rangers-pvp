@@ -60,9 +60,9 @@ OUTPUT_PATH = Path("docs/data/character_usage.json")
 DEBUG_DIR = Path(".artifacts/debug") 
 
 MAX_PAGES = 30
-MAX_LOAD_ATTEMPTS = 50
-STABLE_ATTEMPTS_LIMIT = 10
-LOAD_WAIT_MS = 500  # 待機時間を短縮して高速化
+MAX_LOAD_ATTEMPTS = 12  # 大幅短縮（高速化）
+STABLE_ATTEMPTS_LIMIT = 4  # 安定検出時の即時抜け
+LOAD_WAIT_MS = 150  # 待機時間を150msに短縮
 
 ROW_SELECTORS = [
     "table tbody tr",
@@ -142,10 +142,6 @@ EXCLUDED_SOURCE_WORDS = {
     "guild",
     "league",
     "logo",
-    "profile",
-    "rank",
-    "tier",
-    "user",
 } 
 
 EXCLUDED_CONTEXT_WORDS = {
@@ -155,10 +151,6 @@ EXCLUDED_CONTEXT_WORDS = {
     "flag",
     "guild",
     "league",
-    "player-icon",
-    "profile",
-    "rank-icon",
-    "user-icon",
 }
 
 
@@ -249,8 +241,8 @@ def dismiss_common_dialogs(page) -> None:
                 buttons.count() > 0
                 and buttons.first.is_visible()
             ):
-                buttons.first.click(timeout=1_500)
-                page.wait_for_timeout(100)
+                buttons.first.click(timeout=1_000)
+                page.wait_for_timeout(50)
         except PlaywrightError:
             continue
 
@@ -281,8 +273,8 @@ def select_legend_league(page) -> None:
                 if not candidate.is_visible():
                     continue 
 
-                candidate.click(timeout=2_000)
-                page.wait_for_timeout(1_000) 
+                candidate.click(timeout=1_500)
+                page.wait_for_timeout(500) 
 
                 print(
                     "[INFO] レジェンドリーグを選択しました。"
@@ -308,15 +300,18 @@ def extract_rows_from_dom(page, selector: str) -> list[dict]:
             '[class], [data-team], [data-type], td, li'
             ); 
 
-            return {
-            index: index,
-            src:
-            image.currentSrc
+            // 遅延読み込みURLもすべて網羅して取得
+            const src = image.currentSrc
             || image.getAttribute('src')
             || image.getAttribute('data-src')
             || image.getAttribute('data-lazy-src')
             || image.getAttribute('data-original')
-            || '',
+            || (image.srcset ? image.srcset.split(' ')[0] : '')
+            || '';
+
+            return {
+            index: index,
+            src: src,
             context:
             context
             && typeof context.className === 'string'
@@ -444,7 +439,6 @@ def filter_character_images(images: list[dict]) -> list[dict]:
 
         source_lower = src.lower() 
 
-        # サイズ判定を行わず、キーワードのみで判定（取りこぼし防止）
         if any(
             word in source_lower
             for word in EXCLUDED_SOURCE_WORDS
@@ -468,6 +462,12 @@ def filter_character_images(images: list[dict]) -> list[dict]:
 
 
 def select_team_images(row: dict) -> list[dict]:
+    # コンテナの分解漏れを防ぐため、row内のすべての抽出画像をまとめて取得
+    all_images = row.get("all_images", []) 
+
+    if len(all_images) >= MIN_CHARACTERS_PER_PLAYER:
+        return all_images[:MAX_CHARACTERS_PER_PLAYER] 
+
     combined_images = []
     seen_indices = set() 
 
@@ -478,40 +478,8 @@ def select_team_images(row: dict) -> list[dict]:
                 seen_indices.add(idx)
                 combined_images.append(img) 
 
-    if (
-        MIN_CHARACTERS_PER_PLAYER
-        <= len(combined_images)
-        <= MAX_CHARACTERS_PER_PLAYER
-    ):
-        return combined_images 
-
-    valid_groups = [] 
-
-    for images in row.get("groups", []):
-        if (
-            MIN_CHARACTERS_PER_PLAYER
-            <= len(images)
-            <= MAX_CHARACTERS_PER_PLAYER
-        ):
-            valid_groups.append(images) 
-
-    if valid_groups:
-        return max(valid_groups, key=len) 
-
-    all_images = row.get("all_images", []) 
-
-    if (
-        MIN_CHARACTERS_PER_PLAYER
-        <= len(all_images)
-        <= MAX_CHARACTERS_PER_PLAYER
-    ):
-        return all_images 
-
     if len(combined_images) >= MIN_CHARACTERS_PER_PLAYER:
-        return combined_images[:MAX_CHARACTERS_PER_PLAYER]
-
-    if len(all_images) >= MIN_CHARACTERS_PER_PLAYER:
-        return all_images[:MAX_CHARACTERS_PER_PLAYER]
+        return combined_images[:MAX_CHARACTERS_PER_PLAYER] 
 
     return []
 
@@ -615,9 +583,9 @@ def click_load_more(page) -> bool:
                     continue 
 
                 candidate.scroll_into_view_if_needed(
-                    timeout=2_000
+                    timeout=1_000
                 )
-                candidate.click(timeout=2_000)
+                candidate.click(timeout=1_500)
                 page.wait_for_timeout(LOAD_WAIT_MS) 
 
                 print(
@@ -632,18 +600,22 @@ def click_load_more(page) -> bool:
 
 
 def scroll_dynamic_content(page) -> bool:
-    """【超高速版】遅延ロード解除とページ一括スクロール"""
+    """【超高速・確実版】遅延ロード強制解除と一括高速スクロール"""
     try:
-        # loading="lazy" を解除して即時読み込みを指示
         page.evaluate("""
         () => {
-            document.querySelectorAll('img[loading="lazy"]').forEach(img => {
+            // 遅延読み込み属性を強制解除
+            document.querySelectorAll('img').forEach(img => {
+                const lazySrc = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original');
+                if (lazySrc) {
+                    img.src = lazySrc;
+                }
                 img.setAttribute('loading', 'eager');
             });
             window.scrollTo(0, document.body.scrollHeight);
         }
         """) 
-        page.wait_for_timeout(600)
+        page.wait_for_timeout(200)
         return True
     except PlaywrightError:
         return False
@@ -674,7 +646,6 @@ def collect_current_page(
     attempts = 0
     maximum_dom_rows = 0 
 
-    # 最初にスクロールして読み込ませる
     scroll_dynamic_content(page) 
 
     while attempts < MAX_LOAD_ATTEMPTS:
@@ -742,9 +713,6 @@ def collect_current_page(
         ):
             break 
 
-        if stable_attempts >= STABLE_ATTEMPTS_LIMIT + 2:
-            break 
-
         page.wait_for_timeout(LOAD_WAIT_MS) 
 
     return (
@@ -800,11 +768,11 @@ def go_to_next_page(page, selector: str) -> bool:
                     continue 
 
                 candidate.scroll_into_view_if_needed(
-                    timeout=2_000
+                    timeout=1_500
                 )
-                candidate.click(timeout=3_000) 
+                candidate.click(timeout=2_000) 
 
-                page.wait_for_timeout(1_000)
+                page.wait_for_timeout(500)
                 scroll_dynamic_content(page) 
 
                 new_signature = page_signature(
@@ -1149,7 +1117,7 @@ def main() -> None:
             try:
                 page.wait_for_load_state(
                     "networkidle",
-                    timeout=8_000,
+                    timeout=5_000,
                 )
             except PlaywrightTimeoutError:
                 print(
@@ -1157,10 +1125,10 @@ def main() -> None:
                     "タイムアウトしました。"
                 ) 
 
-            page.wait_for_timeout(1_000)
+            page.wait_for_timeout(500)
             dismiss_common_dialogs(page)
             select_legend_league(page)
-            page.wait_for_timeout(1_000) 
+            page.wait_for_timeout(500) 
 
             if DEBUG:
                 selector, diagnostics = (
