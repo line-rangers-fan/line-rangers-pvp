@@ -46,7 +46,7 @@ MIN_REQUIRED_PLAYERS = int(
     os.environ.get("MIN_REQUIRED_PLAYERS", "50")
 )
 
-# 【修正】1体以上キャラクターが検出されればプレイヤーとしてカウントする
+# 【ご要望】1体以上キャラクターがいればプレイヤーとして集計する方式を維持
 MIN_CHARACTERS_PER_PLAYER = int(
     os.environ.get("MIN_CHARACTERS_PER_PLAYER", "1")
 )
@@ -61,9 +61,9 @@ OUTPUT_PATH = Path("docs/data/character_usage.json")
 DEBUG_DIR = Path(".artifacts/debug")
 
 MAX_PAGES = 30
-MAX_LOAD_ATTEMPTS = 100
-STABLE_ATTEMPTS_LIMIT = 15
-LOAD_WAIT_MS = 2000
+MAX_LOAD_ATTEMPTS = 120
+STABLE_ATTEMPTS_LIMIT = 20
+LOAD_WAIT_MS = 2500  # 読み込み待機時間をさらに強化
 
 ROW_SELECTORS = [
     "table tbody tr",
@@ -88,9 +88,9 @@ TEAM_CONTAINER_SELECTORS = [
     ".defense-team",
     ".defence-team",
     "[class*='defense-team']",
-    "[class*='defense-team']",
+    "[class*='defence-team']",
     "[class*='defense'] [class*='team']",
-    "[class*='defense'] [class*='team']",
+    "[class*='defence'] [class*='team']",
     ".team-formation",
     ".ranger-team",
     "[class*='formation']",
@@ -652,8 +652,8 @@ def click_load_more(page) -> bool:
 
 
 def scroll_dynamic_content(page) -> bool:
+    """ 【強力な読み込み強化】遅延ロードを解除し、ページ最下部までゆっくり確実にスクロールさせて全画像を確実に取得 """
     try:
-        # 画像の遅延読み込みを強制的に解除
         page.evaluate("""
             () => {
                 document.querySelectorAll('img[loading="lazy"]').forEach(img => {
@@ -664,51 +664,24 @@ def scroll_dynamic_content(page) -> bool:
 
         result = page.evaluate(
             """
-            () => {
+            async () => {
                 let moved = false;
-
-                const scrollables = Array.from(
-                    document.querySelectorAll('*')
-                ).filter((element) => {
-                    const style = getComputedStyle(element);
-
-                    return (
-                        element.scrollHeight
-                            > element.clientHeight + 100
-                        && (
-                            style.overflowY === 'auto'
-                            || style.overflowY === 'scroll'
-                        )
-                    );
-                });
-
-                for (const element of scrollables) {
-                    const before = element.scrollTop;
-                    const step = Math.max(
-                        400,
-                        Math.floor(element.clientHeight * 0.8)
-                    );
-
-                    element.scrollTop = Math.min(
-                        element.scrollTop + step,
-                        element.scrollHeight
-                    );
-
-                    if (element.scrollTop !== before) {
-                        moved = true;
-                    }
-                }
-
                 const beforeWindow = window.scrollY;
 
-                window.scrollTo(
-                    0,
-                    Math.min(
-                        window.scrollY
-                            + Math.max(600, window.innerHeight * 0.8),
-                        document.documentElement.scrollHeight
-                    )
-                );
+                await new Promise((resolve) => {
+                    let totalHeight = window.scrollY;
+                    const distance = 300;
+                    const timer = setInterval(() => {
+                        const scrollHeight = document.documentElement.scrollHeight;
+                        window.scrollBy(0, distance);
+                        totalHeight += distance;
+
+                        if (totalHeight >= scrollHeight - window.innerHeight) {
+                            clearInterval(timer);
+                            resolve();
+                        }
+                    }, 80);
+                });
 
                 if (window.scrollY !== beforeWindow) {
                     moved = true;
@@ -718,10 +691,9 @@ def scroll_dynamic_content(page) -> bool:
             }
             """
         )
-
-        page.keyboard.press("End")
-        page.wait_for_timeout(500)
-
+        
+        # 画像のネットワーク読み込みが完了するのをしっかりと待つ
+        page.wait_for_timeout(2500)
         return bool(result)
     except PlaywrightError:
         return False
@@ -766,6 +738,9 @@ def collect_current_page(
     previous_count = 0
     attempts = 0
     maximum_dom_rows = 0
+
+    # ページ表示直後に、まずは一番下までスクロールして全画像を描画させる
+    scroll_dynamic_content(page)
 
     while attempts < MAX_LOAD_ATTEMPTS:
         attempts += 1
@@ -894,7 +869,9 @@ def go_to_next_page(page, selector: str) -> bool:
                 )
                 candidate.click(timeout=5_000)
 
-                page.wait_for_timeout(2_000)
+                # 次ページ移動後もしっかり待ってからスクロール読み込み
+                page.wait_for_timeout(3_000)
+                scroll_dynamic_content(page)
 
                 new_signature = page_signature(
                     page,
@@ -1268,7 +1245,7 @@ def main() -> None:
             timezone_id="Asia/Tokyo",
             viewport={
                 "width": 1440,
-                "height": 8000,
+                "height": 1200,  # 通常のモニターサイズに戻しました
             },
             user_agent=(
                 "Mozilla/5.0 (X11; Linux x86_64) "
