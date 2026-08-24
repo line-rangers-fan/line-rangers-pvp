@@ -1,64 +1,45 @@
 name: scrape-and-deploy
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "docs/**"
-      - "scripts/**"
-      - "requirements.txt"
-      - ".github/workflows/update-character-usage.yml"
-  schedule:
-    # 10分ごとに実行
-    - cron: "*/10 * * * *"
-
-# ワークフロー全体のデフォルト権限。
-# GitHub Pages の作成・更新には pages:write と id-token:write が必須。
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  workflow_dispatch: # Actionsタブから手動で実行できるようにする設定
+  # schedule:
+  #   - cron: '0 */6 * * *' # 自動定期実行も停止する場合はコメントアウトのままにします
 
 jobs:
-  scrape-and-deploy:
+  scrape:
     runs-on: ubuntu-latest
-    # Playwright用Dockerイメージを使用（高速化のため）
-    container:
-      image: mcr.microsoft.com/playwright/python:v1.57.0-noble
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
-      - name: Checkout repository
+      - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install playwright==1.57.0
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install playwright
           playwright install chromium
 
-      - name: Run scraper
-        env:
-          TARGET_PLAYER_COUNT: "200"
-          MIN_REQUIRED_PLAYERS: "50"
+      - name: Run Scraper
         run: python scripts/scrape_character_usage.py
 
-      # docs/data/character_usage.json が生成されている前提
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload Debug Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          path: docs
+          name: debug-artifacts
+          path: .artifacts/debug/
 
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      # ==============================================================
+      # 【サイト公開停止】以下のデプロイ処理を無効化（非公開化）しています
+      # ==============================================================
+      # - name: Deploy to GitHub Pages
+      #   uses: peaceiris/actions-gh-pages@v3
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     publish_dir: ./docs
