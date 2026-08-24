@@ -1,20 +1,30 @@
 """
 LINE Rangers HandbookのPvP Trackerから、
-レジェンド帯プレイヤーの防衛チームを集計する。 
+レジェンド帯プレイヤーの防衛チームを集計する。
 
 occurrence_count:
-同一プレイヤー内の重複を含むキャラクターの総編成数。 
+    同一プレイヤー内の重複を含むキャラクターの総編成数。
 
 player_count:
-対象キャラクターを1体以上編成しているプレイヤー数。 
+    対象キャラクターを1体以上編成しているプレイヤー数。
 
 adoption_rate:
-player_count / sampled_players * 100。 
+    player_count / sampled_players * 100。
 
 同じキャラクターを1人が複数体使用している場合、
 occurrence_countには体数分を加算し、
 player_countには1人分だけ加算する。
-""" 
+
+【集計条件について】
+1チームの最大編成数は10体。1体でも編成されていれば集計対象とする
+(MIN_CHARACTERS_PER_PLAYER=1, MAX_CHARACTERS_PER_PLAYER=10)。
+
+サイト側で1人のプレイヤーの情報が複数の<tr>に分かれて描画される
+ケースがあるため、create_player_identity()が「本体行」か
+「直前の本体行に付随する断片行」かを判定し、断片行は本体行に
+画像をマージすることで、1人が複数プレイヤーとして誤カウント
+されるのを防いでいる。
+"""
 
 import hashlib
 import json
@@ -25,7 +35,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
-from urllib.parse import urljoin, urlsplit, urlunsplit 
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from playwright.sync_api import (
     Error as PlaywrightError,
@@ -35,33 +45,39 @@ from playwright.sync_api import (
 
 
 TARGET_URL = "https://rangers.lerico.net/ja/pvp-tracker"
-SOURCE_NAME = "LINE Rangers Handbook PvP Tracker" 
+SOURCE_NAME = "LINE Rangers Handbook PvP Tracker"
 
 TARGET_PLAYER_COUNT = int(
     os.environ.get("TARGET_PLAYER_COUNT", "200")
-) 
+)
 
 MIN_REQUIRED_PLAYERS = int(
     os.environ.get("MIN_REQUIRED_PLAYERS", "50")
-) 
+)
 
+# 1体でも編成されていれば集計対象とする
 MIN_CHARACTERS_PER_PLAYER = int(
     os.environ.get("MIN_CHARACTERS_PER_PLAYER", "1")
-) 
+)
 
+# 1チームの最大編成数は10体
 MAX_CHARACTERS_PER_PLAYER = int(
-    os.environ.get("MAX_CHARACTERS_PER_PLAYER", "15")
-) 
+    os.environ.get("MAX_CHARACTERS_PER_PLAYER", "10")
+)
 
-DEBUG = os.environ.get("DEBUG", "0") == "1" 
+DEBUG = os.environ.get("DEBUG", "0") == "1"
 
 OUTPUT_PATH = Path("docs/data/character_usage.json")
-DEBUG_DIR = Path(".artifacts/debug") 
+DEBUG_DIR = Path(".artifacts/debug")
 
 MAX_PAGES = 30
-MAX_LOAD_ATTEMPTS = 50
-STABLE_ATTEMPTS_LIMIT = 10
-LOAD_WAIT_MS = 500 
+MAX_LOAD_ATTEMPTS = 20
+STABLE_ATTEMPTS_LIMIT = 4
+LOAD_WAIT_MS = 300
+
+# スクロール・追加読込ボタンのどちらも効かない状態が
+# この回数続いたら、これ以上新しい行は出てこないと判断して打ち切る
+NO_PROGRESS_LIMIT = 2
 
 ROW_SELECTORS = [
     "table tbody tr",
@@ -73,7 +89,7 @@ ROW_SELECTORS = [
     "[data-player-id]",
     "[class*='ranking'] [class*='row']",
     "[class*='player'] [class*='row']",
-] 
+]
 
 TEAM_CONTAINER_SELECTORS = [
     "[data-team='defense']",
@@ -92,7 +108,7 @@ TEAM_CONTAINER_SELECTORS = [
     ".team-formation",
     ".ranger-team",
     "[class*='formation']",
-] 
+]
 
 LOAD_MORE_SELECTORS = [
     "button:has-text('もっと見る')",
@@ -105,7 +121,7 @@ LOAD_MORE_SELECTORS = [
     "a:has-text('Show more')",
     "[class*='load-more'] button",
     "[class*='load-more'] a",
-] 
+]
 
 NEXT_PAGE_SELECTORS = [
     "button[aria-label='Go to next page']",
@@ -129,7 +145,7 @@ NEXT_PAGE_SELECTORS = [
     ".pagination .next button",
     ".pagination .next a",
     "[class*='pagination'] [class*='next']",
-] 
+]
 
 EXCLUDED_SOURCE_WORDS = {
     "avatar",
@@ -145,7 +161,7 @@ EXCLUDED_SOURCE_WORDS = {
     "rank",
     "tier",
     "user",
-} 
+}
 
 EXCLUDED_CONTEXT_WORDS = {
     "avatar",
@@ -163,10 +179,10 @@ EXCLUDED_CONTEXT_WORDS = {
 
 def clean_url(url: str) -> str:
     if not url:
-        return "" 
+        return ""
 
     absolute_url = urljoin(TARGET_URL, url)
-    parts = urlsplit(absolute_url) 
+    parts = urlsplit(absolute_url)
 
     return urlunsplit(
         (
@@ -180,10 +196,10 @@ def clean_url(url: str) -> str:
 
 
 def character_key(image_url: str) -> str:
-    normalized = clean_url(image_url) 
+    normalized = clean_url(image_url)
 
     if normalized:
-        return normalized 
+        return normalized
 
     return "unknown"
 
@@ -192,7 +208,7 @@ def save_json(path: Path, value) -> None:
     path.parent.mkdir(
         parents=True,
         exist_ok=True,
-    ) 
+    )
 
     with path.open(
         "w",
@@ -213,7 +229,7 @@ def is_disabled(locator) -> bool:
         aria_disabled = locator.get_attribute("aria-disabled")
         class_name = (
             locator.get_attribute("class") or ""
-        ).lower() 
+        ).lower()
 
         return (
             disabled is not None
@@ -234,7 +250,7 @@ def dismiss_common_dialogs(page) -> None:
         "OK",
         "閉じる",
         "Close",
-    ] 
+    ]
 
     for label in labels:
         try:
@@ -242,7 +258,7 @@ def dismiss_common_dialogs(page) -> None:
                 "button",
                 name=label,
                 exact=True,
-            ) 
+            )
 
             if (
                 buttons.count() > 0
@@ -264,24 +280,24 @@ def select_legend_league(page) -> None:
         "button:has-text('Legend')",
         "a:has-text('Legend')",
         "[role='option']:has-text('Legend')",
-    ] 
+    ]
 
     for selector in selectors:
         try:
             candidates = page.locator(selector)
             count = min(candidates.count(), 10)
         except PlaywrightError:
-            continue 
+            continue
 
         for index in range(count):
-            candidate = candidates.nth(index) 
+            candidate = candidates.nth(index)
 
             try:
                 if not candidate.is_visible():
-                    continue 
+                    continue
 
                 candidate.click(timeout=3_000)
-                page.wait_for_timeout(1_500) 
+                page.wait_for_timeout(700)
 
                 print(
                     "[INFO] レジェンドリーグを選択しました。"
@@ -289,7 +305,7 @@ def select_legend_league(page) -> None:
                 )
                 return
             except PlaywrightError:
-                continue 
+                continue
 
     print(
         "[INFO] レジェンド選択ボタンは見つかりませんでした。"
@@ -302,119 +318,119 @@ def extract_rows_from_dom(page, selector: str) -> list[dict]:
         raw_rows = page.locator(selector).evaluate_all(
             """
             (rows, teamSelectors) => {
-            function readImage(image, index) {
-            const rect = image.getBoundingClientRect();
-            const style = getComputedStyle(image);
-            const context = image.closest(
-            '[class], [data-team], [data-type], td, li'
-            ); 
+                function readImage(image, index) {
+                    const rect = image.getBoundingClientRect();
+                    const style = getComputedStyle(image);
+                    const context = image.closest(
+                        '[class], [data-team], [data-type], td, li'
+                    );
 
-            return {
-            index: index,
-            src:
-            image.currentSrc
-            || image.getAttribute('src')
-            || image.getAttribute('data-src')
-            || image.getAttribute('data-lazy-src')
-            || image.getAttribute('data-original')
-            || '',
-            width: Math.round(rect.width),
-            height: Math.round(rect.height),
-            visible:
-            rect.width > 0
-            && rect.height > 0
-            && style.display !== 'none'
-            && style.visibility !== 'hidden'
-            && Number(style.opacity || 1) !== 0,
-            context:
-            context
-            && typeof context.className === 'string'
-            ? context.className
-            : ''
-            };
-            } 
+                    return {
+                        index: index,
+                        src:
+                            image.currentSrc
+                            || image.getAttribute('src')
+                            || image.getAttribute('data-src')
+                            || image.getAttribute('data-lazy-src')
+                            || image.getAttribute('data-original')
+                            || '',
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height),
+                        visible:
+                            rect.width > 0
+                            && rect.height > 0
+                            && style.display !== 'none'
+                            && style.visibility !== 'hidden'
+                            && Number(style.opacity || 1) !== 0,
+                        context:
+                            context
+                            && typeof context.className === 'string'
+                                ? context.className
+                                : ''
+                    };
+                }
 
-            return rows.map((row, rowIndex) => {
-            const groups = []; 
+                return rows.map((row, rowIndex) => {
+                    const groups = [];
 
-            for (const selector of teamSelectors) {
-            let containers = []; 
+                    for (const selector of teamSelectors) {
+                        let containers = [];
 
-            try {
-            containers = Array.from(
-            row.querySelectorAll(selector)
-            );
-            } catch {
-            continue;
-            } 
+                        try {
+                            containers = Array.from(
+                                row.querySelectorAll(selector)
+                            );
+                        } catch {
+                            continue;
+                        }
 
-            for (const container of containers) {
-            const images = Array.from(
-            container.querySelectorAll('img')
-            ).map(readImage); 
+                        for (const container of containers) {
+                            const images = Array.from(
+                                container.querySelectorAll('img')
+                            ).map(readImage);
 
-            if (images.length > 0) {
-            groups.push({
-            selector: selector,
-            images: images
-            });
-            }
-            }
-            } 
+                            if (images.length > 0) {
+                                groups.push({
+                                    selector: selector,
+                                    images: images
+                                });
+                            }
+                        }
+                    }
 
-            const allImages = Array.from(
-            row.querySelectorAll('img')
-            ).map(readImage); 
+                    const allImages = Array.from(
+                        row.querySelectorAll('img')
+                    ).map(readImage);
 
-            const attributes = {}; 
+                    const attributes = {};
 
-            for (const attribute of row.attributes) {
-            if (
-            attribute.name.startsWith('data-')
-            || attribute.name === 'id'
-            ) {
-            attributes[attribute.name] =
-            attribute.value;
-            }
-            } 
+                    for (const attribute of row.attributes) {
+                        if (
+                            attribute.name.startsWith('data-')
+                            || attribute.name === 'id'
+                        ) {
+                            attributes[attribute.name] =
+                                attribute.value;
+                        }
+                    }
 
-            return {
-            rowIndex: rowIndex,
-            text: (
-            row.innerText
-            || row.textContent
-            || ''
-            )
-            .replace(/\\s+/g, ' ')
-            .trim(),
-            attributes: attributes,
-            groups: groups,
-            allImages: allImages
-            };
-            });
+                    return {
+                        rowIndex: rowIndex,
+                        text: (
+                            row.innerText
+                            || row.textContent
+                            || ''
+                        )
+                            .replace(/\\s+/g, ' ')
+                            .trim(),
+                        attributes: attributes,
+                        groups: groups,
+                        allImages: allImages
+                    };
+                });
             }
             """,
             TEAM_CONTAINER_SELECTORS,
         )
     except PlaywrightError:
-        return [] 
+        return []
 
-    rows = [] 
+    rows = []
 
     for raw_row in raw_rows:
-        groups = [] 
+        groups = []
 
         for raw_group in raw_row.get("groups", []):
             images = filter_character_images(
                 raw_group.get("images", [])
-            ) 
+            )
 
             if images:
-                groups.append(images) 
+                groups.append(images)
 
         all_images = filter_character_images(
             raw_row.get("allImages", [])
-        ) 
+        )
 
         rows.append(
             {
@@ -431,50 +447,50 @@ def extract_rows_from_dom(page, selector: str) -> list[dict]:
                 "groups": groups,
                 "all_images": all_images,
             }
-        ) 
+        )
 
     return rows
 
 
 def filter_character_images(images: list[dict]) -> list[dict]:
-    results = [] 
+    results = []
 
     for image in images:
         if not image.get("visible"):
-            continue 
+            continue
 
         src = clean_url(
             str(image.get("src") or "")
-        ) 
+        )
 
         width = int(image.get("width") or 0)
         height = int(image.get("height") or 0)
         context = str(
             image.get("context") or ""
-        ).lower() 
+        ).lower()
 
         if not src:
-            continue 
+            continue
 
-        source_lower = src.lower() 
+        source_lower = src.lower()
 
         if any(
             word in source_lower
             for word in EXCLUDED_SOURCE_WORDS
         ):
-            continue 
+            continue
 
         if any(
             word in context
             for word in EXCLUDED_CONTEXT_WORDS
         ):
-            continue 
+            continue
 
         if width < 18 or height < 18:
-            continue 
+            continue
 
         if width > 220 or height > 220:
-            continue 
+            continue
 
         results.append(
             {
@@ -483,53 +499,53 @@ def filter_character_images(images: list[dict]) -> list[dict]:
                 "height": height,
                 "index": image.get("index"),
             }
-        ) 
+        )
 
     return results
 
 
 def select_team_images(row: dict) -> list[dict]:
     combined_images = []
-    seen_indices = set() 
+    seen_indices = set()
 
     for group in row.get("groups", []):
         for img in group:
             idx = img.get("index")
             if idx is not None and idx not in seen_indices:
                 seen_indices.add(idx)
-                combined_images.append(img) 
+                combined_images.append(img)
 
     if combined_images:
-        return combined_images[:MAX_CHARACTERS_PER_PLAYER] 
+        return combined_images[:MAX_CHARACTERS_PER_PLAYER]
 
-    all_images = row.get("all_images", []) 
+    all_images = row.get("all_images", [])
 
     if all_images:
-        return all_images[:MAX_CHARACTERS_PER_PLAYER] 
+        return all_images[:MAX_CHARACTERS_PER_PLAYER]
 
     return []
 
 
 def find_best_row_selector(page) -> tuple[str | None, dict]:
-    diagnostics = {} 
+    diagnostics = {}
 
     for selector in ROW_SELECTORS:
         rows = extract_rows_from_dom(page, selector)
         valid_rows = 0
-        image_counts = [] 
+        image_counts = []
 
         for row in rows[:30]:
-            images = select_team_images(row) 
+            images = select_team_images(row)
 
             if images:
                 valid_rows += 1
-                image_counts.append(len(images)) 
+                image_counts.append(len(images))
 
         diagnostics[selector] = {
             "row_count": len(rows),
             "valid_rows": valid_rows,
             "image_counts": image_counts,
-        } 
+        }
 
     ranked = sorted(
         diagnostics.items(),
@@ -538,13 +554,13 @@ def find_best_row_selector(page) -> tuple[str | None, dict]:
             item[1]["row_count"],
         ),
         reverse=True,
-    ) 
+    )
 
     if not ranked:
-        return None, diagnostics 
+        return None, diagnostics
 
     if ranked[0][1]["valid_rows"] == 0:
-        return None, diagnostics 
+        return None, diagnostics
 
     return ranked[0][0], diagnostics
 
@@ -552,43 +568,61 @@ def find_best_row_selector(page) -> tuple[str | None, dict]:
 def create_player_identity(
     row: dict,
     page_number: int,
-) -> str:
-    attributes = row.get("attributes", {}) 
+) -> tuple[str, bool]:
+    """
+    戻り値: (identity, is_strong)
+
+    is_strong=True  : プレイヤー本人を示す行(名前などのテキストを持つ本体行)
+    is_strong=False : 直前の本体行に付随する断片行(継続行)
+
+    防衛チームなどが複数の<tr>に分割して描画されているケースで、
+    断片行を新規プレイヤーとして誤カウントしないための判定。
+    """
+    attributes = row.get("attributes", {})
 
     preferred_attributes = [
         "data-player-id",
         "data-user-id",
         "data-id",
         "id",
-    ] 
+    ]
 
     for attribute_name in preferred_attributes:
         value = str(
             attributes.get(attribute_name) or ""
-        ).strip() 
+        ).strip()
 
         if value:
-            return f"{attribute_name}:{value}" 
+            return f"{attribute_name}:{value}", True
 
     text = re.sub(
         r"\s+",
         " ",
         row.get("text") or "",
-    ).strip() 
+    ).strip()
 
-    # 順位や数字の表記を除去してプレイヤー名テキストのみでIdentityを生成（同一プレイヤーの複数行を結合するため）
+    # 順位や数字の表記を除去してプレイヤー名テキストのみでIdentityを生成
     clean_text = re.sub(r"^\d+\s*", "", text).strip()
+
+    # 数字・記号・括弧などを取り除いた残りが極端に短い行は、
+    # プレイヤー名を含まない断片行(継続行)の可能性が高いと判定する
+    meaningful_text = re.sub(
+        r"[\d\s%.,()（）・:：\-]",
+        "",
+        clean_text,
+    )
+    is_strong = len(meaningful_text) >= 2
 
     if clean_text:
         digest = hashlib.sha256(
             clean_text.encode("utf-8")
-        ).hexdigest() 
+        ).hexdigest()
 
-        return f"text:{digest}" 
+        return f"text:{digest}", is_strong
 
     return (
-        f"page:{page_number}:"
-        f"row:{row['row_index']}"
+        f"page:{page_number}:row:{row['row_index']}",
+        False,
     )
 
 
@@ -598,23 +632,23 @@ def click_load_more(page) -> bool:
             candidates = page.locator(selector)
             count = min(candidates.count(), 10)
         except PlaywrightError:
-            continue 
+            continue
 
         for index in range(count):
-            candidate = candidates.nth(index) 
+            candidate = candidates.nth(index)
 
             try:
                 if not candidate.is_visible():
-                    continue 
+                    continue
 
                 if is_disabled(candidate):
-                    continue 
+                    continue
 
                 candidate.scroll_into_view_if_needed(
                     timeout=3_000
                 )
                 candidate.click(timeout=4_000)
-                page.wait_for_timeout(LOAD_WAIT_MS) 
+                page.wait_for_timeout(LOAD_WAIT_MS)
 
                 print(
                     "[INFO] 追加表示ボタンを押しました。"
@@ -622,7 +656,7 @@ def click_load_more(page) -> bool:
                 )
                 return True
             except PlaywrightError:
-                continue 
+                continue
 
     return False
 
@@ -631,43 +665,43 @@ def scroll_dynamic_content(page) -> bool:
     try:
         page.evaluate("""
         () => {
-        document.querySelectorAll('img[loading="lazy"]').forEach(img => {
-        img.setAttribute('loading', 'eager');
-        });
+            document.querySelectorAll('img[loading="lazy"]').forEach(img => {
+                img.setAttribute('loading', 'eager');
+            });
         }
-        """) 
+        """)
 
         result = page.evaluate(
             """
             async () => {
-            let moved = false;
-            const beforeWindow = window.scrollY; 
+                let moved = false;
+                const beforeWindow = window.scrollY;
 
-            await new Promise((resolve) => {
-            let totalHeight = window.scrollY;
-            const distance = 400;
-            const timer = setInterval(() => {
-            const scrollHeight = document.documentElement.scrollHeight;
-            window.scrollBy(0, distance);
-            totalHeight += distance; 
+                await new Promise((resolve) => {
+                    let totalHeight = window.scrollY;
+                    const distance = 800;
+                    const timer = setInterval(() => {
+                        const scrollHeight = document.documentElement.scrollHeight;
+                        window.scrollBy(0, distance);
+                        totalHeight += distance;
 
-            if (totalHeight >= scrollHeight - window.innerHeight) {
-            clearInterval(timer);
-            resolve();
-            }
-            }, 100);
-            }); 
+                        if (totalHeight >= scrollHeight - window.innerHeight) {
+                            clearInterval(timer);
+                            resolve();
+                        }
+                    }, 60);
+                });
 
-            if (window.scrollY !== beforeWindow) {
-            moved = true;
-            } 
+                if (window.scrollY !== beforeWindow) {
+                    moved = true;
+                }
 
-            return moved;
+                return moved;
             }
             """
-        ) 
+        )
 
-        page.wait_for_timeout(1500)
+        page.wait_for_timeout(500)
         return bool(result)
     except PlaywrightError:
         return False
@@ -678,22 +712,22 @@ def reset_scroll(page) -> None:
         page.evaluate(
             """
             () => {
-            window.scrollTo(0, 0); 
+                window.scrollTo(0, 0);
 
-            for (const element of document.querySelectorAll('*')) {
-            const style = getComputedStyle(element); 
+                for (const element of document.querySelectorAll('*')) {
+                    const style = getComputedStyle(element);
 
-            if (
-            element.scrollHeight
-            > element.clientHeight + 100
-            && (
-            style.overflowY === 'auto'
-            || style.overflowY === 'scroll'
-            )
-            ) {
-            element.scrollTop = 0;
-            }
-            }
+                    if (
+                        element.scrollHeight
+                            > element.clientHeight + 100
+                        && (
+                            style.overflowY === 'auto'
+                            || style.overflowY === 'scroll'
+                        )
+                    ) {
+                        element.scrollTop = 0;
+                    }
+                }
             }
             """
         )
@@ -707,53 +741,94 @@ def collect_current_page(
     page_number: int,
     already_sampled: int,
 ) -> tuple[list[dict], dict]:
-    collected = {}
+    collected: dict = {}
+    row_order: list[str] = []  # 本体行のidentityをDOM順に記録
     stable_attempts = 0
+    no_progress_attempts = 0
     previous_count = 0
     attempts = 0
-    maximum_dom_rows = 0 
+    maximum_dom_rows = 0
 
-    scroll_dynamic_content(page) 
+    scroll_dynamic_content(page)
 
     while attempts < MAX_LOAD_ATTEMPTS:
-        attempts += 1 
+        attempts += 1
 
         rows = extract_rows_from_dom(page, selector)
         maximum_dom_rows = max(
             maximum_dom_rows,
             len(rows),
-        ) 
+        )
 
-        new_rows = 0 
+        new_rows = 0
+        last_identity = row_order[-1] if row_order else None
 
         for row in rows:
-            images = select_team_images(row) 
+            images = select_team_images(row)
 
             if not images:
-                continue 
+                continue
 
-            identity = create_player_identity(
+            identity, is_strong = create_player_identity(
                 row,
                 page_number,
-            ) 
+            )
 
-            # 同一プレイヤーの行が複数存在する場合は画像を結合（Aチーム+Bチーム）
-            if identity in collected:
-                existing_urls = {img["image"] for img in collected[identity]["images"]}
+            if is_strong:
+                if identity not in collected:
+                    collected[identity] = {
+                        "identity": identity,
+                        "images": [],
+                    }
+                    row_order.append(identity)
+                    new_rows += 1
+
+                existing_urls = {
+                    img["image"]
+                    for img in collected[identity]["images"]
+                }
+
                 for img in images:
                     if img["image"] not in existing_urls:
                         collected[identity]["images"].append(img)
                         existing_urls.add(img["image"])
-                continue 
 
-            collected[identity] = {
-                "identity": identity,
-                "images": images,
-            } 
+                last_identity = identity
 
-            new_rows += 1 
+            elif last_identity is not None:
+                # 直前の本体行の断片とみなして画像を統合する。
+                # ただし合計がMAX_CHARACTERS_PER_PLAYERを超える場合は
+                # 誤統合の可能性が高いため統合しない(取りこぼす方が安全)
+                existing_urls = {
+                    img["image"]
+                    for img in collected[last_identity]["images"]
+                }
+                merged_images = list(
+                    collected[last_identity]["images"]
+                )
 
-        current_count = len(collected) 
+                for img in images:
+                    if img["image"] not in existing_urls:
+                        merged_images.append(img)
+                        existing_urls.add(img["image"])
+
+                if len(merged_images) <= MAX_CHARACTERS_PER_PLAYER:
+                    collected[last_identity]["images"] = merged_images
+
+            else:
+                # 本体行がまだ一つも無い状態で断片行しか無い場合は、
+                # やむを得ずこの行単体を1人として登録する
+                if identity not in collected:
+                    collected[identity] = {
+                        "identity": identity,
+                        "images": images,
+                    }
+                    row_order.append(identity)
+                    new_rows += 1
+
+                last_identity = identity
+
+        current_count = len(collected)
 
         print(
             f"[INFO] page={page_number}, "
@@ -761,35 +836,38 @@ def collect_current_page(
             f"dom_rows={len(rows)}, "
             f"new_rows={new_rows}, "
             f"collected={current_count}"
-        ) 
+        )
 
         if (
             already_sampled + current_count
             >= TARGET_PLAYER_COUNT
         ):
-            break 
+            break
 
         if current_count == previous_count:
             stable_attempts += 1
         else:
-            stable_attempts = 0 
+            stable_attempts = 0
 
-        previous_count = current_count 
+        previous_count = current_count
 
         clicked = click_load_more(page)
-        moved = scroll_dynamic_content(page) 
+        moved = scroll_dynamic_content(page)
 
-        if (
-            stable_attempts >= STABLE_ATTEMPTS_LIMIT
-            and not clicked
-            and not moved
-        ):
-            break 
+        if not clicked and not moved:
+            no_progress_attempts += 1
+        else:
+            no_progress_attempts = 0
 
-        if stable_attempts >= STABLE_ATTEMPTS_LIMIT + 3:
-            break 
+        # スクロールも追加読み込みも効かない状態が続いたら、
+        # これ以上新しい行は出てこないと判断して即終了する
+        if no_progress_attempts >= NO_PROGRESS_LIMIT:
+            break
 
-        page.wait_for_timeout(LOAD_WAIT_MS) 
+        if stable_attempts >= STABLE_ATTEMPTS_LIMIT:
+            break
+
+        page.wait_for_timeout(LOAD_WAIT_MS)
 
     return (
         list(collected.values()),
@@ -802,15 +880,15 @@ def collect_current_page(
 
 
 def page_signature(page, selector: str) -> str:
-    rows = extract_rows_from_dom(page, selector) 
+    rows = extract_rows_from_dom(page, selector)
 
     text = "\n".join(
         row.get("text", "")[:300]
         for row in rows[:10]
-    ) 
+    )
 
     if not text:
-        text = page.url 
+        text = page.url
 
     return hashlib.sha256(
         text.encode("utf-8")
@@ -822,39 +900,39 @@ def go_to_next_page(page, selector: str) -> bool:
         page,
         selector,
     )
-    previous_url = page.url 
+    previous_url = page.url
 
-    reset_scroll(page) 
+    reset_scroll(page)
 
     for button_selector in NEXT_PAGE_SELECTORS:
         try:
             candidates = page.locator(button_selector)
             count = min(candidates.count(), 20)
         except PlaywrightError:
-            continue 
+            continue
 
         for index in range(count):
-            candidate = candidates.nth(index) 
+            candidate = candidates.nth(index)
 
             try:
                 if not candidate.is_visible():
-                    continue 
+                    continue
 
                 if is_disabled(candidate):
-                    continue 
+                    continue
 
                 candidate.scroll_into_view_if_needed(
                     timeout=4_000
                 )
-                candidate.click(timeout=5_000) 
+                candidate.click(timeout=5_000)
 
-                page.wait_for_timeout(3_000)
-                scroll_dynamic_content(page) 
+                page.wait_for_timeout(900)
+                scroll_dynamic_content(page)
 
                 new_signature = page_signature(
                     page,
                     selector,
-                ) 
+                )
 
                 if (
                     new_signature != previous_signature
@@ -866,7 +944,7 @@ def go_to_next_page(page, selector: str) -> bool:
                     )
                     return True
             except PlaywrightError:
-                continue 
+                continue
 
     return False
 
@@ -875,7 +953,7 @@ def dump_debug(page, details: dict) -> None:
     DEBUG_DIR.mkdir(
         parents=True,
         exist_ok=True,
-    ) 
+    )
 
     try:
         (DEBUG_DIR / "page.html").write_text(
@@ -883,7 +961,7 @@ def dump_debug(page, details: dict) -> None:
             encoding="utf-8",
         )
     except PlaywrightError:
-        pass 
+        pass
 
     try:
         page.screenshot(
@@ -891,34 +969,34 @@ def dump_debug(page, details: dict) -> None:
             full_page=True,
         )
     except PlaywrightError:
-        pass 
+        pass
 
     try:
         images = page.locator("img").evaluate_all(
             """
             (images) => images.map((image) => {
-            const rect = image.getBoundingClientRect(); 
+                const rect = image.getBoundingClientRect();
 
-            return {
-            src:
-            image.currentSrc
-            || image.getAttribute('src')
-            || image.getAttribute('data-src'),
-            alt: image.getAttribute('alt'),
-            width: Math.round(rect.width),
-            height: Math.round(rect.height),
-            outerHtml: image.outerHTML.slice(0, 1000)
-            };
+                return {
+                    src:
+                        image.currentSrc
+                        || image.getAttribute('src')
+                        || image.getAttribute('data-src'),
+                    alt: image.getAttribute('alt'),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    outerHtml: image.outerHTML.slice(0, 1000)
+                };
             })
             """
-        ) 
+        )
 
         save_json(
             DEBUG_DIR / "images.json",
             images,
         )
     except PlaywrightError:
-        pass 
+        pass
 
     try:
         controls = page.locator(
@@ -926,31 +1004,31 @@ def dump_debug(page, details: dict) -> None:
         ).evaluate_all(
             """
             (elements) => elements.map((element) => ({
-            text: (
-            element.innerText
-            || element.textContent
-            || ''
-            ).trim().slice(0, 200),
-            ariaLabel: element.getAttribute('aria-label'),
-            title: element.getAttribute('title'),
-            className:
-            typeof element.className === 'string'
-            ? element.className
-            : '',
-            disabled:
-            element.hasAttribute('disabled')
-            || element.getAttribute('aria-disabled') === 'true',
-            outerHtml: element.outerHTML.slice(0, 1000)
+                text: (
+                    element.innerText
+                    || element.textContent
+                    || ''
+                ).trim().slice(0, 200),
+                ariaLabel: element.getAttribute('aria-label'),
+                title: element.getAttribute('title'),
+                className:
+                    typeof element.className === 'string'
+                        ? element.className
+                        : '',
+                disabled:
+                    element.hasAttribute('disabled')
+                    || element.getAttribute('aria-disabled') === 'true',
+                outerHtml: element.outerHTML.slice(0, 1000)
             }))
             """
-        ) 
+        )
 
         save_json(
             DEBUG_DIR / "controls.json",
             controls,
         )
     except PlaywrightError:
-        pass 
+        pass
 
     save_json(
         DEBUG_DIR / "diagnostics.json",
@@ -961,14 +1039,14 @@ def dump_debug(page, details: dict) -> None:
 def scrape(page) -> dict:
     selector, selector_diagnostics = (
         find_best_row_selector(page)
-    ) 
+    )
 
     if selector is None:
         raise RuntimeError(
             "プレイヤー行を特定できませんでした。"
-        ) 
+        )
 
-    print(f"[INFO] row selector={selector}") 
+    print(f"[INFO] row selector={selector}")
 
     counts = defaultdict(
         lambda: {
@@ -976,7 +1054,7 @@ def scrape(page) -> dict:
             "player_count": 0,
             "image": "",
         }
-    ) 
+    )
 
     sampled_players = 0
     total_slots = 0
@@ -984,64 +1062,64 @@ def scrape(page) -> dict:
     pages_scanned = 0
     termination_reason = "unknown"
     visited_pages = set()
-    page_diagnostics = [] 
+    page_diagnostics = []
 
     while (
         sampled_players < TARGET_PLAYER_COUNT
         and pages_scanned < MAX_PAGES
     ):
-        signature = page_signature(page, selector) 
+        signature = page_signature(page, selector)
 
         if signature in visited_pages:
             termination_reason = "duplicate_page"
-            break 
+            break
 
         visited_pages.add(signature)
-        pages_scanned += 1 
+        pages_scanned += 1
 
         page_rows, diagnostics = collect_current_page(
             page,
             selector,
             pages_scanned,
             sampled_players,
-        ) 
+        )
 
         page_players = 0
-        page_slots = 0 
+        page_slots = 0
 
         for row in page_rows:
             if sampled_players >= TARGET_PLAYER_COUNT:
-                break 
+                break
 
-            images = row["images"] 
+            images = row["images"]
 
             if not (
                 MIN_CHARACTERS_PER_PLAYER
                 <= len(images)
                 <= MAX_CHARACTERS_PER_PLAYER
             ):
-                continue 
+                continue
 
             sampled_players += 1
-            page_players += 1 
+            page_players += 1
 
             slot_count = len(images)
             total_slots += slot_count
             page_slots += slot_count
-            player_sizes.append(slot_count) 
+            player_sizes.append(slot_count)
 
-            player_character_keys = set() 
+            player_character_keys = set()
 
             for image in images:
-                key = character_key(image["image"]) 
+                key = character_key(image["image"])
 
                 counts[key]["occurrence_count"] += 1
-                counts[key]["image"] = image["image"] 
+                counts[key]["image"] = image["image"]
 
-                player_character_keys.add(key) 
+                player_character_keys.add(key)
 
             for key in player_character_keys:
-                counts[key]["player_count"] += 1 
+                counts[key]["player_count"] += 1
 
         page_diagnostics.append(
             {
@@ -1050,26 +1128,26 @@ def scrape(page) -> dict:
                 "slots": page_slots,
                 **diagnostics,
             }
-        ) 
+        )
 
         print(
             f"[INFO] page={pages_scanned}, "
             f"players={page_players}, "
             f"total_players={sampled_players}, "
             f"total_slots={total_slots}"
-        ) 
+        )
 
         if sampled_players >= TARGET_PLAYER_COUNT:
             termination_reason = "target_reached"
-            break 
+            break
 
         if page_players == 0:
             termination_reason = "no_valid_players"
-            break 
+            break
 
         if not go_to_next_page(page, selector):
             termination_reason = "no_next_page"
-            break 
+            break
 
     if sampled_players < MIN_REQUIRED_PLAYERS:
         raise RuntimeError(
@@ -1077,9 +1155,9 @@ def scrape(page) -> dict:
             f"取得人数={sampled_players}, "
             f"必要人数={MIN_REQUIRED_PLAYERS}, "
             f"終了理由={termination_reason}"
-        ) 
+        )
 
-    characters = [] 
+    characters = []
 
     for data in counts.values():
         occurrence_count = int(
@@ -1087,7 +1165,7 @@ def scrape(page) -> dict:
         )
         player_count = int(
             data["player_count"]
-        ) 
+        )
 
         if player_count > sampled_players:
             raise RuntimeError(
@@ -1095,12 +1173,12 @@ def scrape(page) -> dict:
                 f"採用人数={player_count}, "
                 f"集計人数={sampled_players}, "
                 f"画像={data['image']}"
-            ) 
+            )
 
         adoption_rate = round(
             player_count / sampled_players * 100,
             1,
-        ) 
+        )
 
         slot_rate = (
             round(
@@ -1109,7 +1187,7 @@ def scrape(page) -> dict:
             )
             if total_slots > 0
             else 0
-        ) 
+        )
 
         characters.append(
             {
@@ -1119,7 +1197,7 @@ def scrape(page) -> dict:
                 "adoption_rate": adoption_rate,
                 "slot_rate": slot_rate,
             }
-        ) 
+        )
 
     characters.sort(
         key=lambda item: (
@@ -1127,10 +1205,10 @@ def scrape(page) -> dict:
             -item["player_count"],
             item["image"],
         )
-    ) 
+    )
 
     previous_count = None
-    current_rank = 0 
+    current_rank = 0
 
     for index, character in enumerate(
         characters,
@@ -1140,24 +1218,24 @@ def scrape(page) -> dict:
             character["occurrence_count"]
             != previous_count
         ):
-            current_rank = index 
+            current_rank = index
 
         character["rank"] = current_rank
         previous_count = character[
             "occurrence_count"
-        ] 
+        ]
 
     calculated_slots = sum(
         character["occurrence_count"]
         for character in characters
-    ) 
+    )
 
     if calculated_slots != total_slots:
         raise RuntimeError(
             "キャラクター総数が一致しません。"
             f"取得枠数={total_slots}, "
             f"キャラクター別合計={calculated_slots}"
-        ) 
+        )
 
     return {
         "schema_version": 3,
@@ -1196,11 +1274,11 @@ def write_output(data: dict) -> None:
     OUTPUT_PATH.parent.mkdir(
         parents=True,
         exist_ok=True,
-    ) 
+    )
 
     temporary_path = OUTPUT_PATH.with_suffix(
         ".json.tmp"
-    ) 
+    )
 
     save_json(temporary_path, data)
     temporary_path.replace(OUTPUT_PATH)
@@ -1214,7 +1292,7 @@ def main() -> None:
                 "--disable-dev-shm-usage",
                 "--no-sandbox",
             ],
-        ) 
+        )
 
         context = browser.new_context(
             locale="ja-JP",
@@ -1229,17 +1307,17 @@ def main() -> None:
                 "(KHTML, like Gecko) "
                 "Chrome/131.0 Safari/537.36"
             ),
-        ) 
+        )
 
         page = context.new_page()
-        page.set_default_timeout(10_000) 
+        page.set_default_timeout(10_000)
 
         try:
             response = page.goto(
                 TARGET_URL,
                 wait_until="domcontentloaded",
                 timeout=60_000,
-            ) 
+            )
 
             if (
                 response is not None
@@ -1247,7 +1325,7 @@ def main() -> None:
             ):
                 raise RuntimeError(
                     f"HTTPエラー: {response.status}"
-                ) 
+                )
 
             try:
                 page.wait_for_load_state(
@@ -1258,17 +1336,17 @@ def main() -> None:
                 print(
                     "[WARN] networkidle待機が"
                     "タイムアウトしました。"
-                ) 
+                )
 
-            page.wait_for_timeout(2_000)
+            page.wait_for_timeout(800)
             dismiss_common_dialogs(page)
             select_legend_league(page)
-            page.wait_for_timeout(1_500) 
+            page.wait_for_timeout(700)
 
             if DEBUG:
                 selector, diagnostics = (
                     find_best_row_selector(page)
-                ) 
+                )
 
                 dump_debug(
                     page,
@@ -1277,15 +1355,15 @@ def main() -> None:
                         "selector": selector,
                         "diagnostics": diagnostics,
                     },
-                ) 
+                )
 
                 print(
                     "[DEBUG] 調査ファイルを保存しました。"
                 )
-                return 
+                return
 
             data = scrape(page)
-            write_output(data) 
+            write_output(data)
 
             dump_debug(
                 page,
@@ -1304,7 +1382,7 @@ def main() -> None:
                         "diagnostics"
                     ],
                 },
-            ) 
+            )
 
             print(
                 "[DONE] "
@@ -1312,13 +1390,13 @@ def main() -> None:
                 f"slots={data['character_slots']}, "
                 f"characters={len(data['characters'])}, "
                 f"termination={data['termination_reason']}"
-            ) 
+            )
 
         except Exception as error:
             print(
                 f"[ERROR] {error}",
                 file=sys.stderr,
-            ) 
+            )
 
             dump_debug(
                 page,
@@ -1326,9 +1404,9 @@ def main() -> None:
                     "mode": "error",
                     "error": str(error),
                 },
-            ) 
+            )
 
-            raise 
+            raise
 
         finally:
             context.close()
