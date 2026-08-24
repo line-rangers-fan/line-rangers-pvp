@@ -163,6 +163,53 @@ EXCLUDED_CONTEXT_WORDS = {
 }
 
 
+_NON_WORD_CHARACTERS = re.compile(r"[^a-z0-9]+")
+
+# デバッグ用: どんな画像が何の理由で除外されたかを
+# 一定件数だけ記録しておく(dump_debugで書き出す)。
+MAX_EXCLUSION_LOG_ENTRIES = 300
+EXCLUSION_LOG: list[dict] = []
+
+
+def _log_exclusion(
+    reason: str,
+    src: str,
+    width: int = 0,
+    height: int = 0,
+) -> None:
+    if len(EXCLUSION_LOG) >= MAX_EXCLUSION_LOG_ENTRIES:
+        return
+
+    EXCLUSION_LOG.append(
+        {
+            "reason": reason,
+            "src": src,
+            "width": width,
+            "height": height,
+        }
+    )
+
+
+def _extract_words(value: str) -> set[str]:
+    """英数字以外の文字(区切り文字・ハイフン等含む)で分割し、
+    単語トークンの集合を作る。
+
+    例: ".../pvp-ranking/character_0231.png"
+        -> {"pvp", "ranking", "character", "0231", "png"}
+
+    これにより「rank」という単語そのものが独立して
+    パスに現れる場合だけを検出できる。単純な部分文字列一致
+    (`"rank" in url`)だと、"ranking" や "frankenstein" のように
+    "rank" を含むだけの無関係な単語まで誤って除外してしまう。
+    """
+
+    return {
+        token
+        for token in _NON_WORD_CHARACTERS.split(value.lower())
+        if token
+    }
+
+
 def clean_url(url: str) -> str:
     if not url:
         return ""
@@ -337,6 +384,34 @@ def extract_rows_from_dom(page, selector: str) -> list[dict]:
                 }
 
                 return rows.map((row, rowIndex) => {
+                    // 【重要・バグ修正】
+                    // 以前は各コンテナごとに
+                    // querySelectorAll('img').map(readImage) を呼んでおり、
+                    // Array.prototype.map が渡すindexはコンテナ内での
+                    // ローカルな連番だった。
+                    // そのため例えば「Aチームの1体目」と「Bチームの1体目」
+                    // (＝チーム編成が複数のブロックに分かれて描画される場合や、
+                    // 同じ行の中で別々のチーム表示が存在する場合)が
+                    // どちらも index=0 になり、後段の重複排除ロジックが
+                    // 別の画像を「同一画像の重複」と誤認して
+                    // 片方を丸ごと捨ててしまっていた。
+                    // これが集計人数(200人)は正しいのに
+                    // 総編成キャラ数が想定より少なくなる主因になり得る。
+                    //
+                    // 対策として、行内に実在する<img>要素1つ1つに対し、
+                    // 最初に一度だけ行内グローバルな通し番号を振り、
+                    // 以降はその番号だけをindexとして使う。
+                    // これによりDOM要素が実際に同一かどうかで
+                    // 重複判定できるようになる。
+                    const allImageElements = Array.from(
+                        row.querySelectorAll('img')
+                    );
+                    const globalIndexOf = new Map();
+
+                    allImageElements.forEach((element, i) => {
+                        globalIndexOf.set(element, i);
+                    });
+
                     const groups = [];
 
                     for (const selector of teamSelectors) {
@@ -353,7 +428,12 @@ def extract_rows_from_dom(page, selector: str) -> list[dict]:
                         for (const container of containers) {
                             const images = Array.from(
                                 container.querySelectorAll('img')
-                            ).map(readImage);
+                            ).map((element) => readImage(
+                                element,
+                                globalIndexOf.has(element)
+                                    ? globalIndexOf.get(element)
+                                    : -1
+                            ));
 
                             if (images.length > 0) {
                                 groups.push({
@@ -364,9 +444,9 @@ def extract_rows_from_dom(page, selector: str) -> list[dict]:
                         }
                     }
 
-                    const allImages = Array.from(
-                        row.querySelectorAll('img')
-                    ).map(readImage);
+                    const allImages = allImageElements.map(
+                        (element, i) => readImage(element, i)
+                    );
 
                     const attributes = {};
 
@@ -442,40 +522,92 @@ def filter_character_images(images: list[dict]) -> list[dict]:
     results = []
 
     for image in images:
-        if not image.get("visible"):
-            continue
-
-        src = clean_url(
-            str(image.get("src") or "")
-        )
-
         width = int(image.get("width") or 0)
         height = int(image.get("height") or 0)
+        raw_src = str(image.get("src") or "")
+
+        if not image.get("visible"):
+            _log_exclusion(
+                "not_visible",
+                raw_src,
+                width,
+                height,
+            )
+            continue
+
+        src = clean_url(raw_src)
+
         context = str(
             image.get("context") or ""
         ).lower()
 
         if not src:
+            _log_exclusion(
+                "no_src",
+                raw_src,
+                width,
+                height,
+            )
             continue
 
         source_lower = src.lower()
 
-        if any(
-            word in source_lower
-            for word in EXCLUDED_SOURCE_WORDS
-        ):
+        # 【修正】部分文字列一致(`word in source_lower`)ではなく、
+        # パスを単語単位に分解してから完全一致を見る。
+        # "rank" が "ranking" や "frankenstein" のような無関係な
+        # 単語の一部として誤検出されるのを防ぐため。
+        source_words = _extract_words(source_lower)
+        matched_source_words = (
+            source_words & EXCLUDED_SOURCE_WORDS
+        )
+
+        if matched_source_words:
+            _log_exclusion(
+                "excluded_source_word:"
+                f"{'/'.join(sorted(matched_source_words))}",
+                src,
+                width,
+                height,
+            )
             continue
 
-        if any(
-            word in context
+        # context(クラス名)は開発者が意図的に付けた短い名前である
+        # ことが多く、URLパスほど無関係な単語との衝突リスクが
+        # 高くないため、引き続き部分文字列一致で判定する。
+        # (例: "avatar-wrapper" のような複合クラス名も
+        #  意図通り除外できるようにするため)
+        matched_context_words = [
+            word
             for word in EXCLUDED_CONTEXT_WORDS
-        ):
+            if word in context
+        ]
+
+        if matched_context_words:
+            _log_exclusion(
+                "excluded_context_word:"
+                f"{'/'.join(sorted(matched_context_words))}",
+                src,
+                width,
+                height,
+            )
             continue
 
         if width < 18 or height < 18:
+            _log_exclusion(
+                "too_small",
+                src,
+                width,
+                height,
+            )
             continue
 
         if width > 220 or height > 220:
+            _log_exclusion(
+                "too_large",
+                src,
+                width,
+                height,
+            )
             continue
 
         results.append(
@@ -491,6 +623,15 @@ def filter_character_images(images: list[dict]) -> list[dict]:
 
 
 def select_team_images(row: dict) -> list[dict]:
+    # 【補足】extract_rows_from_dom側のJSを、コンテナごとの
+    # ローカルindexではなく行内グローバルなindexを使うよう修正したため、
+    # ここでのseen_indicesによる重複排除は
+    # 「実在する同一の<img>要素かどうか」を正しく見分けられるようになった。
+    # そのため、複数のセレクタが同じチーム枠を重複検出しても
+    # 正しく1回に畳み込まれ、逆に別々のチーム枠(例: 前列/後列の
+    # ように分割描画されているケースや、Aチーム/Bチームが
+    # 両方DOMに存在するケース)にある別々の画像を
+    # 誤って「重複」として取りこぼすこともなくなる。
     combined_images = []
     seen_indices = set()
 
@@ -974,6 +1115,28 @@ def dump_debug(page, details: dict) -> None:
     except PlaywrightError:
         pass
 
+    reason_counts: dict[str, int] = defaultdict(int)
+
+    for entry in EXCLUSION_LOG:
+        reason_counts[entry["reason"]] += 1
+
+    save_json(
+        DEBUG_DIR / "excluded_images.json",
+        {
+            "note": (
+                "scrape()実行中(行セレクタ確定後)に"
+                "filter_character_imagesで除外された画像の"
+                f"サンプル(最大{MAX_EXCLUSION_LOG_ENTRIES}件)。"
+                "サムネイルが小さすぎる/大きすぎる、"
+                "src・class名に除外ワードを含む、等の理由で"
+                "本来キャラクター画像であるものが"
+                "誤って除外されていないか確認する用途。"
+            ),
+            "reason_counts": dict(reason_counts),
+            "samples": EXCLUSION_LOG,
+        },
+    )
+
     save_json(
         DEBUG_DIR / "diagnostics.json",
         details,
@@ -991,6 +1154,12 @@ def scrape(page) -> dict:
         )
 
     print(f"[INFO] row selector={selector}")
+
+    # 行セレクタ探索フェーズ(find_best_row_selector内で
+    # ROW_SELECTORS候補ごとに何度もextract_rows_from_domを
+    # 呼んでいる)で記録された除外ログはノイズになるため、
+    # 本集計を始める直前にリセットする。
+    EXCLUSION_LOG.clear()
 
     counts = defaultdict(
         lambda: {
