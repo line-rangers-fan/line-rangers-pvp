@@ -61,9 +61,9 @@ OUTPUT_PATH = Path("docs/data/character_usage.json")
 DEBUG_DIR = Path(".artifacts/debug")
 
 MAX_PAGES = 30
-MAX_LOAD_ATTEMPTS = 50
-STABLE_ATTEMPTS_LIMIT = 6
-LOAD_WAIT_MS = 500
+MAX_LOAD_ATTEMPTS = 100         # 変更: 諦めるまでの最大試行回数を増加
+STABLE_ATTEMPTS_LIMIT = 15      # 変更: 画像の読み込みを待つためリミットを延長
+LOAD_WAIT_MS = 1500             # 変更: 読み込み待機時間を長くする (0.5秒 -> 1.5秒)
 
 ROW_SELECTORS = [
     "table tbody tr",
@@ -656,6 +656,15 @@ def click_load_more(page) -> bool:
 
 def scroll_dynamic_content(page) -> bool:
     try:
+        # 強制的に遅延読み込み(loading="lazy")を解除してロードを促す
+        page.evaluate("""
+            () => {
+                document.querySelectorAll('img[loading="lazy"]').forEach(img => {
+                    img.setAttribute('loading', 'eager');
+                });
+            }
+        """)
+
         result = page.evaluate(
             """
             () => {
@@ -885,7 +894,7 @@ def go_to_next_page(page, selector: str) -> bool:
                 )
                 candidate.click(timeout=5_000)
 
-                page.wait_for_timeout(1_500)
+                page.wait_for_timeout(2_000) # ページ遷移時も長めに待つ
 
                 new_signature = page_signature(
                     page,
