@@ -46,9 +46,9 @@ MIN_REQUIRED_PLAYERS = int(
     os.environ.get("MIN_REQUIRED_PLAYERS", "50")
 )
 
-# 10体に満たないプレイヤーは集計から除外し、遅延読み込みを待つように変更
+# 【修正】1体以上キャラクターが検出されればプレイヤーとしてカウントする
 MIN_CHARACTERS_PER_PLAYER = int(
-    os.environ.get("MIN_CHARACTERS_PER_PLAYER", "10")
+    os.environ.get("MIN_CHARACTERS_PER_PLAYER", "1")
 )
 
 MAX_CHARACTERS_PER_PLAYER = int(
@@ -61,9 +61,9 @@ OUTPUT_PATH = Path("docs/data/character_usage.json")
 DEBUG_DIR = Path(".artifacts/debug")
 
 MAX_PAGES = 30
-MAX_LOAD_ATTEMPTS = 100         # 変更: 諦めるまでの最大試行回数を増加
-STABLE_ATTEMPTS_LIMIT = 15      # 変更: 画像の読み込みを待つためリミットを延長
-LOAD_WAIT_MS = 1500             # 変更: 読み込み待機時間を長くする (0.5秒 -> 1.5秒)
+MAX_LOAD_ATTEMPTS = 100
+STABLE_ATTEMPTS_LIMIT = 15
+LOAD_WAIT_MS = 2000
 
 ROW_SELECTORS = [
     "table tbody tr",
@@ -88,9 +88,9 @@ TEAM_CONTAINER_SELECTORS = [
     ".defense-team",
     ".defence-team",
     "[class*='defense-team']",
-    "[class*='defence-team']",
+    "[class*='defense-team']",
     "[class*='defense'] [class*='team']",
-    "[class*='defence'] [class*='team']",
+    "[class*='defense'] [class*='team']",
     ".team-formation",
     ".ranger-team",
     "[class*='formation']",
@@ -483,7 +483,7 @@ def filter_character_images(images: list[dict]) -> list[dict]:
                 "image": src,
                 "width": width,
                 "height": height,
-                "index": image.get("index"),  # 重複判定用にindexを保持
+                "index": image.get("index"), 
             }
         )
 
@@ -491,7 +491,6 @@ def filter_character_images(images: list[dict]) -> list[dict]:
 
 
 def select_team_images(row: dict) -> list[dict]:
-    # 1. 最優先: コンテナが分離している場合 (Aチーム/Bチームなど) を結合して評価
     combined_images = []
     seen_indices = set()
 
@@ -509,7 +508,6 @@ def select_team_images(row: dict) -> list[dict]:
     ):
         return combined_images
 
-    # 2. フォールバック: 単一グループで条件を満たす最大のもの
     valid_groups = []
 
     for images in row.get("groups", []):
@@ -523,7 +521,6 @@ def select_team_images(row: dict) -> list[dict]:
     if valid_groups:
         return max(valid_groups, key=len)
 
-    # 3. 最後の手段: 行全体の画像 (UIアイコン等が混ざるリスクがあるため最後に評価)
     all_images = row.get("all_images", [])
 
     if (
@@ -656,7 +653,7 @@ def click_load_more(page) -> bool:
 
 def scroll_dynamic_content(page) -> bool:
     try:
-        # 強制的に遅延読み込み(loading="lazy")を解除してロードを促す
+        # 画像の遅延読み込みを強制的に解除
         page.evaluate("""
             () => {
                 document.querySelectorAll('img[loading="lazy"]').forEach(img => {
@@ -721,6 +718,9 @@ def scroll_dynamic_content(page) -> bool:
             }
             """
         )
+
+        page.keyboard.press("End")
+        page.wait_for_timeout(500)
 
         return bool(result)
     except PlaywrightError:
@@ -894,7 +894,7 @@ def go_to_next_page(page, selector: str) -> bool:
                 )
                 candidate.click(timeout=5_000)
 
-                page.wait_for_timeout(2_000) # ページ遷移時も長めに待つ
+                page.wait_for_timeout(2_000)
 
                 new_signature = page_signature(
                     page,
@@ -1268,7 +1268,7 @@ def main() -> None:
             timezone_id="Asia/Tokyo",
             viewport={
                 "width": 1440,
-                "height": 1200,
+                "height": 8000,
             },
             user_agent=(
                 "Mozilla/5.0 (X11; Linux x86_64) "
