@@ -3,18 +3,24 @@
 LINE Rangers HandbookのPvP Trackerから、
 レジェンド帯プレイヤーの防衛チームを集計する。
 
-occurrence_count:
-    同一プレイヤー内の重複を含むキャラクターの総編成数。
+集計仕様:
+    occurrence_count:
+        同一プレイヤー内の重複を含むキャラクターの総編成数。
 
-player_count:
-    対象キャラクターを1体以上編成しているプレイヤー数。
+    player_count:
+        対象キャラクターを1体以上編成しているプレイヤー数。
 
-adoption_rate:
-    player_count / sampled_players * 100。
+    adoption_rate:
+        player_count / sampled_players * 100。
 
-同じキャラクターを1人が複数体使用している場合、
-occurrence_countには体数分を加算し、
-player_countには1人分だけ加算する。
+同じキャラクターを1人が複数体使用している場合:
+    occurrence_countには体数分を加算する。
+    player_countには1人分だけ加算する。
+
+重要:
+    プレイヤーはキャラクターを1体以上取得できれば集計対象にする。
+    1プレイヤーにつき最大10体まで読み取る。
+    遅延読み込み、仮想スクロール、ページネーションに対応する。
 """
 
 import hashlib
@@ -22,11 +28,18 @@ import json
 import os
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import (
+    parse_qsl,
+    unquote,
+    urlencode,
+    urljoin,
+    urlsplit,
+    urlunsplit,
+)
 
 from playwright.sync_api import (
     Error as PlaywrightError,
@@ -46,40 +59,84 @@ MIN_REQUIRED_PLAYERS = int(
     os.environ.get("MIN_REQUIRED_PLAYERS", "50")
 )
 
-# 【ご要望】1体以上キャラクターがいればプレイヤーとして集計する方式を維持
+# 1体以上読み取れたプレイヤーを集計対象にする。
 MIN_CHARACTERS_PER_PLAYER = int(
     os.environ.get("MIN_CHARACTERS_PER_PLAYER", "1")
 )
 
+# LINE Rangersの1チーム上限。
 MAX_CHARACTERS_PER_PLAYER = int(
-    os.environ.get("MAX_CHARACTERS_PER_PLAYER", "15")
+    os.environ.get("MAX_CHARACTERS_PER_PLAYER", "10")
+)
+
+MAX_PAGES = int(
+    os.environ.get("MAX_PAGES", "30")
+)
+
+MAX_LOAD_ATTEMPTS = int(
+    os.environ.get("MAX_LOAD_ATTEMPTS", "240")
+)
+
+STABLE_ATTEMPTS_LIMIT = int(
+    os.environ.get("STABLE_ATTEMPTS_LIMIT", "4")
+)
+
+NEXT_PAGE_STABLE_ATTEMPTS = int(
+    os.environ.get("NEXT_PAGE_STABLE_ATTEMPTS", "2")
+)
+
+CONTENT_CHANGE_TIMEOUT_MS = int(
+    os.environ.get("CONTENT_CHANGE_TIMEOUT_MS", "900")
+)
+
+ACTION_SETTLE_MS = int(
+    os.environ.get("ACTION_SETTLE_MS", "80")
+)
+
+PAGE_NAVIGATION_TIMEOUT_MS = int(
+    os.environ.get("PAGE_NAVIGATION_TIMEOUT_MS", "15000")
+)
+
+DEFAULT_TIMEOUT_MS = int(
+    os.environ.get("DEFAULT_TIMEOUT_MS", "5000")
 )
 
 DEBUG = os.environ.get("DEBUG", "0") == "1"
+HEADLESS = os.environ.get("HEADLESS", "1") != "0"
 
-OUTPUT_PATH = Path("docs/data/character_usage.json")
-DEBUG_DIR = Path(".artifacts/debug")
+OUTPUT_PATH = Path(
+    os.environ.get(
+        "OUTPUT_PATH",
+        "docs/data/character_usage.json",
+    )
+)
 
-MAX_PAGES = 30
-MAX_LOAD_ATTEMPTS = 120
-STABLE_ATTEMPTS_LIMIT = 20
-LOAD_WAIT_MS = 2500  # 読み込み待機時間をさらに強化
+DEBUG_DIR = Path(
+    os.environ.get(
+        "DEBUG_DIR",
+        ".artifacts/debug",
+    )
+)
 
 ROW_SELECTORS = [
+    "[data-player-id]",
+    "[data-player]",
+    "[data-rank-entry]",
     "table tbody tr",
     "[role='rowgroup'] [role='row']",
     ".ranking-table tbody tr",
     ".ranking-list .ranking-row",
     ".player-list .player-row",
     ".player-card",
-    "[data-player-id]",
     "[class*='ranking'] [class*='row']",
     "[class*='player'] [class*='row']",
 ]
 
-TEAM_CONTAINER_SELECTORS = [
+STRICT_TEAM_CONTAINER_SELECTORS = [
     "[data-team='defense']",
     "[data-team='defence']",
+    "[data-team-type='defense']",
+    "[data-team-type='defence']",
     "[data-type='defense']",
     "[data-type='defence']",
     "[aria-label*='defense' i]",
@@ -89,11 +146,31 @@ TEAM_CONTAINER_SELECTORS = [
     ".defence-team",
     "[class*='defense-team']",
     "[class*='defence-team']",
+    "[class*='defense_team']",
+    "[class*='defence_team']",
     "[class*='defense'] [class*='team']",
     "[class*='defence'] [class*='team']",
+]
+
+FALLBACK_TEAM_CONTAINER_SELECTORS = [
     ".team-formation",
     ".ranger-team",
+    ".formation",
+    "[class*='team-formation']",
+    "[class*='ranger-team']",
     "[class*='formation']",
+    "[class*='team']",
+]
+
+PLAYER_NAME_SELECTORS = [
+    "[data-player-name]",
+    ".player-name",
+    "[class*='player-name']",
+    "[class*='player_name']",
+    ".username",
+    "[class*='username']",
+    "[class*='user-name']",
+    "[class*='display-name']",
 ]
 
 LOAD_MORE_SELECTORS = [
@@ -133,6 +210,16 @@ NEXT_PAGE_SELECTORS = [
     "[class*='pagination'] [class*='next']",
 ]
 
+POSITIVE_CHARACTER_WORDS = {
+    "character",
+    "characters",
+    "chara",
+    "iconunit",
+    "ranger",
+    "rangers",
+    "unit",
+}
+
 EXCLUDED_SOURCE_WORDS = {
     "avatar",
     "badge",
@@ -153,21 +240,53 @@ EXCLUDED_CONTEXT_WORDS = {
     "avatar",
     "badge",
     "country",
+    "emoji",
     "flag",
     "guild",
-    "league",
+    "league-icon",
     "player-icon",
     "profile",
     "rank-icon",
+    "tier-icon",
     "user-icon",
 }
 
+TRACKING_QUERY_KEYS = {
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "utm_id",
+    "fbclid",
+    "gclid",
+}
+
+IMAGE_TRANSFORM_QUERY_KEYS = {
+    "dpr",
+    "fit",
+    "fm",
+    "format",
+    "h",
+    "height",
+    "q",
+    "quality",
+    "resize",
+    "w",
+    "width",
+}
+
+WRAPPED_IMAGE_QUERY_KEYS = (
+    "url",
+    "src",
+    "image",
+    "image_url",
+)
 
 _NON_WORD_CHARACTERS = re.compile(r"[^a-z0-9]+")
+_SPACE_CHARACTERS = re.compile(r"\s+")
 
-# デバッグ用: どんな画像が何の理由で除外されたかを
-# 一定件数だけ記録しておく(dump_debugで書き出す)。
-MAX_EXCLUSION_LOG_ENTRIES = 300
+MAX_EXCLUSION_LOG_ENTRIES = 500
 EXCLUSION_LOG: list[dict] = []
 
 
@@ -176,6 +295,7 @@ def _log_exclusion(
     src: str,
     width: int = 0,
     height: int = 0,
+    context: str = "",
 ) -> None:
     if len(EXCLUSION_LOG) >= MAX_EXCLUSION_LOG_ENTRIES:
         return
@@ -186,43 +306,127 @@ def _log_exclusion(
             "src": src,
             "width": width,
             "height": height,
+            "context": context,
         }
     )
 
 
 def _extract_words(value: str) -> set[str]:
-    """英数字以外の文字(区切り文字・ハイフン等含む)で分割し、
-    単語トークンの集合を作る。
-
-    例: ".../pvp-ranking/character_0231.png"
-        -> {"pvp", "ranking", "character", "0231", "png"}
-
-    これにより「rank」という単語そのものが独立して
-    パスに現れる場合だけを検出できる。単純な部分文字列一致
-    (`"rank" in url`)だと、"ranking" や "frankenstein" のように
-    "rank" を含むだけの無関係な単語まで誤って除外してしまう。
-    """
-
     return {
         token
-        for token in _NON_WORD_CHARACTERS.split(value.lower())
+        for token in _NON_WORD_CHARACTERS.split(
+            (value or "").lower()
+        )
         if token
     }
+
+
+def normalize_text(value: str) -> str:
+    return _SPACE_CHARACTERS.sub(
+        " ",
+        value or "",
+    ).strip()
+
+
+def first_srcset_url(value: str) -> str:
+    if not value:
+        return ""
+
+    candidates = []
+
+    for part in value.split(","):
+        candidate = part.strip().split(" ")[0].strip()
+
+        if candidate:
+            candidates.append(candidate)
+
+    if not candidates:
+        return ""
+
+    return candidates[-1]
+
+
+def unwrap_image_url(url: str) -> str:
+    current = url
+
+    for _ in range(3):
+        if not current:
+            break
+
+        absolute_url = urljoin(TARGET_URL, current)
+        parts = urlsplit(absolute_url)
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+
+        wrapped = ""
+
+        for key in WRAPPED_IMAGE_QUERY_KEYS:
+            value = query.get(key, "")
+
+            if not value:
+                continue
+
+            decoded = unquote(value)
+
+            if (
+                decoded.startswith("http://")
+                or decoded.startswith("https://")
+                or decoded.startswith("/")
+            ):
+                wrapped = decoded
+                break
+
+        if not wrapped:
+            return absolute_url
+
+        current = wrapped
+
+    return urljoin(TARGET_URL, current)
 
 
 def clean_url(url: str) -> str:
     if not url:
         return ""
 
-    absolute_url = urljoin(TARGET_URL, url)
+    stripped_url = url.strip()
+
+    if (
+        not stripped_url
+        or stripped_url.startswith("data:")
+        or stripped_url.startswith("blob:")
+        or stripped_url.startswith("javascript:")
+    ):
+        return ""
+
+    absolute_url = unwrap_image_url(stripped_url)
     parts = urlsplit(absolute_url)
+
+    if parts.scheme not in {"http", "https"}:
+        return ""
+
+    filtered_query = []
+
+    for key, value in parse_qsl(
+        parts.query,
+        keep_blank_values=True,
+    ):
+        lower_key = key.lower()
+
+        if lower_key in TRACKING_QUERY_KEYS:
+            continue
+
+        if lower_key in IMAGE_TRANSFORM_QUERY_KEYS:
+            continue
+
+        filtered_query.append((key, value))
+
+    filtered_query.sort()
 
     return urlunsplit(
         (
             parts.scheme.lower(),
             parts.netloc.lower(),
             parts.path,
-            "",
+            urlencode(filtered_query, doseq=True),
             "",
         )
     )
@@ -273,6 +477,30 @@ def is_disabled(locator) -> bool:
         return True
 
 
+def install_resource_filter(context) -> None:
+    blocked_hosts = {
+        "connect.facebook.net",
+        "googleads.g.doubleclick.net",
+        "www.google-analytics.com",
+        "www.googletagmanager.com",
+    }
+
+    def handle_route(route) -> None:
+        request = route.request
+        host = urlsplit(request.url).netloc.lower()
+
+        if (
+            request.resource_type in {"font", "media"}
+            or host in blocked_hosts
+        ):
+            route.abort()
+            return
+
+        route.continue_()
+
+    context.route("**/*", handle_route)
+
+
 def dismiss_common_dialogs(page) -> None:
     labels = [
         "同意する",
@@ -298,7 +526,7 @@ def dismiss_common_dialogs(page) -> None:
                 and buttons.first.is_visible()
             ):
                 buttons.first.click(timeout=2_000)
-                page.wait_for_timeout(200)
+                page.wait_for_timeout(100)
         except PlaywrightError:
             continue
 
@@ -315,6 +543,8 @@ def select_legend_league(page) -> None:
         "[role='option']:has-text('Legend')",
     ]
 
+    state_before = get_page_state(page)
+
     for selector in selectors:
         try:
             candidates = page.locator(selector)
@@ -326,11 +556,19 @@ def select_legend_league(page) -> None:
             candidate = candidates.nth(index)
 
             try:
-                if not candidate.is_visible():
+                if (
+                    not candidate.is_visible()
+                    or is_disabled(candidate)
+                ):
                     continue
 
                 candidate.click(timeout=3_000)
-                page.wait_for_timeout(1_500)
+
+                wait_for_page_change(
+                    page,
+                    state_before,
+                    timeout_ms=2_000,
+                )
 
                 print(
                     "[INFO] レジェンドリーグを選択しました。"
@@ -342,426 +580,1020 @@ def select_legend_league(page) -> None:
 
     print(
         "[INFO] レジェンド選択ボタンは見つかりませんでした。"
-        "現在の表示内容で処理します。"
+        " 現在の表示内容で処理します。"
     )
 
 
-def extract_rows_from_dom(page, selector: str) -> list[dict]:
+def extract_rows_from_dom(page) -> list[dict]:
     try:
-        raw_rows = page.locator(selector).evaluate_all(
+        return page.evaluate(
             """
-            (rows, teamSelectors) => {
-                function readImage(image, index) {
-                    const rect = image.getBoundingClientRect();
-                    const style = getComputedStyle(image);
-                    const context = image.closest(
-                        '[class], [data-team], [data-type], td, li'
+            ({
+                rowSelectors,
+                strictTeamSelectors,
+                fallbackTeamSelectors,
+                playerNameSelectors
+            }) => {
+                const normalizeText = (value) => {
+                    return (value || '')
+                        .replace(/\\s+/g, ' ')
+                        .trim();
+                };
+
+                const isVisible = (element) => {
+                    if (!element || !element.isConnected) {
+                        return false;
+                    }
+
+                    const rect = element.getBoundingClientRect();
+                    const style = getComputedStyle(element);
+
+                    return (
+                        rect.width > 0
+                        && rect.height > 0
+                        && style.display !== 'none'
+                        && style.visibility !== 'hidden'
+                        && Number(style.opacity || 1) !== 0
+                    );
+                };
+
+                const readAttribute = (element, names) => {
+                    for (const name of names) {
+                        const value = element.getAttribute(name);
+
+                        if (value) {
+                            return value;
+                        }
+                    }
+
+                    return '';
+                };
+
+                const readPlayerName = (row) => {
+                    const directName = readAttribute(
+                        row,
+                        [
+                            'data-player-name',
+                            'data-user-name',
+                            'data-username'
+                        ]
                     );
 
-                    return {
-                        index: index,
-                        src:
-                            image.currentSrc
-                            || image.getAttribute('src')
-                            || image.getAttribute('data-src')
-                            || image.getAttribute('data-lazy-src')
-                            || image.getAttribute('data-original')
-                            || '',
-                        width: Math.round(rect.width),
-                        height: Math.round(rect.height),
-                        visible:
-                            rect.width > 0
-                            && rect.height > 0
-                            && style.display !== 'none'
-                            && style.visibility !== 'hidden'
-                            && Number(style.opacity || 1) !== 0,
-                        context:
-                            context
-                            && typeof context.className === 'string'
-                                ? context.className
-                                : ''
-                    };
-                }
+                    if (directName) {
+                        return normalizeText(directName);
+                    }
 
-                return rows.map((row, rowIndex) => {
-                    // 【重要・バグ修正】
-                    // 以前は各コンテナごとに
-                    // querySelectorAll('img').map(readImage) を呼んでおり、
-                    // Array.prototype.map が渡すindexはコンテナ内での
-                    // ローカルな連番だった。
-                    // そのため例えば「Aチームの1体目」と「Bチームの1体目」
-                    // (＝チーム編成が複数のブロックに分かれて描画される場合や、
-                    // 同じ行の中で別々のチーム表示が存在する場合)が
-                    // どちらも index=0 になり、後段の重複排除ロジックが
-                    // 別の画像を「同一画像の重複」と誤認して
-                    // 片方を丸ごと捨ててしまっていた。
-                    // これが集計人数(200人)は正しいのに
-                    // 総編成キャラ数が想定より少なくなる主因になり得る。
-                    //
-                    // 対策として、行内に実在する<img>要素1つ1つに対し、
-                    // 最初に一度だけ行内グローバルな通し番号を振り、
-                    // 以降はその番号だけをindexとして使う。
-                    // これによりDOM要素が実際に同一かどうかで
-                    // 重複判定できるようになる。
-                    const allImageElements = Array.from(
-                        row.querySelectorAll('img')
+                    for (const selector of playerNameSelectors) {
+                        const element = row.querySelector(selector);
+
+                        if (!element) {
+                            continue;
+                        }
+
+                        const value = normalizeText(
+                            element.textContent || ''
+                        );
+
+                        if (value) {
+                            return value;
+                        }
+                    }
+
+                    const lines = (row.innerText || '')
+                        .split('\\n')
+                        .map(normalizeText)
+                        .filter(Boolean);
+
+                    return lines.length > 0
+                        ? lines[0].slice(0, 160)
+                        : '';
+                };
+
+                const readProfileHref = (row) => {
+                    const links = Array.from(
+                        row.querySelectorAll('a[href]')
                     );
-                    const globalIndexOf = new Map();
 
-                    allImageElements.forEach((element, i) => {
-                        globalIndexOf.set(element, i);
+                    const preferred = links.find((link) => {
+                        const href = (
+                            link.getAttribute('href') || ''
+                        ).toLowerCase();
+
+                        return (
+                            href.includes('player')
+                            || href.includes('profile')
+                            || href.includes('user')
+                        );
                     });
 
-                    const groups = [];
+                    const link = preferred || links[0];
 
-                    for (const selector of teamSelectors) {
-                        let containers = [];
+                    return link
+                        ? link.getAttribute('href') || ''
+                        : '';
+                };
+
+                const readAncestorContext = (image, row) => {
+                    const values = [];
+                    let current = image.parentElement;
+                    let depth = 0;
+
+                    while (
+                        current
+                        && current !== row
+                        && depth < 6
+                    ) {
+                        if (
+                            typeof current.className === 'string'
+                            && current.className
+                        ) {
+                            values.push(current.className);
+                        }
+
+                        for (
+                            const attribute
+                            of [
+                                'data-team',
+                                'data-team-type',
+                                'data-type',
+                                'aria-label'
+                            ]
+                        ) {
+                            const value = current.getAttribute(
+                                attribute
+                            );
+
+                            if (value) {
+                                values.push(value);
+                            }
+                        }
+
+                        current = current.parentElement;
+                        depth += 1;
+                    }
+
+                    return normalizeText(values.join(' '));
+                };
+
+                const readImage = (
+                    image,
+                    index,
+                    row,
+                    teamMatched
+                ) => {
+                    const rect = image.getBoundingClientRect();
+
+                    const sources = [
+                        image.currentSrc || '',
+                        image.getAttribute('src') || '',
+                        image.getAttribute('data-src') || '',
+                        image.getAttribute('data-lazy-src') || '',
+                        image.getAttribute('data-original') || '',
+                        image.getAttribute('data-image') || '',
+                        image.getAttribute('data-url') || ''
+                    ];
+
+                    const srcsets = [
+                        image.getAttribute('srcset') || '',
+                        image.getAttribute('data-srcset') || ''
+                    ];
+
+                    const picture = image.closest('picture');
+
+                    if (picture) {
+                        for (
+                            const source
+                            of picture.querySelectorAll('source')
+                        ) {
+                            srcsets.push(
+                                source.getAttribute('srcset') || ''
+                            );
+                            srcsets.push(
+                                source.getAttribute(
+                                    'data-srcset'
+                                ) || ''
+                            );
+                        }
+                    }
+
+                    return {
+                        index,
+                        sources,
+                        srcsets,
+                        alt: normalizeText(
+                            image.getAttribute('alt') || ''
+                        ),
+                        title: normalizeText(
+                            image.getAttribute('title') || ''
+                        ),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height),
+                        natural_width: image.naturalWidth || 0,
+                        natural_height: image.naturalHeight || 0,
+                        visible: isVisible(image),
+                        complete: Boolean(image.complete),
+                        team_matched: teamMatched,
+                        context: readAncestorContext(image, row)
+                    };
+                };
+
+                const queryAllSafe = (root, selectors) => {
+                    const result = [];
+                    const seen = new Set();
+
+                    for (const selector of selectors) {
+                        let elements = [];
 
                         try {
-                            containers = Array.from(
-                                row.querySelectorAll(selector)
+                            elements = root.querySelectorAll(
+                                selector
                             );
                         } catch {
                             continue;
                         }
 
-                        for (const container of containers) {
-                            const images = Array.from(
-                                container.querySelectorAll('img')
-                            ).map((element) => readImage(
-                                element,
-                                globalIndexOf.has(element)
-                                    ? globalIndexOf.get(element)
-                                    : -1
-                            ));
-
-                            if (images.length > 0) {
-                                groups.push({
-                                    selector: selector,
-                                    images: images
-                                });
+                        for (const element of elements) {
+                            if (seen.has(element)) {
+                                continue;
                             }
+
+                            seen.add(element);
+                            result.push(element);
                         }
                     }
 
-                    const allImages = allImageElements.map(
-                        (element, i) => readImage(element, i)
-                    );
+                    return result;
+                };
 
-                    const attributes = {};
+                const findTextDefenseContainers = (row) => {
+                    const result = [];
 
-                    for (const attribute of row.attributes) {
+                    for (
+                        const element
+                        of row.querySelectorAll(
+                            'section, article, td, div, li'
+                        )
+                    ) {
+                        const ownText = normalizeText(
+                            element.textContent || ''
+                        ).toLowerCase();
+
                         if (
-                            attribute.name.startsWith('data-')
-                            || attribute.name === 'id'
+                            !ownText.includes('防衛')
+                            && !ownText.includes('defense')
+                            && !ownText.includes('defence')
                         ) {
-                            attributes[attribute.name] =
-                                attribute.value;
+                            continue;
+                        }
+
+                        const imageCount =
+                            element.querySelectorAll('img').length;
+
+                        if (
+                            imageCount >= 1
+                            && imageCount <= 20
+                        ) {
+                            result.push(element);
+                        }
+                    }
+
+                    return result;
+                };
+
+                const collectImages = (row) => {
+                    let containers = queryAllSafe(
+                        row,
+                        strictTeamSelectors
+                    );
+                    let teamMatched = containers.length > 0;
+
+                    if (containers.length === 0) {
+                        containers = findTextDefenseContainers(row);
+                        teamMatched = containers.length > 0;
+                    }
+
+                    if (containers.length === 0) {
+                        containers = queryAllSafe(
+                            row,
+                            fallbackTeamSelectors
+                        );
+                    }
+
+                    if (containers.length === 0) {
+                        containers = [row];
+                    }
+
+                    const images = [];
+                    const seenImages = new Set();
+
+                    for (const container of containers) {
+                        for (
+                            const image
+                            of container.querySelectorAll('img')
+                        ) {
+                            if (seenImages.has(image)) {
+                                continue;
+                            }
+
+                            seenImages.add(image);
+
+                            images.push(
+                                readImage(
+                                    image,
+                                    images.length,
+                                    row,
+                                    teamMatched
+                                )
+                            );
                         }
                     }
 
                     return {
-                        rowIndex: rowIndex,
-                        text: (
-                            row.innerText
-                            || row.textContent
-                            || ''
-                        )
-                            .replace(/\\s+/g, ' ')
-                            .trim(),
-                        attributes: attributes,
-                        groups: groups,
-                        allImages: allImages
+                        images,
+                        teamMatched
                     };
-                });
+                };
+
+                const candidateGroups = [];
+
+                for (const selector of rowSelectors) {
+                    let rows = [];
+
+                    try {
+                        rows = Array.from(
+                            document.querySelectorAll(selector)
+                        );
+                    } catch {
+                        continue;
+                    }
+
+                    const usableRows = rows.filter((row) => {
+                        if (!row.isConnected) {
+                            return false;
+                        }
+
+                        return row.querySelectorAll('img').length > 0;
+                    });
+
+                    if (usableRows.length === 0) {
+                        continue;
+                    }
+
+                    const imageCounts = usableRows.map((row) => {
+                        return row.querySelectorAll('img').length;
+                    });
+
+                    const reasonableRows = imageCounts.filter(
+                        (count) => count >= 1 && count <= 30
+                    ).length;
+
+                    const score =
+                        reasonableRows * 1000
+                        + usableRows.length;
+
+                    candidateGroups.push({
+                        selector,
+                        rows: usableRows,
+                        score
+                    });
+                }
+
+                candidateGroups.sort(
+                    (left, right) => right.score - left.score
+                );
+
+                const selectedGroup = candidateGroups[0];
+
+                if (!selectedGroup) {
+                    return [];
+                }
+
+                const viewportHeight =
+                    window.innerHeight
+                    || document.documentElement.clientHeight
+                    || 0;
+
+                return selectedGroup.rows.map(
+                    (row, rowIndex) => {
+                        const rect = row.getBoundingClientRect();
+                        const playerName = readPlayerName(row);
+                        const profileHref = readProfileHref(row);
+
+                        const explicitId = readAttribute(
+                            row,
+                            [
+                                'data-player-id',
+                                'data-player',
+                                'data-user-id',
+                                'data-id'
+                            ]
+                        );
+
+                        const rank = readAttribute(
+                            row,
+                            [
+                                'data-rank',
+                                'data-position',
+                                'data-index'
+                            ]
+                        );
+
+                        const rowText = normalizeText(
+                            row.innerText || ''
+                        ).slice(0, 500);
+
+                        const identityParts = [
+                            explicitId,
+                            profileHref,
+                            playerName,
+                            rank
+                        ].filter(Boolean);
+
+                        const identity = identityParts.length > 0
+                            ? identityParts.join('|')
+                            : `${rowText}|${rowIndex}`;
+
+                        const collected = collectImages(row);
+
+                        return {
+                            row_index: rowIndex,
+                            identity,
+                            explicit_id: explicitId,
+                            player_name: playerName,
+                            profile_href: profileHref,
+                            rank,
+                            text: rowText,
+                            selector: selectedGroup.selector,
+                            team_matched:
+                                collected.teamMatched,
+                            viewport_seen:
+                                rect.bottom >= 0
+                                && rect.top <= viewportHeight,
+                            images: collected.images
+                        };
+                    }
+                );
             }
             """,
-            TEAM_CONTAINER_SELECTORS,
+            {
+                "rowSelectors": ROW_SELECTORS,
+                "strictTeamSelectors":
+                    STRICT_TEAM_CONTAINER_SELECTORS,
+                "fallbackTeamSelectors":
+                    FALLBACK_TEAM_CONTAINER_SELECTORS,
+                "playerNameSelectors": PLAYER_NAME_SELECTORS,
+            },
         )
-    except PlaywrightError:
+    except PlaywrightError as error:
+        print(
+            "[WARN] DOMから行を取得できませんでした。"
+            f" error={error}"
+        )
         return []
 
-    rows = []
 
-    for raw_row in raw_rows:
-        groups = []
+def choose_image_source(image: dict) -> str:
+    candidates = []
 
-        for raw_group in raw_row.get("groups", []):
-            images = filter_character_images(
-                raw_group.get("images", [])
-            )
+    for source in image.get("sources", []):
+        if source:
+            candidates.append(source)
 
-            if images:
-                groups.append(images)
+    for srcset in image.get("srcsets", []):
+        source = first_srcset_url(srcset)
 
-        all_images = filter_character_images(
-            raw_row.get("allImages", [])
-        )
+        if source:
+            candidates.append(source)
 
-        rows.append(
-            {
-                "row_index": int(
-                    raw_row.get("rowIndex") or 0
-                ),
-                "text": str(
-                    raw_row.get("text") or ""
-                ),
-                "attributes": raw_row.get(
-                    "attributes",
-                    {},
-                ),
-                "groups": groups,
-                "all_images": all_images,
-            }
-        )
+    for candidate in candidates:
+        cleaned = clean_url(candidate)
 
-    return rows
+        if cleaned:
+            return cleaned
+
+    return ""
 
 
-def filter_character_images(images: list[dict]) -> list[dict]:
-    results = []
-
-    for image in images:
-        width = int(image.get("width") or 0)
-        height = int(image.get("height") or 0)
-        raw_src = str(image.get("src") or "")
-
-        if not image.get("visible"):
-            _log_exclusion(
-                "not_visible",
-                raw_src,
-                width,
-                height,
-            )
-            continue
-
-        src = clean_url(raw_src)
-
-        context = str(
-            image.get("context") or ""
-        ).lower()
-
-        if not src:
-            _log_exclusion(
-                "no_src",
-                raw_src,
-                width,
-                height,
-            )
-            continue
-
-        source_lower = src.lower()
-
-        # 【修正】部分文字列一致(`word in source_lower`)ではなく、
-        # パスを単語単位に分解してから完全一致を見る。
-        # "rank" が "ranking" や "frankenstein" のような無関係な
-        # 単語の一部として誤検出されるのを防ぐため。
-        source_words = _extract_words(source_lower)
-        matched_source_words = (
-            source_words & EXCLUDED_SOURCE_WORDS
-        )
-
-        if matched_source_words:
-            _log_exclusion(
-                "excluded_source_word:"
-                f"{'/'.join(sorted(matched_source_words))}",
-                src,
-                width,
-                height,
-            )
-            continue
-
-        # context(クラス名)は開発者が意図的に付けた短い名前である
-        # ことが多く、URLパスほど無関係な単語との衝突リスクが
-        # 高くないため、引き続き部分文字列一致で判定する。
-        # (例: "avatar-wrapper" のような複合クラス名も
-        #  意図通り除外できるようにするため)
-        matched_context_words = [
-            word
-            for word in EXCLUDED_CONTEXT_WORDS
-            if word in context
-        ]
-
-        if matched_context_words:
-            _log_exclusion(
-                "excluded_context_word:"
-                f"{'/'.join(sorted(matched_context_words))}",
-                src,
-                width,
-                height,
-            )
-            continue
-
-        if width < 18 or height < 18:
-            _log_exclusion(
-                "too_small",
-                src,
-                width,
-                height,
-            )
-            continue
-
-        if width > 220 or height > 220:
-            _log_exclusion(
-                "too_large",
-                src,
-                width,
-                height,
-            )
-            continue
-
-        results.append(
-            {
-                "image": src,
-                "width": width,
-                "height": height,
-                "index": image.get("index"), 
-            }
-        )
-
-    return results
-
-
-def select_team_images(row: dict) -> list[dict]:
-    # 【補足】extract_rows_from_dom側のJSを、コンテナごとの
-    # ローカルindexではなく行内グローバルなindexを使うよう修正したため、
-    # ここでのseen_indicesによる重複排除は
-    # 「実在する同一の<img>要素かどうか」を正しく見分けられるようになった。
-    # そのため、複数のセレクタが同じチーム枠を重複検出しても
-    # 正しく1回に畳み込まれ、逆に別々のチーム枠(例: 前列/後列の
-    # ように分割描画されているケースや、Aチーム/Bチームが
-    # 両方DOMに存在するケース)にある別々の画像を
-    # 誤って「重複」として取りこぼすこともなくなる。
-    combined_images = []
-    seen_indices = set()
-
-    for group in row.get("groups", []):
-        for img in group:
-            idx = img.get("index")
-            if idx is not None and idx not in seen_indices:
-                seen_indices.add(idx)
-                combined_images.append(img)
-
-    if (
-        MIN_CHARACTERS_PER_PLAYER
-        <= len(combined_images)
-        <= MAX_CHARACTERS_PER_PLAYER
-    ):
-        return combined_images
-
-    valid_groups = []
-
-    for images in row.get("groups", []):
-        if (
-            MIN_CHARACTERS_PER_PLAYER
-            <= len(images)
-            <= MAX_CHARACTERS_PER_PLAYER
-        ):
-            valid_groups.append(images)
-
-    if valid_groups:
-        return max(valid_groups, key=len)
-
-    all_images = row.get("all_images", [])
-
-    if (
-        MIN_CHARACTERS_PER_PLAYER
-        <= len(all_images)
-        <= MAX_CHARACTERS_PER_PLAYER
-    ):
-        return all_images
-
-    return []
-
-
-def find_best_row_selector(page) -> tuple[str | None, dict]:
-    diagnostics = {}
-
-    for selector in ROW_SELECTORS:
-        rows = extract_rows_from_dom(page, selector)
-        valid_rows = 0
-        image_counts = []
-
-        for row in rows[:30]:
-            images = select_team_images(row)
-
-            if images:
-                valid_rows += 1
-                image_counts.append(len(images))
-
-        diagnostics[selector] = {
-            "row_count": len(rows),
-            "valid_rows": valid_rows,
-            "image_counts": image_counts,
-        }
-
-    ranked = sorted(
-        diagnostics.items(),
-        key=lambda item: (
-            item[1]["valid_rows"],
-            item[1]["row_count"],
-        ),
-        reverse=True,
+def image_candidate_score(image: dict, source: str) -> int:
+    width = int(
+        image.get("width")
+        or image.get("natural_width")
+        or 0
+    )
+    height = int(
+        image.get("height")
+        or image.get("natural_height")
+        or 0
     )
 
-    if not ranked:
-        return None, diagnostics
+    context = image.get("context", "")
+    alt = image.get("alt", "")
+    title = image.get("title", "")
 
-    if ranked[0][1]["valid_rows"] == 0:
-        return None, diagnostics
+    source_words = _extract_words(source)
+    context_words = _extract_words(context)
+    text_words = _extract_words(f"{alt} {title}")
 
-    return ranked[0][0], diagnostics
+    score = 0
+
+    if image.get("team_matched"):
+        score += 100
+
+    if source_words & POSITIVE_CHARACTER_WORDS:
+        score += 60
+
+    if context_words & POSITIVE_CHARACTER_WORDS:
+        score += 40
+
+    if text_words & POSITIVE_CHARACTER_WORDS:
+        score += 20
+
+    if image.get("visible"):
+        score += 8
+
+    if image.get("complete"):
+        score += 4
+
+    if width >= 32 and height >= 32:
+        score += 15
+
+    if width >= 48 and height >= 48:
+        score += 10
+
+    if width and height:
+        ratio = width / height
+
+        if 0.70 <= ratio <= 1.30:
+            score += 15
+
+    if source_words & EXCLUDED_SOURCE_WORDS:
+        score -= 100
+
+    if context_words & EXCLUDED_CONTEXT_WORDS:
+        score -= 120
+
+    return score
 
 
-def create_player_identity(
+def is_character_image(
+    image: dict,
+    source: str,
+) -> bool:
+    if not source:
+        _log_exclusion(
+            "画像URLなし",
+            "",
+            int(image.get("width", 0)),
+            int(image.get("height", 0)),
+            image.get("context", ""),
+        )
+        return False
+
+    width = int(
+        image.get("width")
+        or image.get("natural_width")
+        or 0
+    )
+    height = int(
+        image.get("height")
+        or image.get("natural_height")
+        or 0
+    )
+
+    context = image.get("context", "")
+    source_words = _extract_words(source)
+    context_words = _extract_words(context)
+
+    positive_source = bool(
+        source_words & POSITIVE_CHARACTER_WORDS
+    )
+
+    positive_context = bool(
+        context_words & POSITIVE_CHARACTER_WORDS
+    )
+
+    team_matched = bool(image.get("team_matched"))
+
+    if (
+        source_words & EXCLUDED_SOURCE_WORDS
+        and not positive_source
+        and not team_matched
+    ):
+        _log_exclusion(
+            "除外対象の画像URL",
+            source,
+            width,
+            height,
+            context,
+        )
+        return False
+
+    if (
+        context_words & EXCLUDED_CONTEXT_WORDS
+        and not positive_context
+        and not team_matched
+    ):
+        _log_exclusion(
+            "除外対象の画像コンテキスト",
+            source,
+            width,
+            height,
+            context,
+        )
+        return False
+
+    if (
+        width > 0
+        and height > 0
+        and width <= 16
+        and height <= 16
+    ):
+        _log_exclusion(
+            "画像が小さすぎる",
+            source,
+            width,
+            height,
+            context,
+        )
+        return False
+
+    if width > 0 and height > 0:
+        ratio = width / height
+
+        if (
+            ratio < 0.40
+            or ratio > 2.50
+        ):
+            _log_exclusion(
+                "画像の縦横比がキャラクター画像ではない",
+                source,
+                width,
+                height,
+                context,
+            )
+            return False
+
+    return True
+
+
+def extract_character_images(row: dict) -> list[dict]:
+    candidates = []
+
+    for image in row.get("images", []):
+        source = choose_image_source(image)
+
+        if not is_character_image(image, source):
+            continue
+
+        name = normalize_text(
+            image.get("alt")
+            or image.get("title")
+            or ""
+        )
+
+        candidates.append(
+            {
+                "index": int(image.get("index", 0)),
+                "image_url": source,
+                "name": name,
+                "score": image_candidate_score(
+                    image,
+                    source,
+                ),
+                "visible": bool(image.get("visible")),
+                "complete": bool(image.get("complete")),
+            }
+        )
+
+    if len(candidates) > MAX_CHARACTERS_PER_PLAYER:
+        candidates = sorted(
+            candidates,
+            key=lambda item: (
+                item["score"],
+                item["visible"],
+                item["complete"],
+                -item["index"],
+            ),
+            reverse=True,
+        )[:MAX_CHARACTERS_PER_PLAYER]
+
+    candidates.sort(
+        key=lambda item: item["index"]
+    )
+
+    return candidates
+
+
+def make_player_key(
     row: dict,
     page_number: int,
 ) -> str:
-    attributes = row.get("attributes", {})
+    identity = normalize_text(
+        row.get("identity", "")
+    )
 
-    preferred_attributes = [
-        "data-player-id",
-        "data-user-id",
-        "data-id",
-        "data-rank",
-        "id",
-    ]
+    if not identity:
+        identity = (
+            f"row:{row.get('row_index', 0)}"
+        )
 
-    for attribute_name in preferred_attributes:
-        value = str(
-            attributes.get(attribute_name) or ""
-        ).strip()
+    digest = hashlib.sha256(
+        identity.encode("utf-8")
+    ).hexdigest()[:24]
 
-        if value:
-            return (
-                f"page:{page_number}:"
-                f"{attribute_name}:{value}"
-            )
+    return f"page:{page_number}:{digest}"
 
-    text = re.sub(
-        r"\s+",
-        " ",
-        row.get("text") or "",
-    ).strip()
 
-    if text:
-        digest = hashlib.sha256(
-            text.encode("utf-8")
-        ).hexdigest()
+def snapshot_quality(snapshot: dict) -> tuple:
+    characters = snapshot.get("characters", [])
 
-        return f"page:{page_number}:text:{digest}"
+    completed = sum(
+        1
+        for character in characters
+        if character.get("complete")
+    )
+
+    visible = sum(
+        1
+        for character in characters
+        if character.get("visible")
+    )
+
+    score = sum(
+        int(character.get("score", 0))
+        for character in characters
+    )
 
     return (
-        f"page:{page_number}:"
-        f"row:{row['row_index']}"
+        len(characters),
+        completed,
+        visible,
+        score,
+        bool(snapshot.get("viewport_seen")),
+        bool(snapshot.get("team_matched")),
     )
 
 
-def click_load_more(page) -> bool:
-    for selector in LOAD_MORE_SELECTORS:
+def merge_rows(
+    players: dict[str, dict],
+    rows: list[dict],
+    page_number: int,
+) -> int:
+    changed = 0
+
+    for row in rows:
+        characters = extract_character_images(row)
+
+        if len(characters) < MIN_CHARACTERS_PER_PLAYER:
+            continue
+
+        player_key = make_player_key(
+            row,
+            page_number,
+        )
+
+        snapshot = {
+            "player_key": player_key,
+            "player_name": normalize_text(
+                row.get("player_name", "")
+            ),
+            "rank": normalize_text(
+                row.get("rank", "")
+            ),
+            "characters": characters,
+            "viewport_seen": bool(
+                row.get("viewport_seen")
+            ),
+            "team_matched": bool(
+                row.get("team_matched")
+            ),
+            "page_number": page_number,
+            "row_index": int(
+                row.get("row_index", 0)
+            ),
+        }
+
+        previous = players.get(player_key)
+
+        if previous is None:
+            players[player_key] = snapshot
+            changed += 1
+            continue
+
+        # 同一プレイヤーのスナップショットを加算しない。
+        # 遅延読み込み後の、より多く読み取れたスナップショットで
+        # 置き換える。これにより同一DOMの二重加算を防ぐ。
+        if snapshot_quality(snapshot) > snapshot_quality(previous):
+            players[player_key] = snapshot
+            changed += 1
+            continue
+
+        if (
+            snapshot.get("viewport_seen")
+            and not previous.get("viewport_seen")
+        ):
+            previous["viewport_seen"] = True
+            changed += 1
+
+    return changed
+
+
+def get_page_state(page) -> dict:
+    try:
+        return page.evaluate(
+            """
+            (rowSelectors) => {
+                let maximumRowCount = 0;
+
+                for (const selector of rowSelectors) {
+                    try {
+                        maximumRowCount = Math.max(
+                            maximumRowCount,
+                            document.querySelectorAll(
+                                selector
+                            ).length
+                        );
+                    } catch {
+                        // 無効なセレクターは無視する。
+                    }
+                }
+
+                const images = Array.from(
+                    document.querySelectorAll('img')
+                );
+
+                const sourcedImages = images.filter((image) => {
+                    return Boolean(
+                        image.currentSrc
+                        || image.getAttribute('src')
+                        || image.getAttribute('data-src')
+                        || image.getAttribute('data-lazy-src')
+                        || image.getAttribute('srcset')
+                        || image.getAttribute('data-srcset')
+                    );
+                }).length;
+
+                const completedImages = images.filter((image) => {
+                    return (
+                        image.complete
+                        && image.naturalWidth > 0
+                    );
+                }).length;
+
+                const body = document.body;
+                const root = document.documentElement;
+
+                const scrollHeight = Math.max(
+                    body ? body.scrollHeight : 0,
+                    root ? root.scrollHeight : 0
+                );
+
+                const scrollTop =
+                    window.scrollY
+                    || root.scrollTop
+                    || 0;
+
+                const viewportHeight =
+                    window.innerHeight
+                    || root.clientHeight
+                    || 0;
+
+                return {
+                    row_count: maximumRowCount,
+                    image_count: images.length,
+                    sourced_image_count: sourcedImages,
+                    completed_image_count: completedImages,
+                    scroll_height: scrollHeight,
+                    scroll_top: scrollTop,
+                    viewport_height: viewportHeight,
+                    at_bottom:
+                        scrollTop + viewportHeight
+                        >= scrollHeight - 8
+                };
+            }
+            """,
+            ROW_SELECTORS,
+        )
+    except PlaywrightError:
+        return {
+            "row_count": 0,
+            "image_count": 0,
+            "sourced_image_count": 0,
+            "completed_image_count": 0,
+            "scroll_height": 0,
+            "scroll_top": 0,
+            "viewport_height": 0,
+            "at_bottom": False,
+        }
+
+
+def wait_for_page_change(
+    page,
+    previous_state: dict,
+    timeout_ms: int = CONTENT_CHANGE_TIMEOUT_MS,
+) -> bool:
+    try:
+        page.wait_for_function(
+            """
+            ({
+                rowSelectors,
+                previousRowCount,
+                previousImageCount,
+                previousSourcedImageCount,
+                previousCompletedImageCount,
+                previousHeight
+            }) => {
+                let maximumRowCount = 0;
+
+                for (const selector of rowSelectors) {
+                    try {
+                        maximumRowCount = Math.max(
+                            maximumRowCount,
+                            document.querySelectorAll(
+                                selector
+                            ).length
+                        );
+                    } catch {
+                        // 無効なセレクターは無視する。
+                    }
+                }
+
+                const images = Array.from(
+                    document.querySelectorAll('img')
+                );
+
+                const sourcedImages = images.filter((image) => {
+                    return Boolean(
+                        image.currentSrc
+                        || image.getAttribute('src')
+                        || image.getAttribute('data-src')
+                        || image.getAttribute('data-lazy-src')
+                        || image.getAttribute('srcset')
+                        || image.getAttribute('data-srcset')
+                    );
+                }).length;
+
+                const completedImages = images.filter((image) => {
+                    return (
+                        image.complete
+                        && image.naturalWidth > 0
+                    );
+                }).length;
+
+                const body = document.body;
+                const root = document.documentElement;
+
+                const currentHeight = Math.max(
+                    body ? body.scrollHeight : 0,
+                    root ? root.scrollHeight : 0
+                );
+
+                return (
+                    maximumRowCount > previousRowCount
+                    || images.length > previousImageCount
+                    || sourcedImages > previousSourcedImageCount
+                    || completedImages > previousCompletedImageCount
+                    || currentHeight > previousHeight
+                );
+            }
+            """,
+            arg={
+                "rowSelectors": ROW_SELECTORS,
+                "previousRowCount":
+                    previous_state.get("row_count", 0),
+                "previousImageCount":
+                    previous_state.get("image_count", 0),
+                "previousSourcedImageCount":
+                    previous_state.get(
+                        "sourced_image_count",
+                        0,
+                    ),
+                "previousCompletedImageCount":
+                    previous_state.get(
+                        "completed_image_count",
+                        0,
+                    ),
+                "previousHeight":
+                    previous_state.get("scroll_height", 0),
+            },
+            timeout=timeout_ms,
+            polling=100,
+        )
+        return True
+    except PlaywrightTimeoutError:
+        return False
+    except PlaywrightError:
+        return False
+
+
+def click_first_enabled(
+    page,
+    selectors: list[str],
+) -> bool:
+    for selector in selectors:
         try:
             candidates = page.locator(selector)
-            count = min(candidates.count(), 10)
+            count = min(candidates.count(), 5)
         except PlaywrightError:
             continue
 
@@ -769,22 +1601,17 @@ def click_load_more(page) -> bool:
             candidate = candidates.nth(index)
 
             try:
-                if not candidate.is_visible():
-                    continue
-
-                if is_disabled(candidate):
+                if (
+                    not candidate.is_visible()
+                    or is_disabled(candidate)
+                ):
                     continue
 
                 candidate.scroll_into_view_if_needed(
-                    timeout=3_000
+                    timeout=1_000
                 )
-                candidate.click(timeout=4_000)
-                page.wait_for_timeout(LOAD_WAIT_MS)
 
-                print(
-                    "[INFO] 追加表示ボタンを押しました。"
-                    f" selector={selector}"
-                )
+                candidate.click(timeout=2_000)
                 return True
             except PlaywrightError:
                 continue
@@ -792,75 +1619,41 @@ def click_load_more(page) -> bool:
     return False
 
 
-def scroll_dynamic_content(page) -> bool:
-    """ 【強力な読み込み強化】遅延ロードを解除し、ページ最下部までゆっくり確実にスクロールさせて全画像を確実に取得 """
-    try:
-        page.evaluate("""
-            () => {
-                document.querySelectorAll('img[loading="lazy"]').forEach(img => {
-                    img.setAttribute('loading', 'eager');
-                });
-            }
-        """)
-
-        result = page.evaluate(
-            """
-            async () => {
-                let moved = false;
-                const beforeWindow = window.scrollY;
-
-                await new Promise((resolve) => {
-                    let totalHeight = window.scrollY;
-                    const distance = 300;
-                    const timer = setInterval(() => {
-                        const scrollHeight = document.documentElement.scrollHeight;
-                        window.scrollBy(0, distance);
-                        totalHeight += distance;
-
-                        if (totalHeight >= scrollHeight - window.innerHeight) {
-                            clearInterval(timer);
-                            resolve();
-                        }
-                    }, 80);
-                });
-
-                if (window.scrollY !== beforeWindow) {
-                    moved = true;
-                }
-
-                return moved;
-            }
-            """
-        )
-        
-        # 画像のネットワーク読み込みが完了するのをしっかりと待つ
-        page.wait_for_timeout(2500)
-        return bool(result)
-    except PlaywrightError:
-        return False
+def click_load_more(page) -> bool:
+    return click_first_enabled(
+        page,
+        LOAD_MORE_SELECTORS,
+    )
 
 
-def reset_scroll(page) -> None:
+def click_next_page(page) -> bool:
+    return click_first_enabled(
+        page,
+        NEXT_PAGE_SELECTORS,
+    )
+
+
+def scroll_forward(page) -> None:
     try:
         page.evaluate(
             """
             () => {
-                window.scrollTo(0, 0);
+                const root = document.documentElement;
+                const viewportHeight =
+                    window.innerHeight
+                    || root.clientHeight
+                    || 800;
 
-                for (const element of document.querySelectorAll('*')) {
-                    const style = getComputedStyle(element);
+                const distance = Math.max(
+                    320,
+                    Math.floor(viewportHeight * 0.78)
+                );
 
-                    if (
-                        element.scrollHeight
-                            > element.clientHeight + 100
-                        && (
-                            style.overflowY === 'auto'
-                            || style.overflowY === 'scroll'
-                        )
-                    ) {
-                        element.scrollTop = 0;
-                    }
-                }
+                window.scrollBy({
+                    top: distance,
+                    left: 0,
+                    behavior: 'auto'
+                });
             }
             """
         )
@@ -868,181 +1661,386 @@ def reset_scroll(page) -> None:
         pass
 
 
-def collect_current_page(
-    page,
-    selector: str,
+def scroll_to_top(page) -> None:
+    try:
+        page.evaluate(
+            """
+            () => {
+                window.scrollTo({
+                    top: 0,
+                    left: 0,
+                    behavior: 'auto'
+                });
+            }
+            """
+        )
+    except PlaywrightError:
+        pass
+
+
+def log_collection_progress(
+    players: dict[str, dict],
+    attempt: int,
     page_number: int,
-    already_sampled: int,
-) -> tuple[list[dict], dict]:
-    collected = {}
+) -> None:
+    character_counts = [
+        len(player.get("characters", []))
+        for player in players.values()
+    ]
+
+    total_characters = sum(character_counts)
+
+    if character_counts:
+        median_characters = median(character_counts)
+        minimum_characters = min(character_counts)
+        maximum_characters = max(character_counts)
+    else:
+        median_characters = 0
+        minimum_characters = 0
+        maximum_characters = 0
+
+    print(
+        "[INFO] 取得状況:"
+        f" players={len(players)}"
+        f" characters={total_characters}"
+        f" min={minimum_characters}"
+        f" median={median_characters}"
+        f" max={maximum_characters}"
+        f" attempt={attempt}"
+        f" page={page_number}"
+    )
+
+
+def load_players(page) -> list[dict]:
+    players: dict[str, dict] = {}
+
     stable_attempts = 0
-    previous_count = 0
-    attempts = 0
-    maximum_dom_rows = 0
+    page_number = 1
+    last_logged_player_count = -1
+    last_logged_character_count = -1
 
-    # ページ表示直後に、まずは一番下までスクロールして全画像を描画させる
-    scroll_dynamic_content(page)
+    for attempt in range(1, MAX_LOAD_ATTEMPTS + 1):
+        rows = extract_rows_from_dom(page)
 
-    while attempts < MAX_LOAD_ATTEMPTS:
-        attempts += 1
-
-        rows = extract_rows_from_dom(page, selector)
-        maximum_dom_rows = max(
-            maximum_dom_rows,
-            len(rows),
+        merge_rows(
+            players,
+            rows,
+            page_number,
         )
 
-        new_rows = 0
+        current_character_count = sum(
+            len(player.get("characters", []))
+            for player in players.values()
+        )
 
-        for row in rows:
-            images = select_team_images(row)
-
-            if not images:
-                continue
-
-            identity = create_player_identity(
-                row,
+        if (
+            len(players) != last_logged_player_count
+            or current_character_count
+            != last_logged_character_count
+        ):
+            log_collection_progress(
+                players,
+                attempt,
                 page_number,
             )
 
-            if identity in collected:
-                continue
+            last_logged_player_count = len(players)
+            last_logged_character_count = (
+                current_character_count
+            )
 
-            collected[identity] = {
-                "identity": identity,
-                "images": images,
-            }
+        state_before = get_page_state(page)
+        action_performed = False
 
-            new_rows += 1
+        if not state_before.get("at_bottom", False):
+            scroll_forward(page)
+            action_performed = True
+        elif click_load_more(page):
+            action_performed = True
+        else:
+            # 最下部でも、遅延読み込み中の画像が残っている可能性が
+            # あるため、短時間だけDOM変化を待つ。
+            action_performed = False
 
-        current_count = len(collected)
-
-        print(
-            f"[INFO] page={page_number}, "
-            f"attempt={attempts}, "
-            f"dom_rows={len(rows)}, "
-            f"new_rows={new_rows}, "
-            f"collected={current_count}"
+        changed = wait_for_page_change(
+            page,
+            state_before,
         )
 
-        if (
-            already_sampled + current_count
-            >= TARGET_PLAYER_COUNT
-        ):
-            break
+        # スクロールではDOM件数が変化しないことがあるため、
+        # 移動後の表示領域を必ず再取得する。
+        rows_after_action = extract_rows_from_dom(page)
 
-        if current_count == previous_count:
-            stable_attempts += 1
-        else:
+        merged_after_action = merge_rows(
+            players,
+            rows_after_action,
+            page_number,
+        )
+
+        state_after = get_page_state(page)
+
+        if (
+            changed
+            or merged_after_action > 0
+            or not state_after.get("at_bottom", False)
+        ):
             stable_attempts = 0
+        else:
+            stable_attempts += 1
 
-        previous_count = current_count
-
-        clicked = click_load_more(page)
-        moved = scroll_dynamic_content(page)
-
+        # 200人に達しても即終了しない。
+        # 最下部で複数回安定するまで処理し、200人目付近の
+        # 遅延画像も読み取る。
         if (
-            stable_attempts >= STABLE_ATTEMPTS_LIMIT
-            and not clicked
-            and not moved
+            len(players) >= TARGET_PLAYER_COUNT
+            and state_after.get("at_bottom", False)
+            and stable_attempts >= STABLE_ATTEMPTS_LIMIT
         ):
             break
 
-        if stable_attempts >= STABLE_ATTEMPTS_LIMIT + 3:
-            break
+        # 現在のページで不足している場合だけ次ページへ進む。
+        if (
+            len(players) < TARGET_PLAYER_COUNT
+            and state_after.get("at_bottom", False)
+            and stable_attempts
+            >= NEXT_PAGE_STABLE_ATTEMPTS
+            and page_number < MAX_PAGES
+        ):
+            previous_url = page.url
+            previous_state = get_page_state(page)
 
-        page.wait_for_timeout(LOAD_WAIT_MS)
+            if click_next_page(page):
+                page_number += 1
 
-    return (
-        list(collected.values()),
-        {
-            "attempts": attempts,
-            "maximum_dom_rows": maximum_dom_rows,
-            "collected_rows": len(collected),
-        },
-    )
-
-
-def page_signature(page, selector: str) -> str:
-    rows = extract_rows_from_dom(page, selector)
-
-    text = "\n".join(
-        row.get("text", "")[:300]
-        for row in rows[:10]
-    )
-
-    if not text:
-        text = page.url
-
-    return hashlib.sha256(
-        text.encode("utf-8")
-    ).hexdigest()
-
-
-def go_to_next_page(page, selector: str) -> bool:
-    previous_signature = page_signature(
-        page,
-        selector,
-    )
-    previous_url = page.url
-
-    reset_scroll(page)
-
-    for button_selector in NEXT_PAGE_SELECTORS:
-        try:
-            candidates = page.locator(button_selector)
-            count = min(candidates.count(), 20)
-        except PlaywrightError:
-            continue
-
-        for index in range(count):
-            candidate = candidates.nth(index)
-
-            try:
-                if not candidate.is_visible():
-                    continue
-
-                if is_disabled(candidate):
-                    continue
-
-                candidate.scroll_into_view_if_needed(
-                    timeout=4_000
-                )
-                candidate.click(timeout=5_000)
-
-                # 次ページ移動後もしっかり待ってからスクロール読み込み
-                page.wait_for_timeout(3_000)
-                scroll_dynamic_content(page)
-
-                new_signature = page_signature(
-                    page,
-                    selector,
-                )
-
-                if (
-                    new_signature != previous_signature
-                    or page.url != previous_url
-                ):
-                    print(
-                        "[INFO] 次ページへ移動しました。"
-                        f" selector={button_selector}"
+                try:
+                    page.wait_for_function(
+                        """
+                        (previousUrl) => {
+                            return (
+                                location.href !== previousUrl
+                                || document.readyState === 'complete'
+                            );
+                        }
+                        """,
+                        arg=previous_url,
+                        timeout=CONTENT_CHANGE_TIMEOUT_MS,
+                        polling=100,
                     )
-                    return True
-            except PlaywrightError:
+                except PlaywrightError:
+                    pass
+
+                wait_for_page_change(
+                    page,
+                    previous_state,
+                    timeout_ms=2_000,
+                )
+
+                scroll_to_top(page)
+                stable_attempts = 0
                 continue
 
-    return False
+        if (
+            state_after.get("at_bottom", False)
+            and stable_attempts >= STABLE_ATTEMPTS_LIMIT
+            and not action_performed
+        ):
+            print(
+                "[INFO] 追加データがないため"
+                "読み込みを終了します。"
+                f" players={len(players)}"
+                f" characters={current_character_count}"
+                f" attempt={attempt}"
+            )
+            break
+
+        if ACTION_SETTLE_MS > 0:
+            page.wait_for_timeout(ACTION_SETTLE_MS)
+
+    ordered_players = sorted(
+        players.values(),
+        key=lambda player: (
+            player.get("page_number", 0),
+            player.get("row_index", 0),
+            player.get("player_key", ""),
+        ),
+    )
+
+    return ordered_players[:TARGET_PLAYER_COUNT]
 
 
-def dump_debug(page, details: dict) -> None:
+def build_character_usage(
+    players: list[dict],
+) -> dict:
+    occurrence_count: Counter[str] = Counter()
+    player_count: Counter[str] = Counter()
+    image_urls: dict[str, str] = {}
+    character_names: defaultdict[
+        str,
+        Counter[str],
+    ] = defaultdict(Counter)
+
+    accepted_players = []
+
+    for player in players:
+        characters = player.get(
+            "characters",
+            [],
+        )[:MAX_CHARACTERS_PER_PLAYER]
+
+        if len(characters) < MIN_CHARACTERS_PER_PLAYER:
+            continue
+
+        accepted_players.append(player)
+        seen_character_keys = set()
+
+        for character in characters:
+            image_url = clean_url(
+                character.get("image_url", "")
+            )
+
+            key = character_key(image_url)
+
+            if key == "unknown":
+                continue
+
+            occurrence_count[key] += 1
+            image_urls[key] = image_url
+
+            name = normalize_text(
+                character.get("name", "")
+            )
+
+            if name:
+                character_names[key][name] += 1
+
+            seen_character_keys.add(key)
+
+        for key in seen_character_keys:
+            player_count[key] += 1
+
+    sampled_players = len(accepted_players)
+    total_occurrences = sum(
+        occurrence_count.values()
+    )
+
+    characters_output = []
+
+    for key, occurrences in occurrence_count.items():
+        users = player_count[key]
+
+        if sampled_players > 0:
+            adoption_rate = (
+                users / sampled_players * 100
+            )
+        else:
+            adoption_rate = 0.0
+
+        names = character_names.get(key)
+
+        if names:
+            character_name = names.most_common(1)[0][0]
+        else:
+            character_name = ""
+
+        characters_output.append(
+            {
+                "character_key": key,
+                "character_name": character_name,
+                "image_url": image_urls.get(key, ""),
+                "occurrence_count": occurrences,
+                "player_count": users,
+                "adoption_rate": round(
+                    adoption_rate,
+                    2,
+                ),
+            }
+        )
+
+    characters_output.sort(
+        key=lambda character: (
+            -character["player_count"],
+            -character["occurrence_count"],
+            character["character_name"],
+            character["character_key"],
+        )
+    )
+
+    player_character_counts = [
+        len(player.get("characters", []))
+        for player in accepted_players
+    ]
+
+    if player_character_counts:
+        minimum_per_player = min(
+            player_character_counts
+        )
+        maximum_per_player = max(
+            player_character_counts
+        )
+        median_per_player = median(
+            player_character_counts
+        )
+        average_per_player = (
+            total_occurrences / sampled_players
+        )
+    else:
+        minimum_per_player = 0
+        maximum_per_player = 0
+        median_per_player = 0
+        average_per_player = 0
+
+    return {
+        "generated_at": datetime.now(
+            timezone.utc
+        ).isoformat(),
+        "source": {
+            "name": SOURCE_NAME,
+            "page": "PvP Tracker",
+            "league": "Legend",
+        },
+        "sampled_players": sampled_players,
+        "target_players": TARGET_PLAYER_COUNT,
+        "minimum_characters_per_player":
+            MIN_CHARACTERS_PER_PLAYER,
+        "maximum_characters_per_player":
+            MAX_CHARACTERS_PER_PLAYER,
+        "total_occurrence_count": total_occurrences,
+        "statistics": {
+            "minimum_characters_per_player":
+                minimum_per_player,
+            "median_characters_per_player":
+                median_per_player,
+            "maximum_characters_per_player":
+                maximum_per_player,
+            "average_characters_per_player": round(
+                average_per_player,
+                3,
+            ),
+        },
+        "characters": characters_output,
+    }
+
+
+def dump_debug(
+    page,
+    players: list[dict],
+    result: dict | None = None,
+) -> None:
+    if not DEBUG:
+        return
+
     DEBUG_DIR.mkdir(
         parents=True,
         exist_ok=True,
     )
 
     try:
-        (DEBUG_DIR / "page.html").write_text(
-            page.content(),
+        html = page.content()
+
+        (
+            DEBUG_DIR / "pvp-tracker.html"
+        ).write_text(
+            html,
             encoding="utf-8",
         )
     except PlaywrightError:
@@ -1050,482 +2048,202 @@ def dump_debug(page, details: dict) -> None:
 
     try:
         page.screenshot(
-            path=str(DEBUG_DIR / "screenshot.png"),
+            path=str(
+                DEBUG_DIR / "pvp-tracker.png"
+            ),
             full_page=True,
         )
     except PlaywrightError:
         pass
 
-    try:
-        images = page.locator("img").evaluate_all(
-            """
-            (images) => images.map((image) => {
-                const rect = image.getBoundingClientRect();
-
-                return {
-                    src:
-                        image.currentSrc
-                        || image.getAttribute('src')
-                        || image.getAttribute('data-src'),
-                    alt: image.getAttribute('alt'),
-                    width: Math.round(rect.width),
-                    height: Math.round(rect.height),
-                    outerHtml: image.outerHTML.slice(0, 1000)
-                };
-            })
-            """
-        )
-
-        save_json(
-            DEBUG_DIR / "images.json",
-            images,
-        )
-    except PlaywrightError:
-        pass
-
-    try:
-        controls = page.locator(
-            "button, a, [role='button']"
-        ).evaluate_all(
-            """
-            (elements) => elements.map((element) => ({
-                text: (
-                    element.innerText
-                    || element.textContent
-                    || ''
-                ).trim().slice(0, 200),
-                ariaLabel: element.getAttribute('aria-label'),
-                title: element.getAttribute('title'),
-                className:
-                    typeof element.className === 'string'
-                        ? element.className
-                        : '',
-                disabled:
-                    element.hasAttribute('disabled')
-                    || element.getAttribute('aria-disabled') === 'true',
-                outerHtml: element.outerHTML.slice(0, 1000)
-            }))
-            """
-        )
-
-        save_json(
-            DEBUG_DIR / "controls.json",
-            controls,
-        )
-    except PlaywrightError:
-        pass
-
-    reason_counts: dict[str, int] = defaultdict(int)
-
-    for entry in EXCLUSION_LOG:
-        reason_counts[entry["reason"]] += 1
-
     save_json(
-        DEBUG_DIR / "excluded_images.json",
-        {
-            "note": (
-                "scrape()実行中(行セレクタ確定後)に"
-                "filter_character_imagesで除外された画像の"
-                f"サンプル(最大{MAX_EXCLUSION_LOG_ENTRIES}件)。"
-                "サムネイルが小さすぎる/大きすぎる、"
-                "src・class名に除外ワードを含む、等の理由で"
-                "本来キャラクター画像であるものが"
-                "誤って除外されていないか確認する用途。"
-            ),
-            "reason_counts": dict(reason_counts),
-            "samples": EXCLUSION_LOG,
-        },
+        DEBUG_DIR / "players.json",
+        players,
     )
 
     save_json(
-        DEBUG_DIR / "diagnostics.json",
-        details,
+        DEBUG_DIR / "excluded-images.json",
+        EXCLUSION_LOG,
     )
 
+    if result is not None:
+        save_json(
+            DEBUG_DIR / "result.json",
+            result,
+        )
 
-def scrape(page) -> dict:
-    selector, selector_diagnostics = (
-        find_best_row_selector(page)
+
+def validate_result(result: dict) -> None:
+    sampled_players = int(
+        result.get("sampled_players", 0)
     )
 
-    if selector is None:
-        raise RuntimeError(
-            "プレイヤー行を特定できませんでした。"
+    total_occurrences = int(
+        result.get(
+            "total_occurrence_count",
+            0,
         )
-
-    print(f"[INFO] row selector={selector}")
-
-    # 行セレクタ探索フェーズ(find_best_row_selector内で
-    # ROW_SELECTORS候補ごとに何度もextract_rows_from_domを
-    # 呼んでいる)で記録された除外ログはノイズになるため、
-    # 本集計を始める直前にリセットする。
-    EXCLUSION_LOG.clear()
-
-    counts = defaultdict(
-        lambda: {
-            "occurrence_count": 0,
-            "player_count": 0,
-            "image": "",
-        }
     )
-
-    sampled_players = 0
-    total_slots = 0
-    player_sizes = []
-    pages_scanned = 0
-    termination_reason = "unknown"
-    visited_pages = set()
-    page_diagnostics = []
-
-    while (
-        sampled_players < TARGET_PLAYER_COUNT
-        and pages_scanned < MAX_PAGES
-    ):
-        signature = page_signature(page, selector)
-
-        if signature in visited_pages:
-            termination_reason = "duplicate_page"
-            break
-
-        visited_pages.add(signature)
-        pages_scanned += 1
-
-        page_rows, diagnostics = collect_current_page(
-            page,
-            selector,
-            pages_scanned,
-            sampled_players,
-        )
-
-        page_players = 0
-        page_slots = 0
-
-        for row in page_rows:
-            if sampled_players >= TARGET_PLAYER_COUNT:
-                break
-
-            images = row["images"]
-
-            if not (
-                MIN_CHARACTERS_PER_PLAYER
-                <= len(images)
-                <= MAX_CHARACTERS_PER_PLAYER
-            ):
-                continue
-
-            sampled_players += 1
-            page_players += 1
-
-            slot_count = len(images)
-            total_slots += slot_count
-            page_slots += slot_count
-            player_sizes.append(slot_count)
-
-            # occurrence_countでは重複を残す
-            player_character_keys = set()
-
-            for image in images:
-                key = character_key(image["image"])
-
-                counts[key]["occurrence_count"] += 1
-                counts[key]["image"] = image["image"]
-
-                # player_countでは同一人物内の重複だけを1件にする
-                player_character_keys.add(key)
-
-            for key in player_character_keys:
-                counts[key]["player_count"] += 1
-
-        page_diagnostics.append(
-            {
-                "page": pages_scanned,
-                "players": page_players,
-                "slots": page_slots,
-                **diagnostics,
-            }
-        )
-
-        print(
-            f"[INFO] page={pages_scanned}, "
-            f"players={page_players}, "
-            f"total_players={sampled_players}, "
-            f"total_slots={total_slots}"
-        )
-
-        if sampled_players >= TARGET_PLAYER_COUNT:
-            termination_reason = "target_reached"
-            break
-
-        if page_players == 0:
-            termination_reason = "no_valid_players"
-            break
-
-        if not go_to_next_page(page, selector):
-            termination_reason = "no_next_page"
-            break
 
     if sampled_players < MIN_REQUIRED_PLAYERS:
         raise RuntimeError(
-            "品質基準を満たしません。"
-            f"取得人数={sampled_players}, "
-            f"必要人数={MIN_REQUIRED_PLAYERS}, "
-            f"終了理由={termination_reason}"
+            "必要なプレイヤー数を取得できませんでした。"
+            f" required={MIN_REQUIRED_PLAYERS}"
+            f" actual={sampled_players}"
         )
 
-    characters = []
-
-    for data in counts.values():
-        occurrence_count = int(
-            data["occurrence_count"]
-        )
-        player_count = int(
-            data["player_count"]
-        )
-
-        if player_count > sampled_players:
-            raise RuntimeError(
-                "採用人数が集計人数を超えています。"
-                f"採用人数={player_count}, "
-                f"集計人数={sampled_players}, "
-                f"画像={data['image']}"
-            )
-
-        adoption_rate = round(
-            player_count / sampled_players * 100,
-            1,
-        )
-
-        slot_rate = (
-            round(
-                occurrence_count / total_slots * 100,
-                2,
-            )
-            if total_slots > 0
-            else 0
-        )
-
-        characters.append(
-            {
-                "image": data["image"],
-                "occurrence_count": occurrence_count,
-                "player_count": player_count,
-                "adoption_rate": adoption_rate,
-                "slot_rate": slot_rate,
-            }
-        )
-
-    characters.sort(
-        key=lambda item: (
-            -item["occurrence_count"],
-            -item["player_count"],
-            item["image"],
-        )
-    )
-
-    previous_count = None
-    current_rank = 0
-
-    for index, character in enumerate(
-        characters,
-        start=1,
-    ):
-        if (
-            character["occurrence_count"]
-            != previous_count
-        ):
-            current_rank = index
-
-        character["rank"] = current_rank
-        previous_count = character[
-            "occurrence_count"
-        ]
-
-    calculated_slots = sum(
-        character["occurrence_count"]
-        for character in characters
-    )
-
-    if calculated_slots != total_slots:
+    if total_occurrences < sampled_players:
         raise RuntimeError(
-            "キャラクター総数が一致しません。"
-            f"取得枠数={total_slots}, "
-            f"キャラクター別合計={calculated_slots}"
+            "キャラクター総数がプレイヤー数を"
+            "下回っています。"
+            f" players={sampled_players}"
+            f" characters={total_occurrences}"
         )
 
-    return {
-        "schema_version": 3,
-        "updated_at": datetime.now(
-            timezone.utc
-        ).isoformat(),
-        "source": {
-            "name": SOURCE_NAME,
-            "url": TARGET_URL,
-        },
-        "league": "レジェンド",
-        "target_players": TARGET_PLAYER_COUNT,
-        "sampled_players": sampled_players,
-        "character_slots": total_slots,
-        "unique_characters": len(characters),
-        "median_characters_per_player": (
-            median(player_sizes)
-            if player_sizes
-            else 0
-        ),
-        "pages_scanned": pages_scanned,
-        "termination_reason": termination_reason,
-        "complete_target": (
-            sampled_players >= TARGET_PLAYER_COUNT
-        ),
-        "characters": characters,
-        "diagnostics": {
-            "row_selector": selector,
-            "selector_results": selector_diagnostics,
-            "pages": page_diagnostics,
-        },
-    }
-
-
-def write_output(data: dict) -> None:
-    OUTPUT_PATH.parent.mkdir(
-        parents=True,
-        exist_ok=True,
+    maximum_possible = (
+        sampled_players
+        * MAX_CHARACTERS_PER_PLAYER
     )
 
-    temporary_path = OUTPUT_PATH.with_suffix(
-        ".json.tmp"
+    if total_occurrences > maximum_possible:
+        raise RuntimeError(
+            "キャラクター総数が編成上限を"
+            "超えています。"
+            f" maximum={maximum_possible}"
+            f" actual={total_occurrences}"
+        )
+
+    if sampled_players >= TARGET_PLAYER_COUNT:
+        average = (
+            total_occurrences / sampled_players
+        )
+
+        if average < 8.0:
+            print(
+                "[WARN] 1プレイヤーあたりの平均取得数が"
+                "8体未満です。"
+                f" players={sampled_players}"
+                f" characters={total_occurrences}"
+                f" average={average:.3f}"
+            )
+
+    print(
+        "[INFO] 集計検証:"
+        f" players={sampled_players}"
+        f" characters={total_occurrences}"
+        f" maximum={maximum_possible}"
     )
 
-    save_json(temporary_path, data)
-    temporary_path.replace(OUTPUT_PATH)
 
+def run() -> int:
+    result = None
+    players: list[dict] = []
 
-def main() -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-            ],
+            headless=HEADLESS,
         )
 
         context = browser.new_context(
             locale="ja-JP",
-            timezone_id="Asia/Tokyo",
             viewport={
                 "width": 1440,
-                "height": 1200,  # 通常のモニターサイズに戻しました
+                "height": 1200,
             },
-            user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/131.0 Safari/537.36"
-            ),
+            device_scale_factor=1,
+            reduced_motion="reduce",
         )
 
+        install_resource_filter(context)
+
         page = context.new_page()
-        page.set_default_timeout(10_000)
+        page.set_default_timeout(
+            DEFAULT_TIMEOUT_MS
+        )
+        page.set_default_navigation_timeout(
+            PAGE_NAVIGATION_TIMEOUT_MS
+        )
 
         try:
-            response = page.goto(
+            page.goto(
                 TARGET_URL,
                 wait_until="domcontentloaded",
-                timeout=60_000,
+                timeout=PAGE_NAVIGATION_TIMEOUT_MS,
             )
 
-            if (
-                response is not None
-                and response.status >= 400
-            ):
-                raise RuntimeError(
-                    f"HTTPエラー: {response.status}"
-                )
+            dismiss_common_dialogs(page)
 
             try:
-                page.wait_for_load_state(
-                    "networkidle",
-                    timeout=12_000,
+                page.wait_for_function(
+                    """
+                    (rowSelectors) => {
+                        return rowSelectors.some((selector) => {
+                            try {
+                                return (
+                                    document.querySelector(
+                                        selector
+                                    ) !== null
+                                );
+                            } catch {
+                                return false;
+                            }
+                        });
+                    }
+                    """,
+                    arg=ROW_SELECTORS,
+                    timeout=10_000,
+                    polling=100,
                 )
             except PlaywrightTimeoutError:
                 print(
-                    "[WARN] networkidle待機が"
+                    "[WARN] 初期プレイヤー行の表示待機が"
                     "タイムアウトしました。"
                 )
 
-            page.wait_for_timeout(2_000)
-            dismiss_common_dialogs(page)
             select_legend_league(page)
-            page.wait_for_timeout(1_500)
+            scroll_to_top(page)
 
-            if DEBUG:
-                selector, diagnostics = (
-                    find_best_row_selector(page)
-                )
+            players = load_players(page)
+            result = build_character_usage(players)
 
-                dump_debug(
-                    page,
-                    {
-                        "mode": "debug",
-                        "selector": selector,
-                        "diagnostics": diagnostics,
-                    },
-                )
-
-                print(
-                    "[DEBUG] 調査ファイルを保存しました。"
-                )
-                return
-
-            data = scrape(page)
-            write_output(data)
-
-            dump_debug(
-                page,
-                {
-                    "mode": "success",
-                    "sampled_players": data[
-                        "sampled_players"
-                    ],
-                    "character_slots": data[
-                        "character_slots"
-                    ],
-                    "termination_reason": data[
-                        "termination_reason"
-                    ],
-                    "diagnostics": data[
-                        "diagnostics"
-                    ],
-                },
-            )
+            validate_result(result)
+            save_json(OUTPUT_PATH, result)
+            dump_debug(page, players, result)
 
             print(
-                "[DONE] "
-                f"players={data['sampled_players']}, "
-                f"slots={data['character_slots']}, "
-                f"characters={len(data['characters'])}, "
-                f"termination={data['termination_reason']}"
+                "[INFO] 集計結果を保存しました。"
+                f" path={OUTPUT_PATH}"
+                f" players={result['sampled_players']}"
+                f" characters="
+                f"{result['total_occurrence_count']}"
             )
 
-        except Exception as error:
-            print(
-                f"[ERROR] {error}",
-                file=sys.stderr,
-            )
-
-            dump_debug(
-                page,
-                {
-                    "mode": "error",
-                    "error": str(error),
-                },
-            )
-
+            return 0
+        except Exception:
+            dump_debug(page, players, result)
             raise
-
         finally:
             context.close()
             browser.close()
+
+
+def main() -> None:
+    try:
+        exit_code = run()
+    except Exception as error:
+        print(
+            f"[ERROR] 集計に失敗しました: {error}",
+            file=sys.stderr,
+        )
+
+        if DEBUG:
+            import traceback
+
+            traceback.print_exc()
+
+        raise SystemExit(1) from error
+
+    raise SystemExit(exit_code)
 
 
 if __name__ == "__main__":
