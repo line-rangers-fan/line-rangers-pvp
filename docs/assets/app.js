@@ -1230,10 +1230,9 @@ function rememberRankingPosition() {
 
 function restoreRankingPosition() {
   const scroller = document.querySelector("#ranking-section .table-wrapper");
-  if (!elements.rankingSection || !scroller) return;
+  if (!scroller) return;
 
   requestAnimationFrame(() => {
-    elements.rankingSection.scrollIntoView({ block: "start", behavior: "smooth" });
     scroller.scrollTop = state.rankingScrollTop;
   });
 }
