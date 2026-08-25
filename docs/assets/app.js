@@ -46,6 +46,125 @@ const RESULT_COUNT_LABEL = {
   ko: (n) => `${n}건`,
 };
 
+const equipmentTranslations = {
+  ja: {
+    dialogTitle: "キャラクター装備ランキング",
+    dialogDescription:
+      "装備数は同じキャラを複数編成した分も数え、使用率は同じプレイヤーを1人として計算します。",
+    characterPlayers: "キャラ使用人数",
+    weapon: "武器",
+    armor: "防具",
+    accessory: "アクセサリー",
+    equipment: "装備",
+    equipmentCount: "装備数",
+    equipmentPlayers: "使用人数",
+    rate: "使用率",
+    noEquipment: "このカテゴリの装備データはありません。",
+    equipmentUnit: "件",
+    close: "閉じる",
+  },
+  en: {
+    dialogTitle: "Character Equipment Ranking",
+    dialogDescription:
+      "Every character copy counts toward equipment count; each player counts once for usage rate.",
+    characterPlayers: "Character players",
+    weapon: "Weapon",
+    armor: "Armor",
+    accessory: "Accessory",
+    equipment: "Equipment",
+    equipmentCount: "Equipment count",
+    equipmentPlayers: "Players using",
+    rate: "Usage rate",
+    noEquipment: "No equipment data is available for this category.",
+    equipmentUnit: " items",
+    close: "Close",
+  },
+  zh: {
+    dialogTitle: "角色裝備排行",
+    dialogDescription: "裝備數會計入重複編成；使用率則以每位玩家僅計一次。",
+    characterPlayers: "角色使用人數",
+    weapon: "武器",
+    armor: "防具",
+    accessory: "飾品",
+    equipment: "裝備",
+    equipmentCount: "裝備數",
+    equipmentPlayers: "使用人數",
+    rate: "使用率",
+    noEquipment: "此分類沒有裝備資料。",
+    equipmentUnit: "件",
+    close: "關閉",
+  },
+  th: {
+    dialogTitle: "อันดับอุปกรณ์ตัวละคร",
+    dialogDescription: "จำนวนอุปกรณ์นับตัวละครที่ซ้ำ ส่วนอัตราใช้จะนับผู้เล่นเพียงครั้งเดียว",
+    characterPlayers: "ผู้ใช้ตัวละคร",
+    weapon: "อาวุธ",
+    armor: "เกราะ",
+    accessory: "เครื่องประดับ",
+    equipment: "อุปกรณ์",
+    equipmentCount: "จำนวนอุปกรณ์",
+    equipmentPlayers: "ผู้ใช้",
+    rate: "อัตราการใช้",
+    noEquipment: "ไม่มีข้อมูลอุปกรณ์สำหรับหมวดหมู่นี้",
+    equipmentUnit: " ชิ้น",
+    close: "ปิด",
+  },
+  id: {
+    dialogTitle: "Peringkat Perlengkapan Karakter",
+    dialogDescription:
+      "Jumlah perlengkapan menghitung karakter ganda, sedangkan tingkat penggunaan menghitung tiap pemain sekali.",
+    characterPlayers: "Pemain karakter",
+    weapon: "Senjata",
+    armor: "Pelindung",
+    accessory: "Aksesori",
+    equipment: "Perlengkapan",
+    equipmentCount: "Jumlah perlengkapan",
+    equipmentPlayers: "Pemain pengguna",
+    rate: "Tingkat penggunaan",
+    noEquipment: "Tidak ada data perlengkapan untuk kategori ini.",
+    equipmentUnit: " item",
+    close: "Tutup",
+  },
+  vi: {
+    dialogTitle: "Xếp hạng trang bị nhân vật",
+    dialogDescription:
+      "Số trang bị tính cả nhân vật trùng lặp, còn tỷ lệ sử dụng chỉ tính mỗi người chơi một lần.",
+    characterPlayers: "Người dùng nhân vật",
+    weapon: "Vũ khí",
+    armor: "Giáp",
+    accessory: "Phụ kiện",
+    equipment: "Trang bị",
+    equipmentCount: "Số trang bị",
+    equipmentPlayers: "Người sử dụng",
+    rate: "Tỷ lệ sử dụng",
+    noEquipment: "Không có dữ liệu trang bị cho danh mục này.",
+    equipmentUnit: " món",
+    close: "Đóng",
+  },
+  ko: {
+    dialogTitle: "캐릭터 장비 순위",
+    dialogDescription:
+      "장비 수는 중복 편성도 모두 세고, 사용률은 플레이어를 한 명으로만 계산합니다.",
+    characterPlayers: "캐릭터 사용 인원",
+    weapon: "무기",
+    armor: "방어구",
+    accessory: "액세서리",
+    equipment: "장비",
+    equipmentCount: "장비 수",
+    equipmentPlayers: "사용 인원",
+    rate: "사용률",
+    noEquipment: "이 분류의 장비 데이터가 없습니다.",
+    equipmentUnit: "개",
+    close: "닫기",
+  },
+};
+
+const EQUIPMENT_TYPES = [
+  ["WEAPON", "weapon"],
+  ["ARMOR", "armor"],
+  ["ACC", "accessory"],
+];
+
 const translations = {
   ja: {
     title: "LINEレンジャー レジェンド帯キャラ集計",
@@ -439,6 +558,8 @@ const state = {
   data: null,
   characters: [],
   language: "ja",
+  selectedCharacter: null,
+  selectedEquipmentType: "WEAPON",
 };
 
 const elements = {
@@ -457,6 +578,10 @@ const elements = {
 
 function t(key) {
   return translations[state.language][key];
+}
+
+function et(key) {
+  return equipmentTranslations[state.language][key];
 }
 
 function getLocale() {
@@ -596,6 +721,11 @@ function applyTranslations() {
     renderTable();
     updateStaleWarning();
   }
+
+  const dialog = document.querySelector("#equipment-dialog");
+  if (dialog?.open && state.selectedCharacter) {
+    renderEquipment(state.selectedCharacter);
+  }
 }
 
 function setText(selector, value) {
@@ -713,12 +843,22 @@ function renderTable() {
     const tdChar = document.createElement("td");
     tdChar.className = "character-cell";
 
+    const characterButton = document.createElement("button");
+    characterButton.type = "button";
+    characterButton.className = "character-button";
+    characterButton.dataset.unitCode = char.unit_code || "";
+    characterButton.setAttribute(
+      "aria-label",
+      `${characterLabel(char)}: ${et("dialogTitle")}`
+    );
+
     const img = document.createElement("img");
     img.src = char.image || "";
     img.alt = RANK_IMAGE_LABEL[state.language](rank);
     img.className = "character-image";
     img.loading = "lazy";
-    tdChar.appendChild(img);
+    characterButton.appendChild(img);
+    tdChar.appendChild(characterButton);
     tr.appendChild(tdChar);
 
     // 編成数
@@ -806,6 +946,10 @@ function validateData(data) {
       throw new Error(t("imageInvalid"));
     }
 
+    if (typeof char.unit_code !== "string" || char.unit_code.length === 0) {
+      throw new Error(t("characterInvalid"));
+    }
+
     const occurrence = Number(char.occurrence_count);
 
     if (!Number.isFinite(occurrence) || occurrence < 0) {
@@ -825,6 +969,18 @@ function validateData(data) {
     if (occurrence < players) {
       throw new Error(t("occurrenceTooLow"));
     }
+
+    const rankings = char.equipment_rankings;
+    if (!rankings || typeof rankings !== "object") {
+      throw new Error(t("characterInvalid"));
+    }
+
+    EQUIPMENT_TYPES.forEach(([type]) => {
+      const category = rankings[type];
+      if (!category || !Array.isArray(category.items)) {
+        throw new Error(t("characterInvalid"));
+      }
+    });
   });
 }
 
@@ -883,36 +1039,185 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
+function formatEquipmentCount(value) {
+  return formatInteger(value) + et("equipmentUnit");
+}
+
+function createEquipmentTab(type, label, isSelected, character) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "equipment-tab";
+  button.dataset.equipmentType = type;
+  button.setAttribute("role", "tab");
+  button.setAttribute("aria-selected", String(isSelected));
+  button.textContent = label;
+  button.addEventListener("click", () => {
+    state.selectedEquipmentType = type;
+    renderEquipment(character);
+  });
+  return button;
+}
+
 function renderEquipment(character) {
   const dialog = document.querySelector("#equipment-dialog");
+  const title = document.querySelector("#equipment-title");
   const content = document.querySelector("#equipment-content");
-  if (!dialog || !content) return;
-  content.innerHTML = "";
-  const rankings = character && character.equipment_rankings;
-  if (!rankings) { content.textContent = t("unknown"); dialog.showModal(); return; }
-  ["WEAPON", "ARMOR", "ACC"].forEach((kind) => {
-    const section = document.createElement("section");
-    const heading = document.createElement("h3"); heading.textContent = kind;
-    section.appendChild(heading);
-    const list = document.createElement("ol");
-    (rankings[kind] || []).forEach((item) => {
-      const li = document.createElement("li");
-      const image = document.createElement("img"); image.src = item.image || ""; image.alt = item.equipment_id || "";
-      const label = document.createElement("span"); label.textContent = `${item.equipment_id} — ${item.occurrence_count} / ${item.player_count}`;
-      li.append(image, label); list.appendChild(li);
-    });
-    section.appendChild(list); content.appendChild(section);
+  const closeButton = document.querySelector("#equipment-close");
+  if (!dialog || !title || !content || !character) return;
+
+  const rankings = character.equipment_rankings;
+  if (!rankings || typeof rankings !== "object") return;
+
+  state.selectedCharacter = character;
+  if (!rankings[state.selectedEquipmentType]) {
+    state.selectedEquipmentType = "WEAPON";
+  }
+
+  title.textContent = et("dialogTitle");
+  closeButton.setAttribute("aria-label", et("close"));
+  content.textContent = "";
+
+  const summary = document.createElement("div");
+  summary.className = "equipment-summary";
+
+  const characterImage = document.createElement("img");
+  characterImage.className = "equipment-character-image";
+  characterImage.src = character.image || "";
+  characterImage.alt = characterLabel(character);
+
+  const summaryText = document.createElement("div");
+  const characterCode = document.createElement("strong");
+  characterCode.textContent = characterLabel(character);
+  const description = document.createElement("p");
+  description.textContent = et("dialogDescription");
+  const characterMeta = document.createElement("p");
+  characterMeta.className = "equipment-meta";
+  characterMeta.textContent =
+    et("characterPlayers") +
+    ": " +
+    formatUnit(character.player_count, "players") +
+    " · " +
+    t("occurrence") +
+    ": " +
+    formatUnit(character.occurrence_count, "occurrence");
+  summaryText.append(characterCode, description, characterMeta);
+  summary.append(characterImage, summaryText);
+  content.appendChild(summary);
+
+  const tabList = document.createElement("div");
+  tabList.className = "equipment-tabs";
+  tabList.setAttribute("role", "tablist");
+  EQUIPMENT_TYPES.forEach(([type, labelKey]) => {
+    tabList.appendChild(
+      createEquipmentTab(
+        type,
+        et(labelKey),
+        type === state.selectedEquipmentType,
+        character
+      )
+    );
   });
-  dialog.showModal();
+  content.appendChild(tabList);
+
+  const category = rankings[state.selectedEquipmentType];
+  const items = Array.isArray(category.items) ? category.items : [];
+  const categoryMeta = document.createElement("p");
+  categoryMeta.className = "equipment-category-meta";
+  categoryMeta.textContent =
+    et("equipmentPlayers") +
+    ": " +
+    formatUnit(category.equipped_player_count, "players") +
+    " / " +
+    et("characterPlayers") +
+    ": " +
+    formatUnit(character.player_count, "players");
+  content.appendChild(categoryMeta);
+
+  if (items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "equipment-empty";
+    empty.textContent = et("noEquipment");
+    content.appendChild(empty);
+  } else {
+    const wrapper = document.createElement("div");
+    wrapper.className = "equipment-table-wrapper";
+    const table = document.createElement("table");
+    table.className = "equipment-table";
+
+    const head = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    [t("rank"), et("equipment"), et("equipmentCount"), et("equipmentPlayers"), et("rate")].forEach(
+      (text) => {
+        const cell = document.createElement("th");
+        cell.scope = "col";
+        cell.textContent = text;
+        headRow.appendChild(cell);
+      }
+    );
+    head.appendChild(headRow);
+
+    const body = document.createElement("tbody");
+    items.forEach((item) => {
+      const row = document.createElement("tr");
+
+      const rank = document.createElement("td");
+      rank.className = "rank-cell equipment-rank-cell";
+      rank.dataset.rank = String(item.rank || "");
+      rank.textContent = String(item.rank || "-");
+
+      const itemCell = document.createElement("td");
+      itemCell.className = "equipment-name-cell";
+      const image = document.createElement("img");
+      image.className = "equipment-image";
+      image.src = item.image || "";
+      image.alt = item.name || item.item_code || t("unknown");
+      image.loading = "lazy";
+      const name = document.createElement("span");
+      name.textContent = item.name || item.item_code || t("unknown");
+      itemCell.append(image, name);
+
+      const count = document.createElement("td");
+      count.className = "number-cell";
+      count.textContent = formatEquipmentCount(item.occurrence_count);
+
+      const players = document.createElement("td");
+      players.className = "number-cell";
+      players.textContent = formatUnit(item.player_count, "players");
+
+      const rate = document.createElement("td");
+      rate.className = "number-cell";
+      rate.textContent = Number(item.adoption_rate || 0).toFixed(1) + "%";
+
+      row.append(rank, itemCell, count, players, rate);
+      body.appendChild(row);
+    });
+
+    table.append(head, body);
+    wrapper.appendChild(table);
+    content.appendChild(wrapper);
+  }
+
+  if (!dialog.open) {
+    dialog.showModal();
+  }
 }
 
 document.addEventListener("click", (event) => {
-  const image = event.target.closest(".character-image");
-  if (image) {
-    const character = state.characters.find((item) => item.image === image.src || new URL(item.image, location.href).href === image.src);
-    renderEquipment(character);
+  const characterButton = event.target.closest(".character-button");
+  if (characterButton) {
+    const unitCode = characterButton.dataset.unitCode;
+    const character = state.characters.find((item) => item.unit_code === unitCode);
+    if (character) {
+      renderEquipment(character);
+    }
+    return;
   }
-  if (event.target.matches("#equipment-close") || event.target === document.querySelector("#equipment-dialog")) {
-    document.querySelector("#equipment-dialog")?.close();
+
+  const dialog = document.querySelector("#equipment-dialog");
+  if (
+    event.target.matches("#equipment-close") ||
+    (dialog?.open && event.target === dialog)
+  ) {
+    dialog.close();
   }
 });

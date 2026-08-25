@@ -52,6 +52,66 @@ def test_all_pvp_groups_and_duplicate_units_are_preserved():
     assert beta["player_count"] == 2
 
 
+def test_duplicate_characters_count_each_equipment_but_not_each_player():
+    players = [
+        {
+            "mid": "player-1",
+            "unit_records": [
+                {
+                    "unit_code": "u-alpha",
+                    "equipment": {
+                        "WEAPON": "eq-w1",
+                        "ARMOR": "eq-a1",
+                        "ACC": "eq-c1",
+                    },
+                },
+                {
+                    "unit_code": "u-alpha",
+                    "equipment": {
+                        "WEAPON": "eq-w1",
+                        "ARMOR": "eq-a2",
+                        "ACC": "eq-c1",
+                    },
+                },
+            ],
+        },
+        {
+            "mid": "player-2",
+            "unit_records": [
+                {
+                    "unit_code": "u-alpha",
+                    "equipment": {
+                        "WEAPON": "eq-w2",
+                        "ARMOR": "eq-a1",
+                        "ACC": "eq-c2",
+                    },
+                }
+            ],
+        },
+    ]
+    names = {
+        "eq-w1": "Weapon 1",
+        "eq-w2": "Weapon 2",
+        "eq-a1": "Armor 1",
+        "eq-a2": "Armor 2",
+        "eq-c1": "Accessory 1",
+        "eq-c2": "Accessory 2",
+    }
+
+    data = scraper.build_statistics(players, {}, equipment_names=names, target_players=2)
+    alpha = data["characters"][0]
+    weapon = alpha["equipment_rankings"]["WEAPON"]
+
+    assert alpha["occurrence_count"] == 3
+    assert alpha["player_count"] == 2
+    assert weapon["equipped_occurrence_count"] == 3
+    assert weapon["equipped_player_count"] == 2
+    assert weapon["items"][0]["item_code"] == "eq-w1"
+    assert weapon["items"][0]["occurrence_count"] == 2
+    assert weapon["items"][0]["player_count"] == 1
+    assert weapon["items"][0]["adoption_rate"] == 50.0
+
+
 def test_incomplete_ranked_player_is_reported_instead_of_silently_replaced():
     payload = payload_with_complete_and_single_character_teams()
     payload["playerInfo"] = payload["playerInfo"][1:]

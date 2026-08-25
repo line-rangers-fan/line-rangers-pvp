@@ -760,12 +760,210 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 }
 
 
-.character-image { cursor: pointer; }
-.equipment-dialog { width: min(680px, calc(100% - 2rem)); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
-.equipment-dialog::backdrop { background: rgb(0 0 0 / 70%); }
-.equipment-close { float: right; min-height: 2rem; padding: .25rem .65rem; }
-.equipment-dialog section { display: inline-block; vertical-align: top; width: 32%; padding: .5rem; }
-.equipment-dialog ol { padding-left: 1.4rem; }
-.equipment-dialog li { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; font-size: .8rem; }
-.equipment-dialog li img { width: 2rem; height: 2rem; object-fit: contain; }
-@media (max-width: 600px) { .equipment-dialog section { display: block; width: 100%; } }
+/* =========================================
+   Character Equipment Ranking
+   ========================================= */
+
+.character-button {
+  display: inline-flex;
+  min-height: 0;
+  padding: 0;
+  cursor: pointer;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+
+.character-button:focus-visible {
+  outline: 3px solid rgb(50 213 131 / 55%);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .character-button:hover .character-image {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgb(50 213 131 / 18%);
+    transform: translateY(-2px);
+  }
+}
+
+.character-button:active .character-image {
+  transform: scale(0.96);
+}
+
+.character-image {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
+}
+
+.equipment-dialog {
+  width: min(760px, calc(100% - 1.5rem));
+  max-height: min(88vh, 54rem);
+  padding: 1.25rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.equipment-dialog::backdrop {
+  background: rgb(0 0 0 / 72%);
+  backdrop-filter: blur(2px);
+}
+
+.equipment-dialog h2 {
+  margin: 0 3rem 1rem 0;
+  font-size: clamp(1.25rem, 4vw, 1.6rem);
+}
+
+.equipment-close {
+  float: right;
+  min-height: 2.25rem;
+  padding: 0.2rem 0.75rem;
+  border-color: var(--border);
+  color: var(--muted);
+  background: var(--surface-light);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.equipment-summary {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / 2.5%);
+}
+
+.equipment-character-image {
+  width: 4rem;
+  height: 4rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  object-fit: contain;
+}
+
+.equipment-summary strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.equipment-summary p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.equipment-meta,
+.equipment-category-meta {
+  font-variant-numeric: tabular-nums;
+}
+
+.equipment-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.equipment-tab {
+  min-height: 2.6rem;
+  padding: 0.5rem;
+  border-color: var(--border);
+  color: var(--muted);
+  background: var(--background);
+  font-size: 0.9rem;
+}
+
+.equipment-tab[aria-selected="true"] {
+  border-color: var(--accent);
+  color: #06251a;
+  background: var(--accent);
+}
+
+.equipment-category-meta {
+  margin: 0.85rem 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.equipment-empty {
+  margin: 0;
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  text-align: center;
+}
+
+.equipment-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.equipment-table {
+  min-width: 620px;
+}
+
+.equipment-table th,
+.equipment-table td {
+  padding: 0.7rem 0.8rem;
+}
+
+.equipment-name-cell {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  min-width: 15rem;
+  white-space: normal;
+}
+
+.equipment-image {
+  width: 2.65rem;
+  height: 2.65rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--background);
+  object-fit: contain;
+}
+
+.equipment-rank-cell {
+  width: 3.4rem;
+  min-width: 3.4rem;
+}
+
+@media (max-width: 600px) {
+  .equipment-dialog {
+    width: calc(100% - 0.75rem);
+    max-height: 92vh;
+    padding: 0.85rem;
+  }
+
+  .equipment-summary {
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .equipment-character-image {
+    width: 3.4rem;
+    height: 3.4rem;
+  }
+
+  .equipment-tabs {
+    gap: 0.35rem;
+  }
+
+  .equipment-tab {
+    min-height: 2.4rem;
+    font-size: 0.82rem;
+  }
+}
