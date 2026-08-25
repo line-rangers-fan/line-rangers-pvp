@@ -53,6 +53,8 @@ PLAYER_FETCH_WORKERS = min(
 MIN_CHARACTERS_PER_PLAYER = 1
 MAX_CHARACTERS_PER_PLAYER = 10
 REQUEST_TIMEOUT_SECONDS = 30
+# Three total attempts balance temporary network failures with respectful
+# source access. A failed incomplete run is never published.
 REQUEST_ATTEMPTS = 3
 OUTPUT_PATH = Path("docs/data/character_usage.json")
 DEBUG_DIR = Path(".artifacts/debug")

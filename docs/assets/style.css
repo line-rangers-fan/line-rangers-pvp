@@ -887,8 +887,7 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   font-size: 0.85rem;
 }
 
-.equipment-meta,
-.equipment-category-meta {
+.equipment-meta {
   font-variant-numeric: tabular-nums;
 }
 
@@ -912,12 +911,6 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   border-color: var(--accent);
   color: #06251a;
   background: var(--accent);
-}
-
-.equipment-category-meta {
-  margin: 0.85rem 0;
-  color: var(--muted);
-  font-size: 0.85rem;
 }
 
 .equipment-empty {

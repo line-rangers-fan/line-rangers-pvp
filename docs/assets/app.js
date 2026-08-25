@@ -1043,7 +1043,7 @@ function setupRankingTapHint() {
     (entries) => {
       if (hasShown || !entries.some((entry) => entry.isIntersecting)) return;
       hasShown = true;
-      hint.textContent = "☝ " + (TAP_HINT[state.language] || TAP_HINT.en);
+      hint.textContent = TAP_HINT[state.language] || TAP_HINT.en;
       hint.hidden = false;
       requestAnimationFrame(() => hint.classList.add("is-visible"));
       window.setTimeout(() => {
@@ -1156,17 +1156,6 @@ function renderEquipment(character) {
 
   const category = rankings[state.selectedEquipmentType];
   const items = Array.isArray(category.items) ? category.items : [];
-  const categoryMeta = document.createElement("p");
-  categoryMeta.className = "equipment-category-meta";
-  categoryMeta.textContent =
-    et("equipmentPlayers") +
-    ": " +
-    formatUnit(category.equipped_player_count, "players") +
-    " / " +
-    et("characterPlayers") +
-    ": " +
-    formatUnit(character.player_count, "players");
-  content.appendChild(categoryMeta);
 
   if (items.length === 0) {
     const empty = document.createElement("p");
