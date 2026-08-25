@@ -166,7 +166,7 @@ const EQUIPMENT_TYPES = [
 ];
 
 const TAP_HINT = {
-  ja: "キャラクターをタップすると、装備ランキングを見られます",
+  ja: "キャラクターをタップすると、装備ランキングが見れます。",
   en: "Tap a character to view its equipment ranking.",
   zh: "點選角色即可查看裝備排名。",
   th: "แตะตัวละครเพื่อดูอันดับอุปกรณ์",
