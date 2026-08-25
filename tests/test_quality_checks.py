@@ -41,6 +41,7 @@ def valid_data(sampled_players=2, character_slots=2):
         "characters": [
             {
                 "unit_code": "u-a",
+                "name": "Alpha",
                 "image": "x",
                 "occurrence_count": 1,
                 "player_count": 1,
@@ -48,6 +49,7 @@ def valid_data(sampled_players=2, character_slots=2):
             },
             {
                 "unit_code": "u-b",
+                "name": "Beta",
                 "image": "y",
                 "occurrence_count": 1,
                 "player_count": 1,

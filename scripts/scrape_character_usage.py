@@ -44,7 +44,7 @@ LEAGUE = "LEGEND"
 API_URL_TEMPLATE = "https://rangers.lerico.net/api/v2/pvp/league/rank/{league}"
 PLAYER_API_URL_TEMPLATE = "https://rangers.lerico.net/api/getPlayer/{mid}"
 TRANSLATE_API_URL = "https://rangers.lerico.net/api/v2/translate"
-TRANSLATE_KEY = "ja:EQUIP"
+UNIT_TRANSLATE_KEY = "ja:UNIT"
 TARGET_PLAYER_COUNT = int(os.environ.get("TARGET_PLAYER_COUNT", "200"))
 MIN_REQUIRED_PLAYERS = int(os.environ.get("MIN_REQUIRED_PLAYERS", "50"))
 PLAYER_FETCH_WORKERS = min(
@@ -336,37 +336,37 @@ def extract_ranked_players(
     return players, diagnostics
 
 
-def fetch_equipment_names(item_codes: set[str]) -> dict[str, str]:
-    """Load Japanese item names from the same Handbook translation API."""
-    if not item_codes:
+def fetch_character_names(unit_codes: set[str]) -> dict[str, str]:
+    """Load concise Japanese character names, without their preceding titles."""
+    if not unit_codes:
         return {}
 
-    url = f"{TRANSLATE_API_URL}?{urlencode({'keys': TRANSLATE_KEY})}"
-    payload = fetch_json(url, "Equipment translation API")
+    url = f"{TRANSLATE_API_URL}?{urlencode({'keys': UNIT_TRANSLATE_KEY})}"
+    payload = fetch_json(url, "Character translation API")
     if not isinstance(payload, dict):
-        raise RuntimeError("Equipment translation API has an invalid root structure.")
-    catalog = payload.get(TRANSLATE_KEY)
+        raise RuntimeError("Character translation API has an invalid root structure.")
+    catalog = payload.get(UNIT_TRANSLATE_KEY)
     if not isinstance(catalog, dict):
-        raise RuntimeError("Equipment translation API is missing the equipment catalog.")
+        raise RuntimeError("Character translation API is missing the character catalog.")
 
     names: dict[str, str] = {}
-    for item_code in item_codes:
-        value = catalog.get(f"{item_code}_nm")
+    for unit_code in unit_codes:
+        value = catalog.get(f"{unit_code}_snm") or catalog.get(f"{unit_code}_nm")
         if isinstance(value, str) and value.strip():
-            names[item_code] = " ".join(value.replace("\n", " ").split())
+            names[unit_code] = " ".join(value.replace("\n", " ").split())
         else:
-            names[item_code] = item_code
+            names[unit_code] = unit_code
     return names
 
 
 def build_statistics(
     players: list[dict],
     diagnostics: dict,
-    equipment_names: dict[str, str] | None = None,
+    character_names: dict[str, str] | None = None,
     target_players: int = TARGET_PLAYER_COUNT,
 ) -> dict:
     """Build character and per-character equipment rankings."""
-    equipment_names = equipment_names or {}
+    character_names = character_names or {}
     character_counts = defaultdict(lambda: {"occurrence_count": 0, "player_count": 0})
     character_equipment_records: dict[str, list[dict]] = defaultdict(list)
     category_occurrences = defaultdict(lambda: Counter())
@@ -408,7 +408,6 @@ def build_statistics(
                     {
                         "type": equipment_type,
                         "item_code": item_code,
-                        "name": equipment_names.get(item_code, item_code),
                         "image": equipment_image_url(item_code),
                     }
                 )
@@ -432,7 +431,6 @@ def build_statistics(
         for equipment_type in EQUIPMENT_TYPES:
             items = ranked_equipment[equipment_type]
             for item in items:
-                item["name"] = equipment_names.get(item["item_code"], item["item_code"])
                 item["image"] = equipment_image_url(item["item_code"])
                 item["adoption_rate"] = round(
                     item["player_count"] / counts["player_count"] * 100, 1
@@ -450,6 +448,7 @@ def build_statistics(
         characters.append(
             {
                 "unit_code": unit_code,
+                "name": character_names.get(unit_code, unit_code),
                 "image": character_image_url(unit_code),
                 "occurrence_count": int(counts["occurrence_count"]),
                 "player_count": int(counts["player_count"]),
@@ -484,18 +483,8 @@ def build_statistics(
         for character in characters
         for category in character["equipment_rankings"].values()
     )
-    diagnostics["equipment_names_missing"] = sorted(
-        {
-            item["item_code"]
-            for character in characters
-            for category in character["equipment_rankings"].values()
-            for item in category["items"]
-            if item["name"] == item["item_code"]
-        }
-    )
-
     return {
-        "schema_version": 5,
+        "schema_version": 6,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "source": {"name": SOURCE_NAME, "url": TARGET_URL},
         "league": "レジェンド",
@@ -537,17 +526,16 @@ def scrape() -> dict:
             "refusing to publish a partial sample."
         )
 
-    item_codes = {
-        item_code
+    unit_codes = {
+        record["unit_code"]
         for player in players
         for record in player["unit_records"]
-        for item_code in record["equipment"].values()
     }
-    equipment_names = fetch_equipment_names(item_codes)
+    character_names = fetch_character_names(unit_codes)
     return build_statistics(
         players,
         diagnostics,
-        equipment_names=equipment_names,
+        character_names=character_names,
         target_players=TARGET_PLAYER_COUNT,
     )
 

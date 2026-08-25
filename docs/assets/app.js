@@ -165,6 +165,16 @@ const EQUIPMENT_TYPES = [
   ["ACC", "accessory"],
 ];
 
+const TAP_HINT = {
+  ja: "キャラクターをタップすると、装備ランキングを見られます",
+  en: "Tap a character to view its equipment ranking.",
+  zh: "點選角色即可查看裝備排名。",
+  th: "แตะตัวละครเพื่อดูอันดับอุปกรณ์",
+  id: "Ketuk karakter untuk melihat peringkat perlengkapannya.",
+  vi: "Chạm vào nhân vật để xem xếp hạng trang bị.",
+  ko: "캐릭터를 탭하면 장비 순위를 볼 수 있습니다.",
+};
+
 const translations = {
   ja: {
     title: "LINEレンジャー レジェンド帯キャラ集計",
@@ -657,19 +667,15 @@ function translateLeague(value) {
 }
 
 function characterLabel(character) {
-  if (!character || !character.image) {
+  if (!character) {
     return t("unknown");
   }
 
-  try {
-    const url = new URL(character.image, window.location.href);
-    const filename = url.pathname.split("/").pop() || "";
-    const base = filename.replace(/\.[a-zA-Z0-9]+$/, "");
-
-    return base || t("unknown");
-  } catch {
-    return t("unknown");
+  if (typeof character.name === "string" && character.name.trim()) {
+    return character.name.trim();
   }
+
+  return t("unknown");
 }
 
 function applyTranslations() {
@@ -950,6 +956,10 @@ function validateData(data) {
       throw new Error(t("characterInvalid"));
     }
 
+    if (typeof char.name !== "string" || char.name.trim().length === 0) {
+      throw new Error(t("characterInvalid"));
+    }
+
     const occurrence = Number(char.occurrence_count);
 
     if (!Number.isFinite(occurrence) || occurrence < 0) {
@@ -1008,6 +1018,7 @@ async function loadData() {
     elements.rankingSection.hidden = false;
 
     applyTranslations();
+    setupRankingTapHint();
   } catch (error) {
     console.error(error);
 
@@ -1020,6 +1031,32 @@ async function loadData() {
       ? error.message
       : t("loadError");
   }
+}
+
+function setupRankingTapHint() {
+  const hint = document.querySelector("#ranking-tap-hint");
+  const title = document.querySelector("#ranking-title");
+  if (!hint || !title || !window.IntersectionObserver) return;
+
+  let hasShown = false;
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (hasShown || !entries.some((entry) => entry.isIntersecting)) return;
+      hasShown = true;
+      hint.textContent = "☝ " + (TAP_HINT[state.language] || TAP_HINT.en);
+      hint.hidden = false;
+      requestAnimationFrame(() => hint.classList.add("is-visible"));
+      window.setTimeout(() => {
+        hint.classList.remove("is-visible");
+        window.setTimeout(() => {
+          hint.hidden = true;
+        }, 220);
+      }, 5000);
+      observer.disconnect();
+    },
+    { threshold: 0.65 }
+  );
+  observer.observe(title);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1086,8 +1123,6 @@ function renderEquipment(character) {
   characterImage.alt = characterLabel(character);
 
   const summaryText = document.createElement("div");
-  const characterCode = document.createElement("strong");
-  characterCode.textContent = characterLabel(character);
   const description = document.createElement("p");
   description.textContent = et("dialogDescription");
   const characterMeta = document.createElement("p");
@@ -1100,7 +1135,7 @@ function renderEquipment(character) {
     t("occurrence") +
     ": " +
     formatUnit(character.occurrence_count, "occurrence");
-  summaryText.append(characterCode, description, characterMeta);
+  summaryText.append(description, characterMeta);
   summary.append(characterImage, summaryText);
   content.appendChild(summary);
 
@@ -1166,15 +1201,13 @@ function renderEquipment(character) {
       rank.textContent = String(item.rank || "-");
 
       const itemCell = document.createElement("td");
-      itemCell.className = "equipment-name-cell";
+      itemCell.className = "equipment-icon-cell";
       const image = document.createElement("img");
       image.className = "equipment-image";
       image.src = item.image || "";
-      image.alt = item.name || item.item_code || t("unknown");
+      image.alt = et("equipment");
       image.loading = "lazy";
-      const name = document.createElement("span");
-      name.textContent = item.name || item.item_code || t("unknown");
-      itemCell.append(image, name);
+      itemCell.append(image);
 
       const count = document.createElement("td");
       count.className = "number-cell";

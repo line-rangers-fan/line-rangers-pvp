@@ -34,7 +34,6 @@ def equipment_rankings(records: list[dict]) -> dict[str, list[dict]]:
             lambda: {
                 "item_code": "",
                 "image": "",
-                "name": "",
                 "occurrence_count": 0,
                 "player_count": 0,
             }
@@ -53,7 +52,6 @@ def equipment_rankings(records: list[dict]) -> dict[str, list[dict]]:
             row = totals[kind][item_code]
             row["item_code"] = item_code
             row["image"] = str(item.get("image") or "")
-            row["name"] = str(item.get("name") or item_code)
             row["occurrence_count"] += 1
             seen[kind].add(item_code)
 
@@ -94,6 +92,9 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
         errors.append("duplicate or missing character unit code")
 
     for character in characters:
+        if not str(character.get("name") or "").strip():
+            errors.append("missing character name")
+            continue
         occurrence_count = int(character.get("occurrence_count", 0))
         player_count = int(character.get("player_count", 0))
         if occurrence_count < player_count or player_count > players:
@@ -132,7 +133,6 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
                 item_players = int(item.get("player_count", 0))
                 if (
                     not str(item.get("item_code") or "").strip()
-                    or not str(item.get("name") or "").strip()
                     or item_count <= 0
                     or item_players <= 0
                     or item_count < item_players

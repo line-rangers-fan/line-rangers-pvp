@@ -98,7 +98,7 @@ def test_duplicate_characters_count_each_equipment_but_not_each_player():
         "eq-c2": "Accessory 2",
     }
 
-    data = scraper.build_statistics(players, {}, equipment_names=names, target_players=2)
+    data = scraper.build_statistics(players, {}, character_names={"u-alpha": "Alpha"}, target_players=2)
     alpha = data["characters"][0]
     weapon = alpha["equipment_rankings"]["WEAPON"]
 
