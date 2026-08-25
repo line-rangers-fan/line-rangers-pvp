@@ -32,6 +32,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run scraper
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: python scripts/scrape_character_usage.py
 
       - name: Upload debug artifacts
