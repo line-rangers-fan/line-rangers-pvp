@@ -1001,7 +1001,10 @@ async function loadData() {
     elements.summary.hidden = true;
     elements.rankingSection.hidden = true;
 
-    const response = await fetch(DATA_PATH);
+    const response = await fetch(`${DATA_PATH}?v=${Date.now()}`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
     if (!response.ok) {
       throw new Error(t("fetchError"));
     }
