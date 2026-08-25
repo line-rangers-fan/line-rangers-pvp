@@ -612,7 +612,6 @@ function formatInteger(value) {
   return new Intl.NumberFormat(getLocale()).format(Number(value) || 0);
 }
 
-// 【修正箇所】dateStyle, timeStyleとtimeZoneNameは同時指定できないので、個別に設定
 function formatDate(value) {
   if (!value) {
     return t("notCollected");
@@ -631,7 +630,6 @@ function formatDate(value) {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: TIMEZONES[state.language] || "UTC",
-    timeZoneName: "short",
   }).format(date);
 }
 

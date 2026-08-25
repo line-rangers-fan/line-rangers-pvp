@@ -297,6 +297,10 @@ h1 {
   letter-spacing: -0.01em;
 }
 
+.summary-updated-card {
+  grid-column: 1 / -1;
+}
+
 /* =========================================
    Ranking
    ========================================= */
@@ -365,7 +369,11 @@ button:focus-visible {
    ========================================= */
 
 .table-wrapper {
+  max-height: min(64svh, 44rem);
   overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -408,6 +416,9 @@ td {
 }
 
 thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   color: var(--muted);
   background: #0a1729;
   box-shadow: 0 1px 0 var(--border);
@@ -670,7 +681,7 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   }
 
   .table-wrapper {
-    overflow-x: visible;
+    overflow-x: hidden;
   }
 }
 
