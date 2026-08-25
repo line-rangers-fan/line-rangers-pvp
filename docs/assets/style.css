@@ -384,11 +384,16 @@ button:focus-visible {
 }
 
 .ranking-tap-hint {
+  position: fixed;
+  right: 1rem;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 1rem;
+  z-index: 10;
   display: flex;
   align-items: center;
-  width: fit-content;
-  max-width: 100%;
-  margin: 0.85rem 0 0;
+  width: auto;
+  max-width: none;
+  margin: 0;
   padding: 0.65rem 0.9rem;
   border: 1px solid rgb(50 213 131 / 55%);
   border-radius: 999px;

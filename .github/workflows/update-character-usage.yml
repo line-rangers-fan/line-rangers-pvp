@@ -8,7 +8,7 @@ on:
     - cron: "0 * * * *"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: pages
@@ -34,6 +34,18 @@ jobs:
       - name: Run scraper
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: python scripts/scrape_character_usage.py
+
+      - name: Save collected data
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/character_usage.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Update PvP ranking data"
+          git push
 
       - name: Upload debug artifacts
         if: always()
