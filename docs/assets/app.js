@@ -570,6 +570,7 @@ const state = {
   language: "ja",
   selectedCharacter: null,
   selectedEquipmentType: "WEAPON",
+  rankingScrollTop: 0,
 };
 
 const elements = {
@@ -1222,12 +1223,28 @@ function renderEquipment(character) {
   }
 }
 
+function rememberRankingPosition() {
+  const scroller = document.querySelector("#ranking-section .table-wrapper");
+  state.rankingScrollTop = scroller?.scrollTop || 0;
+}
+
+function restoreRankingPosition() {
+  const scroller = document.querySelector("#ranking-section .table-wrapper");
+  if (!elements.rankingSection || !scroller) return;
+
+  requestAnimationFrame(() => {
+    elements.rankingSection.scrollIntoView({ block: "start", behavior: "smooth" });
+    scroller.scrollTop = state.rankingScrollTop;
+  });
+}
+
 document.addEventListener("click", (event) => {
   const characterButton = event.target.closest(".character-button");
   if (characterButton) {
     const unitCode = characterButton.dataset.unitCode;
     const character = state.characters.find((item) => item.unit_code === unitCode);
     if (character) {
+      rememberRankingPosition();
       renderEquipment(character);
     }
     return;
@@ -1240,4 +1257,9 @@ document.addEventListener("click", (event) => {
   ) {
     dialog.close();
   }
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  const dialog = document.querySelector("#equipment-dialog");
+  dialog?.addEventListener("close", restoreRankingPosition);
 });
