@@ -1,1416 +1,297 @@
-"""
-LINE Rangers HandbookのPvP Trackerから、
-レジェンド帯プレイヤーの防衛チームを集計する。
+"""Build Legend PvP character statistics from the Handbook's public API.
 
-occurrence_count:
-    同一プレイヤー内の重複を含むキャラクターの総編成数。
-
-player_count:
-    対象キャラクターを1体以上編成しているプレイヤー数。
-
-adoption_rate:
-    player_count / sampled_players * 100。
-
-同じキャラクターを1人が複数体使用している場合、
-occurrence_countには体数分を加算し、
-player_countには1人分だけ加算する。
-
-【集計条件について】
-1チームの最大編成数は10体。1体でも編成されていれば集計対象とする
-(MIN_CHARACTERS_PER_PLAYER=1, MAX_CHARACTERS_PER_PLAYER=10)。
-
-サイト側で1人のプレイヤーの情報が複数の<tr>に分かれて描画される
-ケースがあるため、create_player_identity()が「本体行」か
-「直前の本体行に付随する断片行」かを判定し、断片行は本体行に
-画像をマージすることで、1人が複数プレイヤーとして誤カウント
-されるのを防いでいる。
+The PvP Tracker page renders the same data after it has been fetched from
+``/api/v2/pvp/league/rank/LEGEND``. Reading the API directly is deliberate:
+lazy-loaded, off-screen, or split DOM rows must never make a character vanish
+from the statistics. Every ``unitCode`` in a ranked player's ``pvpteam`` is
+counted, including a team with only one character and duplicate characters in
+the same team.
 """
 
-import hashlib
+from __future__ import annotations
+
 import json
 import os
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 
-from playwright.sync_api import (
-    Error as PlaywrightError,
-    TimeoutError as PlaywrightTimeoutError,
-    sync_playwright,
-)
+try:
+    from quality_checks import validate_data
+except ImportError:  # Allows importing this module from the test suite.
+    from scripts.quality_checks import validate_data
 
 
 TARGET_URL = "https://rangers.lerico.net/ja/pvp-tracker"
 SOURCE_NAME = "LINE Rangers Handbook PvP Tracker"
-
-TARGET_PLAYER_COUNT = int(
-    os.environ.get("TARGET_PLAYER_COUNT", "200")
-)
-
-MIN_REQUIRED_PLAYERS = int(
-    os.environ.get("MIN_REQUIRED_PLAYERS", "50")
-)
-
-# 1体でも編成されていれば集計対象とする
-MIN_CHARACTERS_PER_PLAYER = int(
-    os.environ.get("MIN_CHARACTERS_PER_PLAYER", "1")
-)
-
-# 1チームの最大編成数は10体
-MAX_CHARACTERS_PER_PLAYER = int(
-    os.environ.get("MAX_CHARACTERS_PER_PLAYER", "10")
-)
-
-DEBUG = os.environ.get("DEBUG", "0") == "1"
-
+LEAGUE = "LEGEND"
+API_URL_TEMPLATE = "https://rangers.lerico.net/api/v2/pvp/league/rank/{league}"
+TARGET_PLAYER_COUNT = int(os.environ.get("TARGET_PLAYER_COUNT", "200"))
+MIN_REQUIRED_PLAYERS = int(os.environ.get("MIN_REQUIRED_PLAYERS", "50"))
+MIN_CHARACTERS_PER_PLAYER = 1
+MAX_CHARACTERS_PER_PLAYER = 10
+REQUEST_TIMEOUT_SECONDS = 30
 OUTPUT_PATH = Path("docs/data/character_usage.json")
 DEBUG_DIR = Path(".artifacts/debug")
 
-MAX_PAGES = 30
-MAX_LOAD_ATTEMPTS = 20
-STABLE_ATTEMPTS_LIMIT = 4
-LOAD_WAIT_MS = 300
-
-# スクロール・追加読込ボタンのどちらも効かない状態が
-# この回数続いたら、これ以上新しい行は出てこないと判断して打ち切る
-NO_PROGRESS_LIMIT = 2
-
-ROW_SELECTORS = [
-    "table tbody tr",
-    "[role='rowgroup'] [role='row']",
-    ".ranking-table tbody tr",
-    ".ranking-list .ranking-row",
-    ".player-list .player-row",
-    ".player-card",
-    "[data-player-id]",
-    "[class*='ranking'] [class*='row']",
-    "[class*='player'] [class*='row']",
-]
-
-TEAM_CONTAINER_SELECTORS = [
-    "[data-team='defense']",
-    "[data-team='defence']",
-    "[data-type='defense']",
-    "[data-type='defence']",
-    "[aria-label*='defense' i]",
-    "[aria-label*='defence' i]",
-    "[aria-label*='防衛']",
-    ".defense-team",
-    ".defence-team",
-    "[class*='defense-team']",
-    "[class*='defense-team']",
-    "[class*='defense'] [class*='team']",
-    "[class*='defense'] [class*='team']",
-    ".team-formation",
-    ".ranger-team",
-    "[class*='formation']",
-]
-
-LOAD_MORE_SELECTORS = [
-    "button:has-text('もっと見る')",
-    "a:has-text('もっと見る')",
-    "button:has-text('さらに表示')",
-    "a:has-text('さらに表示')",
-    "button:has-text('Load more')",
-    "a:has-text('Load more')",
-    "button:has-text('Show more')",
-    "a:has-text('Show more')",
-    "[class*='load-more'] button",
-    "[class*='load-more'] a",
-]
-
-NEXT_PAGE_SELECTORS = [
-    "button[aria-label='Go to next page']",
-    "a[aria-label='Go to next page']",
-    "button[aria-label*='next' i]",
-    "a[aria-label*='next' i]",
-    "button[title*='next' i]",
-    "a[title*='next' i]",
-    "button[rel='next']",
-    "a[rel='next']",
-    "button:has-text('次へ')",
-    "a:has-text('次へ')",
-    "button:has-text('Next')",
-    "a:has-text('Next')",
-    "button:has-text('›')",
-    "a:has-text('›')",
-    "button:has-text('»')",
-    "a:has-text('»')",
-    ".pagination-next button",
-    ".pagination-next a",
-    ".pagination .next button",
-    ".pagination .next a",
-    "[class*='pagination'] [class*='next']",
-]
-
-EXCLUDED_SOURCE_WORDS = {
-    "avatar",
-    "badge",
-    "banner",
-    "country",
-    "emoji",
-    "flag",
-    "guild",
-    "league",
-    "logo",
-    "profile",
-    "rank",
-    "tier",
-    "user",
-}
-
-EXCLUDED_CONTEXT_WORDS = {
-    "avatar",
-    "badge",
-    "country",
-    "flag",
-    "guild",
-    "league",
-    "player-icon",
-    "profile",
-    "rank-icon",
-    "user-icon",
-}
+# Unit codes are used only to construct a known image path. Reject malformed
+# values instead of publishing a made-up or unsafe URL.
+UNIT_CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
-def clean_url(url: str) -> str:
-    if not url:
-        return ""
-
-    absolute_url = urljoin(TARGET_URL, url)
-    parts = urlsplit(absolute_url)
-
-    return urlunsplit(
-        (
-            parts.scheme.lower(),
-            parts.netloc.lower(),
-            parts.path,
-            "",
-            "",
-        )
-    )
-
-
-def character_key(image_url: str) -> str:
-    normalized = clean_url(image_url)
-
-    if normalized:
-        return normalized
-
-    return "unknown"
-
-
-def save_json(path: Path, value) -> None:
-    path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    with path.open(
-        "w",
-        encoding="utf-8",
-    ) as file:
-        json.dump(
-            value,
-            file,
-            ensure_ascii=False,
-            indent=2,
-        )
+def save_json(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as file:
+        json.dump(value, file, ensure_ascii=False, indent=2)
         file.write("\n")
 
 
-def is_disabled(locator) -> bool:
-    try:
-        disabled = locator.get_attribute("disabled")
-        aria_disabled = locator.get_attribute("aria-disabled")
-        class_name = (
-            locator.get_attribute("class") or ""
-        ).lower()
-
-        return (
-            disabled is not None
-            or aria_disabled == "true"
-            or "disabled" in class_name
-        )
-    except PlaywrightError:
-        return True
-
-
-def dismiss_common_dialogs(page) -> None:
-    labels = [
-        "同意する",
-        "許可する",
-        "すべて許可",
-        "Accept",
-        "Accept all",
-        "OK",
-        "閉じる",
-        "Close",
-    ]
-
-    for label in labels:
-        try:
-            buttons = page.get_by_role(
-                "button",
-                name=label,
-                exact=True,
-            )
-
-            if (
-                buttons.count() > 0
-                and buttons.first.is_visible()
-            ):
-                buttons.first.click(timeout=2_000)
-                page.wait_for_timeout(200)
-        except PlaywrightError:
-            continue
-
-
-def select_legend_league(page) -> None:
-    selectors = [
-        "[role='tab']:has-text('レジェンド')",
-        "button:has-text('レジェンド')",
-        "a:has-text('レジェンド')",
-        "[role='option']:has-text('レジェンド')",
-        "[role='tab']:has-text('Legend')",
-        "button:has-text('Legend')",
-        "a:has-text('Legend')",
-        "[role='option']:has-text('Legend')",
-    ]
-
-    for selector in selectors:
-        try:
-            candidates = page.locator(selector)
-            count = min(candidates.count(), 10)
-        except PlaywrightError:
-            continue
-
-        for index in range(count):
-            candidate = candidates.nth(index)
-
-            try:
-                if not candidate.is_visible():
-                    continue
-
-                candidate.click(timeout=3_000)
-                page.wait_for_timeout(700)
-
-                print(
-                    "[INFO] レジェンドリーグを選択しました。"
-                    f" selector={selector}"
-                )
-                return
-            except PlaywrightError:
-                continue
-
-    print(
-        "[INFO] レジェンド選択ボタンは見つかりませんでした。"
-        "現在の表示内容で処理します。"
-    )
-
-
-def extract_rows_from_dom(page, selector: str) -> list[dict]:
-    try:
-        raw_rows = page.locator(selector).evaluate_all(
-            """
-            (rows, teamSelectors) => {
-                function readImage(image, index) {
-                    const rect = image.getBoundingClientRect();
-                    const style = getComputedStyle(image);
-                    const context = image.closest(
-                        '[class], [data-team], [data-type], td, li'
-                    );
-
-                    return {
-                        index: index,
-                        src:
-                            image.currentSrc
-                            || image.getAttribute('src')
-                            || image.getAttribute('data-src')
-                            || image.getAttribute('data-lazy-src')
-                            || image.getAttribute('data-original')
-                            || '',
-                        width: Math.round(rect.width),
-                        height: Math.round(rect.height),
-                        visible:
-                            rect.width > 0
-                            && rect.height > 0
-                            && style.display !== 'none'
-                            && style.visibility !== 'hidden'
-                            && Number(style.opacity || 1) !== 0,
-                        context:
-                            context
-                            && typeof context.className === 'string'
-                                ? context.className
-                                : ''
-                    };
-                }
-
-                return rows.map((row, rowIndex) => {
-                    const groups = [];
-
-                    for (const selector of teamSelectors) {
-                        let containers = [];
-
-                        try {
-                            containers = Array.from(
-                                row.querySelectorAll(selector)
-                            );
-                        } catch {
-                            continue;
-                        }
-
-                        for (const container of containers) {
-                            const images = Array.from(
-                                container.querySelectorAll('img')
-                            ).map(readImage);
-
-                            if (images.length > 0) {
-                                groups.push({
-                                    selector: selector,
-                                    images: images
-                                });
-                            }
-                        }
-                    }
-
-                    const allImages = Array.from(
-                        row.querySelectorAll('img')
-                    ).map(readImage);
-
-                    const attributes = {};
-
-                    for (const attribute of row.attributes) {
-                        if (
-                            attribute.name.startsWith('data-')
-                            || attribute.name === 'id'
-                        ) {
-                            attributes[attribute.name] =
-                                attribute.value;
-                        }
-                    }
-
-                    return {
-                        rowIndex: rowIndex,
-                        text: (
-                            row.innerText
-                            || row.textContent
-                            || ''
-                        )
-                            .replace(/\\s+/g, ' ')
-                            .trim(),
-                        attributes: attributes,
-                        groups: groups,
-                        allImages: allImages
-                    };
-                });
-            }
-            """,
-            TEAM_CONTAINER_SELECTORS,
-        )
-    except PlaywrightError:
-        return []
-
-    rows = []
-
-    for raw_row in raw_rows:
-        groups = []
-
-        for raw_group in raw_row.get("groups", []):
-            images = filter_character_images(
-                raw_group.get("images", [])
-            )
-
-            if images:
-                groups.append(images)
-
-        all_images = filter_character_images(
-            raw_row.get("allImages", [])
-        )
-
-        rows.append(
-            {
-                "row_index": int(
-                    raw_row.get("rowIndex") or 0
-                ),
-                "text": str(
-                    raw_row.get("text") or ""
-                ),
-                "attributes": raw_row.get(
-                    "attributes",
-                    {},
-                ),
-                "groups": groups,
-                "all_images": all_images,
-            }
-        )
-
-    return rows
-
-
-def filter_character_images(images: list[dict]) -> list[dict]:
-    results = []
-
-    for image in images:
-        if not image.get("visible"):
-            continue
-
-        src = clean_url(
-            str(image.get("src") or "")
-        )
-
-        width = int(image.get("width") or 0)
-        height = int(image.get("height") or 0)
-        context = str(
-            image.get("context") or ""
-        ).lower()
-
-        if not src:
-            continue
-
-        source_lower = src.lower()
-
-        if any(
-            word in source_lower
-            for word in EXCLUDED_SOURCE_WORDS
-        ):
-            continue
-
-        if any(
-            word in context
-            for word in EXCLUDED_CONTEXT_WORDS
-        ):
-            continue
-
-        if width < 18 or height < 18:
-            continue
-
-        if width > 220 or height > 220:
-            continue
-
-        results.append(
-            {
-                "image": src,
-                "width": width,
-                "height": height,
-                "index": image.get("index"),
-            }
-        )
-
-    return results
-
-
-def select_team_images(row: dict) -> list[dict]:
-    combined_images = []
-    seen_indices = set()
-
-    for group in row.get("groups", []):
-        for img in group:
-            idx = img.get("index")
-            if idx is not None and idx not in seen_indices:
-                seen_indices.add(idx)
-                combined_images.append(img)
-
-    if combined_images:
-        return combined_images[:MAX_CHARACTERS_PER_PLAYER]
-
-    all_images = row.get("all_images", [])
-
-    if all_images:
-        return all_images[:MAX_CHARACTERS_PER_PLAYER]
-
-    return []
-
-
-def find_best_row_selector(page) -> tuple[str | None, dict]:
-    diagnostics = {}
-
-    for selector in ROW_SELECTORS:
-        rows = extract_rows_from_dom(page, selector)
-        valid_rows = 0
-        image_counts = []
-
-        for row in rows[:30]:
-            images = select_team_images(row)
-
-            if images:
-                valid_rows += 1
-                image_counts.append(len(images))
-
-        diagnostics[selector] = {
-            "row_count": len(rows),
-            "valid_rows": valid_rows,
-            "image_counts": image_counts,
-        }
-
-    ranked = sorted(
-        diagnostics.items(),
-        key=lambda item: (
-            item[1]["valid_rows"],
-            item[1]["row_count"],
-        ),
-        reverse=True,
-    )
-
-    if not ranked:
-        return None, diagnostics
-
-    if ranked[0][1]["valid_rows"] == 0:
-        return None, diagnostics
-
-    return ranked[0][0], diagnostics
-
-
-def create_player_identity(
-    row: dict,
-    page_number: int,
-) -> tuple[str, bool]:
-    """
-    戻り値: (identity, is_strong)
-
-    is_strong=True  : プレイヤー本人を示す行(名前などのテキストを持つ本体行)
-    is_strong=False : 直前の本体行に付随する断片行(継続行)
-
-    防衛チームなどが複数の<tr>に分割して描画されているケースで、
-    断片行を新規プレイヤーとして誤カウントしないための判定。
-    """
-    attributes = row.get("attributes", {})
-
-    preferred_attributes = [
-        "data-player-id",
-        "data-user-id",
-        "data-id",
-        "id",
-    ]
-
-    for attribute_name in preferred_attributes:
-        value = str(
-            attributes.get(attribute_name) or ""
-        ).strip()
-
-        if value:
-            return f"{attribute_name}:{value}", True
-
-    text = re.sub(
-        r"\s+",
-        " ",
-        row.get("text") or "",
-    ).strip()
-
-    # 順位や数字の表記を除去してプレイヤー名テキストのみでIdentityを生成
-    clean_text = re.sub(r"^\d+\s*", "", text).strip()
-
-    # 数字・記号・括弧などを取り除いた残りが極端に短い行は、
-    # プレイヤー名を含まない断片行(継続行)の可能性が高いと判定する
-    meaningful_text = re.sub(
-        r"[\d\s%.,()（）・:：\-]",
-        "",
-        clean_text,
-    )
-    is_strong = len(meaningful_text) >= 2
-
-    if clean_text:
-        digest = hashlib.sha256(
-            clean_text.encode("utf-8")
-        ).hexdigest()
-
-        return f"text:{digest}", is_strong
-
-    return (
-        f"page:{page_number}:row:{row['row_index']}",
-        False,
-    )
-
-
-def click_load_more(page) -> bool:
-    for selector in LOAD_MORE_SELECTORS:
-        try:
-            candidates = page.locator(selector)
-            count = min(candidates.count(), 10)
-        except PlaywrightError:
-            continue
-
-        for index in range(count):
-            candidate = candidates.nth(index)
-
-            try:
-                if not candidate.is_visible():
-                    continue
-
-                if is_disabled(candidate):
-                    continue
-
-                candidate.scroll_into_view_if_needed(
-                    timeout=3_000
-                )
-                candidate.click(timeout=4_000)
-                page.wait_for_timeout(LOAD_WAIT_MS)
-
-                print(
-                    "[INFO] 追加表示ボタンを押しました。"
-                    f" selector={selector}"
-                )
-                return True
-            except PlaywrightError:
-                continue
-
-    return False
-
-
-def scroll_dynamic_content(page) -> bool:
-    try:
-        page.evaluate("""
-        () => {
-            document.querySelectorAll('img[loading="lazy"]').forEach(img => {
-                img.setAttribute('loading', 'eager');
-            });
-        }
-        """)
-
-        result = page.evaluate(
-            """
-            async () => {
-                let moved = false;
-                const beforeWindow = window.scrollY;
-
-                await new Promise((resolve) => {
-                    let totalHeight = window.scrollY;
-                    const distance = 800;
-                    const timer = setInterval(() => {
-                        const scrollHeight = document.documentElement.scrollHeight;
-                        window.scrollBy(0, distance);
-                        totalHeight += distance;
-
-                        if (totalHeight >= scrollHeight - window.innerHeight) {
-                            clearInterval(timer);
-                            resolve();
-                        }
-                    }, 60);
-                });
-
-                if (window.scrollY !== beforeWindow) {
-                    moved = true;
-                }
-
-                return moved;
-            }
-            """
-        )
-
-        page.wait_for_timeout(500)
-        return bool(result)
-    except PlaywrightError:
-        return False
-
-
-def reset_scroll(page) -> None:
-    try:
-        page.evaluate(
-            """
-            () => {
-                window.scrollTo(0, 0);
-
-                for (const element of document.querySelectorAll('*')) {
-                    const style = getComputedStyle(element);
-
-                    if (
-                        element.scrollHeight
-                            > element.clientHeight + 100
-                        && (
-                            style.overflowY === 'auto'
-                            || style.overflowY === 'scroll'
-                        )
-                    ) {
-                        element.scrollTop = 0;
-                    }
-                }
-            }
-            """
-        )
-    except PlaywrightError:
-        pass
-
-
-def collect_current_page(
-    page,
-    selector: str,
-    page_number: int,
-    already_sampled: int,
-) -> tuple[list[dict], dict]:
-    collected: dict = {}
-    row_order: list[str] = []  # 本体行のidentityをDOM順に記録
-    stable_attempts = 0
-    no_progress_attempts = 0
-    previous_count = 0
-    attempts = 0
-    maximum_dom_rows = 0
-
-    scroll_dynamic_content(page)
-
-    while attempts < MAX_LOAD_ATTEMPTS:
-        attempts += 1
-
-        rows = extract_rows_from_dom(page, selector)
-        maximum_dom_rows = max(
-            maximum_dom_rows,
-            len(rows),
-        )
-
-        new_rows = 0
-        last_identity = row_order[-1] if row_order else None
-
-        for row in rows:
-            images = select_team_images(row)
-
-            if not images:
-                continue
-
-            identity, is_strong = create_player_identity(
-                row,
-                page_number,
-            )
-
-            if is_strong:
-                if identity not in collected:
-                    collected[identity] = {
-                        "identity": identity,
-                        "images": [],
-                    }
-                    row_order.append(identity)
-                    new_rows += 1
-
-                existing_urls = {
-                    img["image"]
-                    for img in collected[identity]["images"]
-                }
-
-                for img in images:
-                    if img["image"] not in existing_urls:
-                        collected[identity]["images"].append(img)
-                        existing_urls.add(img["image"])
-
-                last_identity = identity
-
-            elif last_identity is not None:
-                # 直前の本体行の断片とみなして画像を統合する。
-                # ただし合計がMAX_CHARACTERS_PER_PLAYERを超える場合は
-                # 誤統合の可能性が高いため統合しない(取りこぼす方が安全)
-                existing_urls = {
-                    img["image"]
-                    for img in collected[last_identity]["images"]
-                }
-                merged_images = list(
-                    collected[last_identity]["images"]
-                )
-
-                for img in images:
-                    if img["image"] not in existing_urls:
-                        merged_images.append(img)
-                        existing_urls.add(img["image"])
-
-                if len(merged_images) <= MAX_CHARACTERS_PER_PLAYER:
-                    collected[last_identity]["images"] = merged_images
-
-            else:
-                # 本体行がまだ一つも無い状態で断片行しか無い場合は、
-                # やむを得ずこの行単体を1人として登録する
-                if identity not in collected:
-                    collected[identity] = {
-                        "identity": identity,
-                        "images": images,
-                    }
-                    row_order.append(identity)
-                    new_rows += 1
-
-                last_identity = identity
-
-        current_count = len(collected)
-
-        print(
-            f"[INFO] page={page_number}, "
-            f"attempt={attempts}, "
-            f"dom_rows={len(rows)}, "
-            f"new_rows={new_rows}, "
-            f"collected={current_count}"
-        )
-
-        if (
-            already_sampled + current_count
-            >= TARGET_PLAYER_COUNT
-        ):
-            break
-
-        if current_count == previous_count:
-            stable_attempts += 1
-        else:
-            stable_attempts = 0
-
-        previous_count = current_count
-
-        clicked = click_load_more(page)
-        moved = scroll_dynamic_content(page)
-
-        if not clicked and not moved:
-            no_progress_attempts += 1
-        else:
-            no_progress_attempts = 0
-
-        # スクロールも追加読み込みも効かない状態が続いたら、
-        # これ以上新しい行は出てこないと判断して即終了する
-        if no_progress_attempts >= NO_PROGRESS_LIMIT:
-            break
-
-        if stable_attempts >= STABLE_ATTEMPTS_LIMIT:
-            break
-
-        page.wait_for_timeout(LOAD_WAIT_MS)
-
-    return (
-        list(collected.values()),
-        {
-            "attempts": attempts,
-            "maximum_dom_rows": maximum_dom_rows,
-            "collected_rows": len(collected),
+def load_json(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    with path.open("r", encoding="utf-8") as file:
+        value = json.load(file)
+    return value if isinstance(value, dict) else None
+
+
+def fetch_rank_data(league: str = LEAGUE) -> dict:
+    url = API_URL_TEMPLATE.format(league=quote(league, safe=""))
+    request = Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "line-rangers-pvp-stats/1.0",
         },
     )
+    try:
+        with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            status = getattr(response, "status", 200)
+            if status >= 400:
+                raise RuntimeError(f"PvP API returned HTTP {status}.")
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        raise RuntimeError(f"PvP API returned HTTP {error.code}.") from error
+    except URLError as error:
+        raise RuntimeError(f"PvP API request failed: {error.reason}") from error
+    except json.JSONDecodeError as error:
+        raise RuntimeError("PvP API did not return valid JSON.") from error
+    if not isinstance(payload, dict):
+        raise RuntimeError("PvP API response has an invalid root structure.")
+    return payload
 
 
-def page_signature(page, selector: str) -> str:
-    rows = extract_rows_from_dom(page, selector)
-
-    text = "\n".join(
-        row.get("text", "")[:300]
-        for row in rows[:10]
-    )
-
-    if not text:
-        text = page.url
-
-    return hashlib.sha256(
-        text.encode("utf-8")
-    ).hexdigest()
+def character_image_url(unit_code: str) -> str:
+    """Return the canonical thumbnail URL for a validated unit code."""
+    if not UNIT_CODE_PATTERN.fullmatch(unit_code):
+        raise ValueError(f"Invalid unit code: {unit_code!r}")
+    encoded = quote(unit_code, safe="-_")
+    return f"https://rangers.lerico.net/res/{encoded}/{encoded}-thum.png"
 
 
-def go_to_next_page(page, selector: str) -> bool:
-    previous_signature = page_signature(
-        page,
-        selector,
-    )
-    previous_url = page.url
+def team_group_sort_key(item: tuple[object, object]) -> tuple[int, int | str]:
+    key = str(item[0])
+    return (0, int(key)) if key.isdecimal() else (1, key)
 
-    reset_scroll(page)
 
-    for button_selector in NEXT_PAGE_SELECTORS:
-        try:
-            candidates = page.locator(button_selector)
-            count = min(candidates.count(), 20)
-        except PlaywrightError:
+def extract_ranked_players(payload: dict, target_players: int) -> tuple[list[dict], dict]:
+    """Extract complete PvP teams for the first ranked players.
+
+    ``pvpteam`` contains the two visible defense groups. They form one
+    player's defence formation, so both groups are included. We do not fall
+    back to the selected team number: that would silently discard half of a
+    normal ten-character formation.
+    """
+    rankings = payload.get("top100")
+    player_info = payload.get("playerInfo")
+    if not isinstance(rankings, list) or not isinstance(player_info, list):
+        raise RuntimeError("PvP API response is missing top100 or playerInfo.")
+
+    info_by_mid = {
+        str(record.get("mid")): record
+        for record in player_info
+        if isinstance(record, dict) and str(record.get("mid") or "").strip()
+    }
+    players: list[dict] = []
+    seen_mids: set[str] = set()
+    diagnostics: dict = {
+        "ranked_players_available": len(rankings),
+        "player_info_available": len(info_by_mid),
+        "missing_player_info": [],
+        "invalid_players": [],
+        "invalid_unit_codes": [],
+    }
+
+    for rank_record in rankings:
+        if len(players) >= target_players:
+            break
+        if not isinstance(rank_record, dict):
+            diagnostics["invalid_players"].append("ranking entry is not an object")
             continue
 
-        for index in range(count):
-            candidate = candidates.nth(index)
+        mid = str(rank_record.get("mid") or "").strip()
+        if not mid or mid in seen_mids:
+            diagnostics["invalid_players"].append(
+                f"missing or duplicate player id: {mid or '<empty>'}"
+            )
+            continue
+        seen_mids.add(mid)
+        info = info_by_mid.get(mid)
+        if info is None:
+            diagnostics["missing_player_info"].append(mid)
+            continue
 
-            try:
-                if not candidate.is_visible():
-                    continue
+        team_map = info.get("playerUnitTeamGroupMap")
+        team_map = team_map if isinstance(team_map, dict) else {}
+        team_groups = team_map.get("pvpteam")
+        if not isinstance(team_groups, dict):
+            diagnostics["invalid_players"].append(f"{mid}: no pvpteam map")
+            continue
 
-                if is_disabled(candidate):
-                    continue
-
-                candidate.scroll_into_view_if_needed(
-                    timeout=4_000
-                )
-                candidate.click(timeout=5_000)
-
-                page.wait_for_timeout(900)
-                scroll_dynamic_content(page)
-
-                new_signature = page_signature(
-                    page,
-                    selector,
-                )
-
-                if (
-                    new_signature != previous_signature
-                    or page.url != previous_url
-                ):
-                    print(
-                        "[INFO] 次ページへ移動しました。"
-                        f" selector={button_selector}"
+        units: list[str] = []
+        invalid_code = False
+        for _, group in sorted(team_groups.items(), key=team_group_sort_key):
+            if not isinstance(group, list):
+                invalid_code = True
+                break
+            for unit in group:
+                code = str(unit.get("unitCode") or "").strip() if isinstance(unit, dict) else ""
+                if not UNIT_CODE_PATTERN.fullmatch(code):
+                    diagnostics["invalid_unit_codes"].append(
+                        {"mid": mid, "unit_code": code}
                     )
-                    return True
-            except PlaywrightError:
-                continue
-
-    return False
-
-
-def dump_debug(page, details: dict) -> None:
-    DEBUG_DIR.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    try:
-        (DEBUG_DIR / "page.html").write_text(
-            page.content(),
-            encoding="utf-8",
-        )
-    except PlaywrightError:
-        pass
-
-    try:
-        page.screenshot(
-            path=str(DEBUG_DIR / "screenshot.png"),
-            full_page=True,
-        )
-    except PlaywrightError:
-        pass
-
-    try:
-        images = page.locator("img").evaluate_all(
-            """
-            (images) => images.map((image) => {
-                const rect = image.getBoundingClientRect();
-
-                return {
-                    src:
-                        image.currentSrc
-                        || image.getAttribute('src')
-                        || image.getAttribute('data-src'),
-                    alt: image.getAttribute('alt'),
-                    width: Math.round(rect.width),
-                    height: Math.round(rect.height),
-                    outerHtml: image.outerHTML.slice(0, 1000)
-                };
-            })
-            """
-        )
-
-        save_json(
-            DEBUG_DIR / "images.json",
-            images,
-        )
-    except PlaywrightError:
-        pass
-
-    try:
-        controls = page.locator(
-            "button, a, [role='button']"
-        ).evaluate_all(
-            """
-            (elements) => elements.map((element) => ({
-                text: (
-                    element.innerText
-                    || element.textContent
-                    || ''
-                ).trim().slice(0, 200),
-                ariaLabel: element.getAttribute('aria-label'),
-                title: element.getAttribute('title'),
-                className:
-                    typeof element.className === 'string'
-                        ? element.className
-                        : '',
-                disabled:
-                    element.hasAttribute('disabled')
-                    || element.getAttribute('aria-disabled') === 'true',
-                outerHtml: element.outerHTML.slice(0, 1000)
-            }))
-            """
-        )
-
-        save_json(
-            DEBUG_DIR / "controls.json",
-            controls,
-        )
-    except PlaywrightError:
-        pass
-
-    save_json(
-        DEBUG_DIR / "diagnostics.json",
-        details,
-    )
-
-
-def scrape(page) -> dict:
-    selector, selector_diagnostics = (
-        find_best_row_selector(page)
-    )
-
-    if selector is None:
-        raise RuntimeError(
-            "プレイヤー行を特定できませんでした。"
-        )
-
-    print(f"[INFO] row selector={selector}")
-
-    counts = defaultdict(
-        lambda: {
-            "occurrence_count": 0,
-            "player_count": 0,
-            "image": "",
-        }
-    )
-
-    sampled_players = 0
-    total_slots = 0
-    player_sizes = []
-    pages_scanned = 0
-    termination_reason = "unknown"
-    visited_pages = set()
-    page_diagnostics = []
-
-    while (
-        sampled_players < TARGET_PLAYER_COUNT
-        and pages_scanned < MAX_PAGES
-    ):
-        signature = page_signature(page, selector)
-
-        if signature in visited_pages:
-            termination_reason = "duplicate_page"
-            break
-
-        visited_pages.add(signature)
-        pages_scanned += 1
-
-        page_rows, diagnostics = collect_current_page(
-            page,
-            selector,
-            pages_scanned,
-            sampled_players,
-        )
-
-        page_players = 0
-        page_slots = 0
-
-        for row in page_rows:
-            if sampled_players >= TARGET_PLAYER_COUNT:
+                    invalid_code = True
+                    break
+                units.append(code)
+            if invalid_code:
                 break
 
-            images = row["images"]
+        if invalid_code or not (MIN_CHARACTERS_PER_PLAYER <= len(units) <= MAX_CHARACTERS_PER_PLAYER):
+            diagnostics["invalid_players"].append(f"{mid}: character count={len(units)}")
+            continue
+        players.append({"mid": mid, "units": units})
 
-            if not (
-                MIN_CHARACTERS_PER_PLAYER
-                <= len(images)
-                <= MAX_CHARACTERS_PER_PLAYER
-            ):
-                continue
-
-            sampled_players += 1
-            page_players += 1
-
-            slot_count = len(images)
-            total_slots += slot_count
-            page_slots += slot_count
-            player_sizes.append(slot_count)
-
-            player_character_keys = set()
-
-            for image in images:
-                key = character_key(image["image"])
-
-                counts[key]["occurrence_count"] += 1
-                counts[key]["image"] = image["image"]
-
-                player_character_keys.add(key)
-
-            for key in player_character_keys:
-                counts[key]["player_count"] += 1
-
-        page_diagnostics.append(
-            {
-                "page": pages_scanned,
-                "players": page_players,
-                "slots": page_slots,
-                **diagnostics,
-            }
-        )
-
-        print(
-            f"[INFO] page={pages_scanned}, "
-            f"players={page_players}, "
-            f"total_players={sampled_players}, "
-            f"total_slots={total_slots}"
-        )
-
-        if sampled_players >= TARGET_PLAYER_COUNT:
-            termination_reason = "target_reached"
-            break
-
-        if page_players == 0:
-            termination_reason = "no_valid_players"
-            break
-
-        if not go_to_next_page(page, selector):
-            termination_reason = "no_next_page"
-            break
-
-    if sampled_players < MIN_REQUIRED_PLAYERS:
-        raise RuntimeError(
-            "品質基準を満たしません。"
-            f"取得人数={sampled_players}, "
-            f"必要人数={MIN_REQUIRED_PLAYERS}, "
-            f"終了理由={termination_reason}"
-        )
-
-    characters = []
-
-    for data in counts.values():
-        occurrence_count = int(
-            data["occurrence_count"]
-        )
-        player_count = int(
-            data["player_count"]
-        )
-
-        if player_count > sampled_players:
-            raise RuntimeError(
-                "採用人数が集計人数を超えています。"
-                f"採用人数={player_count}, "
-                f"集計人数={sampled_players}, "
-                f"画像={data['image']}"
-            )
-
-        adoption_rate = round(
-            player_count / sampled_players * 100,
-            1,
-        )
-
-        slot_rate = (
-            round(
-                occurrence_count / total_slots * 100,
-                2,
-            )
-            if total_slots > 0
-            else 0
-        )
-
-        characters.append(
-            {
-                "image": data["image"],
-                "occurrence_count": occurrence_count,
-                "player_count": player_count,
-                "adoption_rate": adoption_rate,
-                "slot_rate": slot_rate,
-            }
-        )
-
-    characters.sort(
-        key=lambda item: (
-            -item["occurrence_count"],
-            -item["player_count"],
-            item["image"],
-        )
+    diagnostics["valid_players"] = len(players)
+    diagnostics["team_size_distribution"] = dict(
+        sorted(Counter(len(player["units"]) for player in players).items())
     )
+    return players, diagnostics
 
+
+def build_statistics(players: list[dict], diagnostics: dict) -> dict:
+    counts = defaultdict(lambda: {"occurrence_count": 0, "player_count": 0})
+    player_sizes: list[int] = []
+    for player in players:
+        units = player["units"]
+        player_sizes.append(len(units))
+        seen_units: set[str] = set()
+        for unit_code in units:
+            counts[unit_code]["occurrence_count"] += 1
+            seen_units.add(unit_code)
+        for unit_code in seen_units:
+            counts[unit_code]["player_count"] += 1
+
+    sampled_players = len(players)
+    total_slots = sum(player_sizes)
+    if not sampled_players or not total_slots:
+        raise RuntimeError("No character slots were found in the ranked players.")
+
+    characters = [
+        {
+            "image": character_image_url(unit_code),
+            "occurrence_count": int(data["occurrence_count"]),
+            "player_count": int(data["player_count"]),
+            "adoption_rate": round(data["player_count"] / sampled_players * 100, 1),
+            "slot_rate": round(data["occurrence_count"] / total_slots * 100, 2),
+        }
+        for unit_code, data in counts.items()
+    ]
+    characters.sort(
+        key=lambda item: (-item["occurrence_count"], -item["player_count"], item["image"])
+    )
     previous_count = None
     current_rank = 0
-
-    for index, character in enumerate(
-        characters,
-        start=1,
-    ):
-        if (
-            character["occurrence_count"]
-            != previous_count
-        ):
+    for index, character in enumerate(characters, start=1):
+        if character["occurrence_count"] != previous_count:
             current_rank = index
-
         character["rank"] = current_rank
-        previous_count = character[
-            "occurrence_count"
-        ]
+        previous_count = character["occurrence_count"]
 
-    calculated_slots = sum(
-        character["occurrence_count"]
-        for character in characters
-    )
-
+    calculated_slots = sum(item["occurrence_count"] for item in characters)
     if calculated_slots != total_slots:
         raise RuntimeError(
-            "キャラクター総数が一致しません。"
-            f"取得枠数={total_slots}, "
-            f"キャラクター別合計={calculated_slots}"
+            "Character totals do not match team totals: "
+            f"{calculated_slots} != {total_slots}"
         )
-
     return {
-        "schema_version": 3,
-        "updated_at": datetime.now(
-            timezone.utc
-        ).isoformat(),
-        "source": {
-            "name": SOURCE_NAME,
-            "url": TARGET_URL,
-        },
+        "schema_version": 4,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "source": {"name": SOURCE_NAME, "url": TARGET_URL},
         "league": "レジェンド",
         "target_players": TARGET_PLAYER_COUNT,
         "sampled_players": sampled_players,
         "character_slots": total_slots,
         "unique_characters": len(characters),
-        "median_characters_per_player": (
-            median(player_sizes)
-            if player_sizes
-            else 0
-        ),
-        "pages_scanned": pages_scanned,
-        "termination_reason": termination_reason,
-        "complete_target": (
-            sampled_players >= TARGET_PLAYER_COUNT
-        ),
+        "median_characters_per_player": median(player_sizes),
+        "pages_scanned": 1,
+        "termination_reason": "api_target_reached",
+        "complete_target": sampled_players >= TARGET_PLAYER_COUNT,
         "characters": characters,
-        "diagnostics": {
-            "row_selector": selector,
-            "selector_results": selector_diagnostics,
-            "pages": page_diagnostics,
-        },
+        "diagnostics": diagnostics,
     }
 
 
+def scrape() -> dict:
+    if TARGET_PLAYER_COUNT < 1:
+        raise RuntimeError("TARGET_PLAYER_COUNT must be at least 1.")
+    payload = fetch_rank_data()
+    players, diagnostics = extract_ranked_players(payload, TARGET_PLAYER_COUNT)
+    if len(players) < MIN_REQUIRED_PLAYERS:
+        raise RuntimeError(
+            "Not enough valid players from the PvP API: "
+            f"{len(players)} < {MIN_REQUIRED_PLAYERS}"
+        )
+    if len(players) < TARGET_PLAYER_COUNT and len(payload.get("top100", [])) >= TARGET_PLAYER_COUNT:
+        raise RuntimeError(
+            "Some requested ranked players had incomplete team data; "
+            "refusing to publish a partial sample."
+        )
+    return build_statistics(players, diagnostics)
+
+
 def write_output(data: dict) -> None:
-    OUTPUT_PATH.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    temporary_path = OUTPUT_PATH.with_suffix(
-        ".json.tmp"
-    )
-
+    temporary_path = OUTPUT_PATH.with_suffix(".json.tmp")
     save_json(temporary_path, data)
     temporary_path.replace(OUTPUT_PATH)
 
 
+def dump_debug(data: dict) -> None:
+    if os.environ.get("DEBUG", "0") == "1":
+        save_json(DEBUG_DIR / "diagnostics.json", data["diagnostics"])
+
+
 def main() -> None:
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-            ],
+    previous = load_json(OUTPUT_PATH)
+    try:
+        data = scrape()
+        validate_data(data, previous)
+        write_output(data)
+        dump_debug(data)
+        print(
+            "[DONE] "
+            f"players={data['sampled_players']}, "
+            f"slots={data['character_slots']}, "
+            f"characters={len(data['characters'])}, "
+            f"termination={data['termination_reason']}"
         )
-
-        context = browser.new_context(
-            locale="ja-JP",
-            timezone_id="Asia/Tokyo",
-            viewport={
-                "width": 1440,
-                "height": 1200,
-            },
-            user_agent=(
-                "Mozilla/5.0 (X11; Linux x86_64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/131.0 Safari/537.36"
-            ),
-        )
-
-        page = context.new_page()
-        page.set_default_timeout(10_000)
-
-        try:
-            response = page.goto(
-                TARGET_URL,
-                wait_until="domcontentloaded",
-                timeout=60_000,
-            )
-
-            if (
-                response is not None
-                and response.status >= 400
-            ):
-                raise RuntimeError(
-                    f"HTTPエラー: {response.status}"
-                )
-
-            try:
-                page.wait_for_load_state(
-                    "networkidle",
-                    timeout=12_000,
-                )
-            except PlaywrightTimeoutError:
-                print(
-                    "[WARN] networkidle待機が"
-                    "タイムアウトしました。"
-                )
-
-            page.wait_for_timeout(800)
-            dismiss_common_dialogs(page)
-            select_legend_league(page)
-            page.wait_for_timeout(700)
-
-            if DEBUG:
-                selector, diagnostics = (
-                    find_best_row_selector(page)
-                )
-
-                dump_debug(
-                    page,
-                    {
-                        "mode": "debug",
-                        "selector": selector,
-                        "diagnostics": diagnostics,
-                    },
-                )
-
-                print(
-                    "[DEBUG] 調査ファイルを保存しました。"
-                )
-                return
-
-            data = scrape(page)
-            write_output(data)
-
-            dump_debug(
-                page,
-                {
-                    "mode": "success",
-                    "sampled_players": data[
-                        "sampled_players"
-                    ],
-                    "character_slots": data[
-                        "character_slots"
-                    ],
-                    "termination_reason": data[
-                        "termination_reason"
-                    ],
-                    "diagnostics": data[
-                        "diagnostics"
-                    ],
-                },
-            )
-
-            print(
-                "[DONE] "
-                f"players={data['sampled_players']}, "
-                f"slots={data['character_slots']}, "
-                f"characters={len(data['characters'])}, "
-                f"termination={data['termination_reason']}"
-            )
-
-        except Exception as error:
-            print(
-                f"[ERROR] {error}",
-                file=sys.stderr,
-            )
-
-            dump_debug(
-                page,
-                {
-                    "mode": "error",
-                    "error": str(error),
-                },
-            )
-
-            raise
-
-        finally:
-            context.close()
-            browser.close()
+    except Exception as error:
+        print(f"[ERROR] {error}", file=sys.stderr)
+        raise
 
 
 if __name__ == "__main__":
