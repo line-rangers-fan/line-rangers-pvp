@@ -687,6 +687,7 @@ function applyTranslations() {
 
   setText("#page-title", tr.title);
   setText("#page-description", tr.description);
+  setText("#ranking-tap-hint", TAP_HINT[state.language] || TAP_HINT.en);
 
   setText("#label-league", tr.league);
   setText("#label-players", tr.players);
@@ -1034,28 +1035,9 @@ async function loadData() {
 
 function setupRankingTapHint() {
   const hint = document.querySelector("#ranking-tap-hint");
-  const title = document.querySelector("#ranking-title");
-  if (!hint || !title || !window.IntersectionObserver) return;
+  if (!hint) return;
 
-  let hasShown = false;
-  const observer = new IntersectionObserver(
-    (entries) => {
-      if (hasShown || !entries.some((entry) => entry.isIntersecting)) return;
-      hasShown = true;
-      hint.textContent = TAP_HINT[state.language] || TAP_HINT.en;
-      hint.hidden = false;
-      requestAnimationFrame(() => hint.classList.add("is-visible"));
-      window.setTimeout(() => {
-        hint.classList.remove("is-visible");
-        window.setTimeout(() => {
-          hint.hidden = true;
-        }, 220);
-      }, 5000);
-      observer.disconnect();
-    },
-    { threshold: 0.65 }
-  );
-  observer.observe(title);
+  hint.textContent = TAP_HINT[state.language] || TAP_HINT.en;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
