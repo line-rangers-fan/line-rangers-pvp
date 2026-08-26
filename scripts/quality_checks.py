@@ -77,12 +77,16 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
     """Reject incomplete or internally inconsistent published data."""
     errors: list[str] = []
     players = int(data.get("sampled_players", 0))
+    target_players = int(data.get("target_players", 0))
     slots = int(data.get("character_slots", 0))
     characters = data.get("characters")
 
     if players <= 0 or not isinstance(characters, list):
         errors.append("invalid sample")
         characters = []
+
+    if target_players <= 0 or players != target_players or data.get("complete_target") is not True:
+        errors.append("incomplete sample")
 
     if sum(int(char.get("occurrence_count", 0)) for char in characters) != slots:
         errors.append("slot total mismatch")

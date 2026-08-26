@@ -31,6 +31,11 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+      - name: Run quality tests
+        run: |
+          pytest -q
+          node --check docs/assets/app.js
+
       - name: Run scraper
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[collect-now]')
         run: python scripts/scrape_character_usage.py

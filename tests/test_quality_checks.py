@@ -36,7 +36,9 @@ def valid_data(sampled_players=2, character_slots=2):
         for kind in ("WEAPON", "ARMOR", "ACC")
     }
     return {
+        "target_players": sampled_players,
         "sampled_players": sampled_players,
+        "complete_target": True,
         "character_slots": character_slots,
         "characters": [
             {
@@ -76,3 +78,15 @@ def test_duplicate_and_drop_rejected():
 
 def test_valid_data():
     assert validate_data(valid_data())
+
+
+def test_incomplete_sample_rejected():
+    data = valid_data()
+    data["complete_target"] = False
+    with pytest.raises(ValueError, match="incomplete sample"):
+        validate_data(data)
+
+    data["complete_target"] = True
+    data["target_players"] = 3
+    with pytest.raises(ValueError, match="incomplete sample"):
+        validate_data(data)

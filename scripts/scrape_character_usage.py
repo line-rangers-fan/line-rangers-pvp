@@ -46,7 +46,6 @@ PLAYER_API_URL_TEMPLATE = "https://rangers.lerico.net/api/getPlayer/{mid}"
 TRANSLATE_API_URL = "https://rangers.lerico.net/api/v2/translate"
 UNIT_TRANSLATE_KEY = "ja:UNIT"
 TARGET_PLAYER_COUNT = int(os.environ.get("TARGET_PLAYER_COUNT", "200"))
-MIN_REQUIRED_PLAYERS = int(os.environ.get("MIN_REQUIRED_PLAYERS", "50"))
 PLAYER_FETCH_WORKERS = min(
     12, max(1, int(os.environ.get("PLAYER_FETCH_WORKERS", "6")))
 )
@@ -509,6 +508,12 @@ def scrape() -> dict:
 
     payload = fetch_rank_data()
     mids, ranking_diagnostics = extract_ranked_mids(payload, TARGET_PLAYER_COUNT)
+    if len(mids) != TARGET_PLAYER_COUNT:
+        raise RuntimeError(
+            "PvP ranking API did not provide the requested number of unique players: "
+            f"{len(mids)} != {TARGET_PLAYER_COUNT}"
+        )
+
     details, detail_failures = fetch_ranked_player_details(mids)
     players, diagnostics = extract_ranked_players(
         payload, TARGET_PLAYER_COUNT, player_details=details
@@ -517,15 +522,10 @@ def scrape() -> dict:
     diagnostics["detail_fetches_requested"] = len(mids)
     diagnostics["detail_fetch_failures"] = detail_failures
 
-    if len(players) < MIN_REQUIRED_PLAYERS:
-        raise RuntimeError(
-            "Not enough valid players from the PvP API: "
-            f"{len(players)} < {MIN_REQUIRED_PLAYERS}"
-        )
-    if len(players) < TARGET_PLAYER_COUNT and len(payload.get("top100", [])) >= TARGET_PLAYER_COUNT:
+    if len(players) != TARGET_PLAYER_COUNT:
         raise RuntimeError(
             "Some requested ranked players had incomplete team or equipment data; "
-            "refusing to publish a partial sample."
+            f"refusing to publish a partial sample ({len(players)} != {TARGET_PLAYER_COUNT})."
         )
 
     unit_codes = {

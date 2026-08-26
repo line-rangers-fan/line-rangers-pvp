@@ -125,3 +125,32 @@ def test_incomplete_ranked_player_is_reported_instead_of_silently_replaced():
 def test_malformed_unit_code_is_rejected():
     with pytest.raises(ValueError):
         scraper.character_image_url("../../not-a-unit")
+
+
+def test_insufficient_ranked_players_refuses_publish(monkeypatch):
+    monkeypatch.setattr(scraper, "TARGET_PLAYER_COUNT", 2)
+    monkeypatch.setattr(
+        scraper,
+        "fetch_rank_data",
+        lambda: {"top100": [{"mid": "player-1"}]},
+    )
+
+    with pytest.raises(RuntimeError, match="did not provide the requested number"):
+        scraper.scrape()
+
+
+def test_failed_collection_keeps_previous_published_data(tmp_path, monkeypatch):
+    output_path = tmp_path / "character_usage.json"
+    previous = {"updated_at": "previous", "sampled_players": 200}
+    scraper.save_json(output_path, previous)
+    monkeypatch.setattr(scraper, "OUTPUT_PATH", output_path)
+    monkeypatch.setattr(
+        scraper,
+        "scrape",
+        lambda: (_ for _ in ()).throw(RuntimeError("incomplete sample")),
+    )
+
+    with pytest.raises(RuntimeError, match="incomplete sample"):
+        scraper.main()
+
+    assert scraper.load_json(output_path) == previous
