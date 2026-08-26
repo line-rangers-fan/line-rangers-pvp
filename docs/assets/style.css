@@ -690,6 +690,24 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
    ========================================= */
 
 @media (max-width: 480px) {
+  .ranking-section {
+    max-height: min(92svh, 50rem);
+  }
+
+  .table-heading {
+    gap: 0.2rem;
+    padding: 0.8rem 1rem;
+  }
+
+  .table-heading h2 {
+    font-size: 1.12rem;
+  }
+
+  .table-heading p {
+    margin-top: 0;
+    font-size: 0.78rem;
+  }
+
   .site-header {
     padding-top: 3rem;
   }
@@ -718,8 +736,8 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 
   th,
   td {
-    padding: 0.55rem 0.45rem;
-    font-size: 0.92rem;
+    padding: 0.3rem 0.35rem;
+    font-size: 0.8rem;
   }
 
   th:nth-child(1),
@@ -730,8 +748,8 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 
   th:nth-child(2),
   td:nth-child(2) {
-    width: 4.8rem;
-    min-width: 4.8rem;
+    width: 3.8rem;
+    min-width: 3.8rem;
   }
 
   th:nth-child(3),
@@ -756,13 +774,13 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   }
 
   .character-image {
-    width: 3.2rem;
-    height: 3.2rem;
+    width: 2.35rem;
+    height: 2.35rem;
   }
 
   .number-cell,
   .rate-value {
-    font-size: 1rem;
+    font-size: 0.86rem;
   }
 
   .rate-cell {
