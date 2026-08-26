@@ -1046,7 +1046,7 @@ function setupRankingTapHint() {
 }
 
 function setupRankingScrollGuard() {
-  const scroller = document.querySelector("#ranking-section .table-wrapper");
+  const scroller = document.querySelector("#ranking-section");
   if (!scroller || scroller.dataset.scrollGuardReady === "true") return;
 
   let startX = 0;
@@ -1243,12 +1243,12 @@ function renderEquipment(character) {
 }
 
 function rememberRankingPosition() {
-  const scroller = document.querySelector("#ranking-section .table-wrapper");
+  const scroller = document.querySelector("#ranking-section");
   state.rankingScrollTop = scroller?.scrollTop || 0;
 }
 
 function restoreRankingPosition() {
-  const scroller = document.querySelector("#ranking-section .table-wrapper");
+  const scroller = document.querySelector("#ranking-section");
   if (!scroller) return;
 
   requestAnimationFrame(() => {

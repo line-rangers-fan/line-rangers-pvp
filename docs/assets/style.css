@@ -312,7 +312,13 @@ h1 {
    ========================================= */
 
 .ranking-section {
-  overflow: hidden;
+  max-height: min(76svh, 50rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+  scrollbar-gutter: stable;
+  touch-action: pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
@@ -375,13 +381,8 @@ button:focus-visible {
    ========================================= */
 
 .table-wrapper {
-  max-height: min(64svh, 44rem);
-  overflow-x: auto;
-  overflow-y: auto;
-  overscroll-behavior-y: auto;
-  scrollbar-gutter: stable;
-  touch-action: pan-y pinch-zoom;
-  -webkit-overflow-scrolling: touch;
+  max-height: none;
+  overflow: visible;
 }
 
 .table-wrapper table {
@@ -680,7 +681,7 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   }
 
   .table-wrapper {
-    overflow-x: hidden;
+    overflow: visible;
   }
 }
 
