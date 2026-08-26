@@ -571,6 +571,7 @@ const state = {
   selectedCharacter: null,
   selectedEquipmentType: "WEAPON",
   rankingScrollTop: 0,
+  suppressCharacterTapUntil: 0,
 };
 
 const elements = {
@@ -1022,6 +1023,7 @@ async function loadData() {
 
     applyTranslations();
     setupRankingTapHint();
+    setupRankingScrollGuard();
   } catch (error) {
     console.error(error);
 
@@ -1041,6 +1043,38 @@ function setupRankingTapHint() {
   if (!hint) return;
 
   hint.textContent = TAP_HINT[state.language] || TAP_HINT.en;
+}
+
+function setupRankingScrollGuard() {
+  const scroller = document.querySelector("#ranking-section .table-wrapper");
+  if (!scroller || scroller.dataset.scrollGuardReady === "true") return;
+
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+
+  scroller.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "mouse") return;
+    startX = event.clientX;
+    startY = event.clientY;
+    tracking = true;
+  });
+
+  scroller.addEventListener("pointermove", (event) => {
+    if (!tracking) return;
+    if (Math.hypot(event.clientX - startX, event.clientY - startY) > 8) {
+      state.suppressCharacterTapUntil = Date.now() + 350;
+      tracking = false;
+    }
+  });
+
+  scroller.addEventListener("pointerup", () => {
+    tracking = false;
+  });
+  scroller.addEventListener("pointercancel", () => {
+    tracking = false;
+  });
+  scroller.dataset.scrollGuardReady = "true";
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1225,6 +1259,10 @@ function restoreRankingPosition() {
 document.addEventListener("click", (event) => {
   const characterButton = event.target.closest(".character-button");
   if (characterButton) {
+    if (Date.now() < state.suppressCharacterTapUntil) {
+      event.preventDefault();
+      return;
+    }
     const unitCode = characterButton.dataset.unitCode;
     const character = state.characters.find((item) => item.unit_code === unitCode);
     if (character) {

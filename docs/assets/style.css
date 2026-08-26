@@ -380,7 +380,17 @@ button:focus-visible {
   overflow-y: auto;
   overscroll-behavior-y: auto;
   scrollbar-gutter: stable;
+  touch-action: pan-y pinch-zoom;
   -webkit-overflow-scrolling: touch;
+}
+
+.table-wrapper table {
+  table-layout: fixed;
+}
+
+.table-wrapper th,
+.table-wrapper td {
+  touch-action: pan-y;
 }
 
 .ranking-tap-hint {
@@ -478,10 +488,9 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 }
 
 .character-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   min-width: 5.5rem;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .character-image {
@@ -798,6 +807,9 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  vertical-align: middle;
 }
 
 .character-button:focus-visible {
