@@ -390,7 +390,7 @@ button:focus-visible {
 
 .table-wrapper th,
 .table-wrapper td {
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 
 .ranking-tap-hint {
@@ -807,7 +807,7 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   -webkit-tap-highlight-color: transparent;
   vertical-align: middle;
 }
