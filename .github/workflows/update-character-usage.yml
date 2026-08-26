@@ -33,7 +33,7 @@ jobs:
 
       - name: Run quality tests
         run: |
-          pytest -q
+          PYTHONPATH=. pytest -q
           node --check docs/assets/app.js
 
       - name: Run scraper
