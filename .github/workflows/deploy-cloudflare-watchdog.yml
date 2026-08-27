@@ -1,0 +1,32 @@
+name: deploy-cloudflare-watchdog
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "infra/cloudflare-watchdog/**"
+      - ".github/workflows/deploy-cloudflare-watchdog.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-watchdog-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Deploy Worker and Cron trigger
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: infra/cloudflare-watchdog
+          command: deploy
