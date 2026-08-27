@@ -46,7 +46,7 @@ def test_all_pvp_groups_and_duplicate_units_are_preserved():
     beta = by_image[scraper.character_image_url("u-beta")]
 
     assert data["character_slots"] == 4
-    assert data["schema_version"] == 7
+    assert data["schema_version"] == 8
     assert data["collection_quality"]["sample_coverage"] == 100.0
     assert alpha["occurrence_count"] == 2
     assert alpha["player_count"] == 1
@@ -228,6 +228,81 @@ def test_previous_comparison_uses_positive_values_for_upward_rank_moves():
     assert current["characters"][1]["change"] == {"new": True}
     assert current["comparison"]["new_characters"] == 1
     assert current["comparison"]["removed_characters"] == 1
+    assert current["comparison"]["interval_minutes"] == 60.0
+
+
+def test_period_rank_changes_use_verified_day_week_and_month_snapshots():
+    previous = {
+        "updated_at": "2026-08-28T01:00:00+00:00",
+        "sampled_players": 2,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 2,
+                "occurrence_count": 2,
+                "player_count": 2,
+                "adoption_rate": 100.0,
+            }
+        ],
+    }
+    current = {
+        "updated_at": "2026-08-28T02:00:00+00:00",
+        "sampled_players": 2,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": 2,
+                "player_count": 2,
+                "adoption_rate": 100.0,
+            }
+        ],
+    }
+
+    def snapshot(updated_at: str, rank: int) -> dict:
+        return {
+            "updated_at": updated_at,
+            "characters": [{"unit_code": "u-alpha", "rank": rank}],
+        }
+
+    history = {
+        "snapshots": [
+            snapshot("2026-07-28T02:00:00+00:00", 4),
+            snapshot("2026-08-21T02:00:00+00:00", 3),
+            snapshot("2026-08-27T02:00:00+00:00", 2),
+        ]
+    }
+
+    scraper.add_previous_comparison(current, previous, history)
+    periods = current["characters"][0]["change"]["periods"]
+
+    assert periods["day"]["comparable"] is True
+    assert periods["day"]["rank"] == 1
+    assert periods["week"]["rank"] == 2
+    assert periods["month"]["rank"] == 3
+    assert current["comparison"]["periods"]["month"]["comparable"] is True
+
+
+def test_period_rank_changes_are_unavailable_when_history_gap_is_too_large():
+    current = {
+        "updated_at": "2026-08-28T02:00:00+00:00",
+        "sampled_players": 2,
+        "characters": [{"unit_code": "u-alpha", "rank": 1}],
+    }
+    history = {
+        "snapshots": [
+            {
+                "updated_at": "2026-08-20T02:00:00+00:00",
+                "characters": [{"unit_code": "u-alpha", "rank": 2}],
+            }
+        ]
+    }
+
+    scraper.add_previous_comparison(current, None, history)
+    periods = current["characters"][0]["change"]["periods"]
+
+    assert periods["day"]["comparable"] is False
+    assert periods["day"]["rank"] is None
 
 
 def test_history_is_compact_deduplicated_and_bounded():

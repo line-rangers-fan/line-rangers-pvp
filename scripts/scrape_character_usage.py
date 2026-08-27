@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
+from time import monotonic
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
@@ -57,7 +58,17 @@ REQUEST_TIMEOUT_SECONDS = 30
 REQUEST_ATTEMPTS = 3
 OUTPUT_PATH = Path("docs/data/character_usage.json")
 HISTORY_PATH = Path("docs/data/character_usage_history.json")
-HISTORY_LIMIT = 24 * 7
+# Keep enough hourly snapshots for the longest public comparison period.  The
+# history file contains only compact aggregate rows (never player IDs), so it
+# remains small while allowing a true calendar-month comparison.
+HISTORY_LIMIT = 24 * 31
+RANK_COMPARISON_PERIODS = {
+    "day": 24 * 60 * 60,
+    "week": 7 * 24 * 60 * 60,
+    "month": 31 * 24 * 60 * 60,
+}
+RANK_COMPARISON_MIN_RATIO = 0.75
+RANK_COMPARISON_MAX_RATIO = 1.50
 DEBUG_DIR = Path(".artifacts/debug")
 
 # IDs are only used in known source URLs. Strict validation avoids publishing a
@@ -514,7 +525,7 @@ def build_statistics(
     )
     equipment_slots_expected = total_slots * len(EQUIPMENT_TYPES)
     return {
-        "schema_version": 7,
+        "schema_version": 8,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "source": {"name": SOURCE_NAME, "url": TARGET_URL},
         "league": "レジェンド",
@@ -560,6 +571,9 @@ def scrape() -> dict:
     if TARGET_PLAYER_COUNT < 1:
         raise RuntimeError("TARGET_PLAYER_COUNT must be at least 1.")
 
+    collection_started_at = datetime.now(timezone.utc)
+    collection_started_clock = monotonic()
+
     payload = fetch_rank_data()
     mids, ranking_diagnostics = extract_ranked_mids(payload, TARGET_PLAYER_COUNT)
     if len(mids) != TARGET_PLAYER_COUNT:
@@ -568,7 +582,9 @@ def scrape() -> dict:
             f"{len(mids)} != {TARGET_PLAYER_COUNT}"
         )
 
+    detail_started_clock = monotonic()
     details, detail_failures = fetch_ranked_player_details(mids)
+    detail_duration_seconds = monotonic() - detail_started_clock
     if detail_failures:
         if os.environ.get("DEBUG", "0") == "1":
             save_json(
@@ -602,23 +618,148 @@ def scrape() -> dict:
         for record in player["unit_records"]
     }
     character_names = fetch_character_names(unit_codes)
-    return build_statistics(
+    data = build_statistics(
         players,
         diagnostics,
         character_names=character_names,
         target_players=TARGET_PLAYER_COUNT,
     )
+    data["collection_quality"].update(
+        {
+            "collection_started_at": collection_started_at.isoformat(),
+            "collection_duration_seconds": round(
+                monotonic() - collection_started_clock,
+                2,
+            ),
+            "detail_fetch_duration_seconds": round(
+                detail_duration_seconds,
+                2,
+            ),
+        }
+    )
+    return data
 
 
-def add_previous_comparison(data: dict, previous: dict | None) -> dict:
-    """Attach exact hour-over-hour changes without publishing player IDs."""
+def _parse_history_time(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _period_reference(
+    history: dict | None,
+    current_time: datetime | None,
+    period_seconds: int,
+) -> dict | None:
+    """Return a sufficiently close, earlier verified snapshot for a period.
+
+    A missing hourly run must not turn into a misleading month comparison. We
+    therefore select the newest snapshot at or before the target point and
+    accept it only when its actual age is between 75% and 150% of the target.
+    """
+    if current_time is None or not isinstance(history, dict):
+        return None
+    snapshots = history.get("snapshots")
+    if not isinstance(snapshots, list):
+        return None
+
+    target_time = current_time.timestamp() - period_seconds
+    candidates: list[tuple[float, dict]] = []
+    for snapshot in snapshots:
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("characters"), list):
+            continue
+        timestamp = _parse_history_time(snapshot.get("updated_at"))
+        if timestamp is None:
+            continue
+        age = current_time.timestamp() - timestamp.timestamp()
+        if (
+            timestamp.timestamp() <= target_time
+            and age >= period_seconds * RANK_COMPARISON_MIN_RATIO
+            and age <= period_seconds * RANK_COMPARISON_MAX_RATIO
+        ):
+            candidates.append((timestamp.timestamp(), snapshot))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
+
+
+def _period_change(
+    current_row: dict,
+    reference: dict | None,
+    current_time: datetime | None,
+) -> dict:
+    """Build one period result with an explicit comparable flag."""
+    result = {
+        "comparable": False,
+        "rank": None,
+        "from_updated_at": None,
+        "interval_minutes": None,
+    }
+    if not reference:
+        return result
+
+    reference_time = _parse_history_time(reference.get("updated_at"))
+    old_rows = {
+        str(row.get("unit_code")): row
+        for row in reference.get("characters", [])
+        if isinstance(row, dict) and row.get("unit_code")
+    }
+    old = old_rows.get(str(current_row.get("unit_code")))
+    if not old or reference_time is None or current_time is None:
+        return result
+
+    result.update(
+        {
+            "comparable": True,
+            # Positive means the character moved up the ranking.
+            "rank": int(old.get("rank", 0)) - int(current_row.get("rank", 0)),
+            "from_updated_at": reference.get("updated_at"),
+            "interval_minutes": round(
+                (current_time - reference_time).total_seconds() / 60,
+                1,
+            ),
+        }
+    )
+    return result
+
+
+def add_previous_comparison(
+    data: dict,
+    previous: dict | None,
+    history: dict | None = None,
+) -> dict:
+    """Attach hour-over-hour and period rank changes without player IDs."""
+    current_time = _parse_history_time(data.get("updated_at"))
+    period_references = {
+        name: _period_reference(history, current_time, seconds)
+        for name, seconds in RANK_COMPARISON_PERIODS.items()
+    }
+    period_summary = {
+        name: {
+            "comparable": reference is not None,
+            "updated_at": reference.get("updated_at") if reference else None,
+        }
+        for name, reference in period_references.items()
+    }
     if not previous or not isinstance(previous.get("characters"), list):
         data["comparison"] = {
             "previous_updated_at": None,
+            "interval_minutes": None,
             "comparable": False,
             "new_characters": 0,
             "removed_characters": 0,
+            "periods": period_summary,
         }
+        for row in data.get("characters", []):
+            row["change"] = {"new": True}
+            if history is not None:
+                row["change"]["periods"] = {
+                    name: _period_change(row, reference, current_time)
+                    for name, reference in period_references.items()
+                }
         return data
 
     previous_rows = {
@@ -650,15 +791,46 @@ def add_previous_comparison(data: dict, previous: dict | None) -> dict:
                 1,
             ),
         }
+        if history is not None:
+            row["change"]["periods"] = {
+                name: _period_change(row, reference, current_time)
+                for name, reference in period_references.items()
+            }
+
+    # New characters still carry explicit period entries so consumers can
+    # distinguish "new" from a missing or malformed field.
+    for row in data["characters"]:
+        if row.get("change", {}).get("new") is True:
+            if history is not None:
+                row["change"]["periods"] = {
+                    name: _period_change(row, reference, current_time)
+                    for name, reference in period_references.items()
+                }
+
+    try:
+        previous_time = datetime.fromisoformat(
+            str(previous.get("updated_at")).replace("Z", "+00:00")
+        )
+        current_time = datetime.fromisoformat(
+            str(data.get("updated_at")).replace("Z", "+00:00")
+        )
+        interval_minutes = round(
+            (current_time - previous_time).total_seconds() / 60,
+            1,
+        )
+    except ValueError:
+        interval_minutes = None
 
     data["comparison"] = {
         "previous_updated_at": previous.get("updated_at"),
+        "interval_minutes": interval_minutes,
         "comparable": (
             int(previous.get("sampled_players", 0))
             == int(data.get("sampled_players", 0))
         ),
         "new_characters": new_characters,
         "removed_characters": len(set(previous_rows) - current_codes),
+        "periods": period_summary,
     }
     return data
 
@@ -670,6 +842,9 @@ def history_snapshot(data: dict) -> dict:
         "sampled_players": data["sampled_players"],
         "character_slots": data["character_slots"],
         "unique_characters": data["unique_characters"],
+        "collection_duration_seconds": data.get("collection_quality", {}).get(
+            "collection_duration_seconds"
+        ),
         "characters": [
             {
                 "unit_code": row["unit_code"],
@@ -724,7 +899,7 @@ def main() -> None:
     previous_history = load_json(HISTORY_PATH)
     try:
         data = scrape()
-        add_previous_comparison(data, previous)
+        add_previous_comparison(data, previous, previous_history)
         validate_data(data, previous)
         history = update_history(data, previous_history)
         write_outputs(data, history)

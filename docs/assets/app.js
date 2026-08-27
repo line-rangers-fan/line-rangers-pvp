@@ -2,10 +2,17 @@
 "use strict";
 
 const DATA_PATH = "./data/character_usage.json";
+const HISTORY_PATH = "./data/character_usage_history.json";
 const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const DELAYED_AFTER_MS = 90 * 60 * 1000;
 const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
+const TREND_WINDOW_MS = 24 * 60 * 60 * 1000;
+const RANK_CHANGE_PERIODS = [
+  ["day", "rankDay"],
+  ["week", "rankWeek"],
+  ["month", "rankMonth"],
+];
 
 const LANGUAGES = [
   "ja",
@@ -17,7 +24,7 @@ const LANGUAGES = [
   "ko",
 ];
 
-// 言語ごとの代表タイムゾーン（国旗と対応させています）
+// Browser time zone is preferred; these language zones are safe fallbacks.
 const TIMEZONES = {
   ja: "Asia/Tokyo",
   en: "America/New_York",
@@ -179,6 +186,68 @@ const TAP_HINT = {
   ko: "캐릭터를 탭하면 장비 순위를 볼 수 있습니다.",
 };
 
+const WEEKLY_NOTICE = {
+  ja: "土曜のPVPランキング初期化直後は、200人分が揃うまで前回の正常データを表示する場合があります。部分集計は公開しません。",
+  en: "After Saturday's PVP reset, the last verified data may remain visible until all 200 players are available. Partial results are never published.",
+  zh: "週六 PVP 排名重置後，在湊齊 200 名玩家前可能會繼續顯示上次驗證成功的資料，不會發布不完整的統計。",
+  th: "หลังรีเซ็ตอันดับ PVP วันเสาร์ ระบบอาจแสดงข้อมูลที่ตรวจสอบแล้วครั้งล่าสุดจนกว่าจะครบ 200 คน และจะไม่เผยแพร่ผลลัพธ์ที่ไม่ครบ",
+  id: "Setelah reset PVP hari Sabtu, data terverifikasi terakhir dapat tetap ditampilkan hingga 200 pemain lengkap. Hasil parsial tidak dipublikasikan.",
+  vi: "Sau khi xếp hạng PVP được đặt lại vào thứ Bảy, dữ liệu đã xác minh gần nhất có thể tiếp tục hiển thị cho đến khi đủ 200 người chơi. Kết quả chưa đầy đủ sẽ không được công bố.",
+  ko: "토요일 PVP 랭킹 초기화 직후에는 200명이 모두 확인될 때까지 마지막 정상 데이터를 표시할 수 있습니다. 일부만 집계된 결과는 공개하지 않습니다.",
+};
+
+const TREND_TEXT = {
+  ja: {
+    title: "過去24時間の採用率",
+    loading: "履歴を読み込んでいます…",
+    unavailable: "比較できる履歴がまだありません。",
+    change: "表示期間差",
+    aria: (start, end) => `採用率は${start}%から${end}%へ変化しました。`,
+  },
+  en: {
+    title: "Usage rate over 24 hours",
+    loading: "Loading history…",
+    unavailable: "There is not enough history to compare yet.",
+    change: "Window change",
+    aria: (start, end) => `Usage rate changed from ${start}% to ${end}%.`,
+  },
+  zh: {
+    title: "過去24小時使用率",
+    loading: "正在載入歷史資料……",
+    unavailable: "目前沒有足夠的歷史資料可供比較。",
+    change: "顯示期間變化",
+    aria: (start, end) => `使用率由${start}%變為${end}%。`,
+  },
+  th: {
+    title: "อัตราการใช้งานใน 24 ชั่วโมง",
+    loading: "กำลังโหลดประวัติ…",
+    unavailable: "ยังมีประวัติไม่เพียงพอสำหรับการเปรียบเทียบ",
+    change: "การเปลี่ยนแปลงในช่วงที่แสดง",
+    aria: (start, end) => `อัตราการใช้งานเปลี่ยนจาก ${start}% เป็น ${end}%`,
+  },
+  id: {
+    title: "Tingkat penggunaan 24 jam",
+    loading: "Memuat riwayat…",
+    unavailable: "Riwayat belum cukup untuk dibandingkan.",
+    change: "Perubahan periode",
+    aria: (start, end) => `Tingkat penggunaan berubah dari ${start}% menjadi ${end}%.`,
+  },
+  vi: {
+    title: "Tỷ lệ sử dụng trong 24 giờ",
+    loading: "Đang tải lịch sử…",
+    unavailable: "Chưa có đủ lịch sử để so sánh.",
+    change: "Thay đổi trong khoảng hiển thị",
+    aria: (start, end) => `Tỷ lệ sử dụng thay đổi từ ${start}% thành ${end}%.`,
+  },
+  ko: {
+    title: "최근 24시간 사용률",
+    loading: "기록을 불러오는 중…",
+    unavailable: "아직 비교할 기록이 충분하지 않습니다.",
+    change: "표시 기간 변화",
+    aria: (start, end) => `사용률이 ${start}%에서 ${end}%로 변했습니다.`,
+  },
+};
+
 const STATUS_TEXT = {
   ja: {
     healthy: "正常更新",
@@ -192,7 +261,12 @@ const STATUS_TEXT = {
     coverageSuffix: "人",
     errors: "取得エラー",
     equipment: "装備",
+    duration: "集計",
+    seconds: "秒",
     rankNew: "新",
+    rankDay: "1日",
+    rankWeek: "1週",
+    rankMonth: "1月",
   },
   en: {
     healthy: "Up to date",
@@ -206,7 +280,12 @@ const STATUS_TEXT = {
     coverageSuffix: " players",
     errors: "fetch errors ",
     equipment: "equipment ",
+    duration: "collected in ",
+    seconds: "s",
     rankNew: "NEW",
+    rankDay: "1d",
+    rankWeek: "7d",
+    rankMonth: "30d",
   },
   zh: {
     healthy: "更新正常",
@@ -219,7 +298,12 @@ const STATUS_TEXT = {
     coverageSuffix: "人",
     errors: "取得錯誤",
     equipment: "裝備",
+    duration: "收集",
+    seconds: "秒",
     rankNew: "新",
+    rankDay: "1日",
+    rankWeek: "1週",
+    rankMonth: "1月",
   },
   th: {
     healthy: "อัปเดตปกติ",
@@ -232,7 +316,12 @@ const STATUS_TEXT = {
     coverageSuffix: " คน",
     errors: "ข้อผิดพลาด ",
     equipment: "อุปกรณ์ ",
+    duration: "รวบรวม ",
+    seconds: " วินาที",
     rankNew: "ใหม่",
+    rankDay: "1 วัน",
+    rankWeek: "1 สัปดาห์",
+    rankMonth: "1 เดือน",
   },
   id: {
     healthy: "Pembaruan normal",
@@ -246,7 +335,12 @@ const STATUS_TEXT = {
     coverageSuffix: " pemain",
     errors: "galat ",
     equipment: "perlengkapan ",
+    duration: "dikumpulkan ",
+    seconds: " dtk",
     rankNew: "BARU",
+    rankDay: "1h",
+    rankWeek: "7h",
+    rankMonth: "30h",
   },
   vi: {
     healthy: "Cập nhật bình thường",
@@ -260,7 +354,12 @@ const STATUS_TEXT = {
     coverageSuffix: " người",
     errors: "lỗi ",
     equipment: "trang bị ",
+    duration: "thu thập ",
+    seconds: " giây",
     rankNew: "MỚI",
+    rankDay: "1 ngày",
+    rankWeek: "1 tuần",
+    rankMonth: "1 tháng",
   },
   ko: {
     healthy: "정상 업데이트",
@@ -274,7 +373,12 @@ const STATUS_TEXT = {
     coverageSuffix: "명",
     errors: "수집 오류 ",
     equipment: "장비 ",
+    duration: "집계 ",
+    seconds: "초",
     rankNew: "신규",
+    rankDay: "1일",
+    rankWeek: "1주",
+    rankMonth: "1개월",
   },
 };
 
@@ -669,6 +773,8 @@ const translations = {
 
 const state = {
   data: null,
+  history: null,
+  historyPromise: null,
   characters: [],
   language: "ja",
   selectedCharacter: null,
@@ -709,6 +815,11 @@ function st(key) {
   return language[key];
 }
 
+function tt(key) {
+  const language = TREND_TEXT[state.language] || TREND_TEXT.en;
+  return language[key];
+}
+
 function getLocale() {
   const locales = {
     ja: "ja-JP",
@@ -721,6 +832,23 @@ function getLocale() {
   };
 
   return locales[state.language];
+}
+
+function getDisplayTimeZone() {
+  const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return browserTimeZone || TIMEZONES[state.language] || "UTC";
+}
+
+function updateWeeklyNotice() {
+  const notice = document.querySelector("#sunday-notice");
+  if (!notice) return;
+
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date());
+  notice.textContent = WEEKLY_NOTICE[state.language] || WEEKLY_NOTICE.en;
+  notice.hidden = weekday !== "Sun";
 }
 
 function formatInteger(value) {
@@ -744,7 +872,7 @@ function formatDate(value) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: TIMEZONES[state.language] || "UTC",
+    timeZone: getDisplayTimeZone(),
   }).format(date);
 }
 
@@ -802,6 +930,7 @@ function applyTranslations() {
   setText("#page-title", tr.title);
   setText("#page-description", tr.description);
   setText("#ranking-tap-hint", TAP_HINT[state.language] || TAP_HINT.en);
+  updateWeeklyNotice();
 
   setText("#label-league", tr.league);
   setText("#label-players", tr.players);
@@ -923,6 +1052,14 @@ function formatQualitySummary() {
   if (Number.isFinite(fillRate)) {
     parts.push(`${text.equipment}${fillRate.toFixed(1)}%`);
   }
+  const duration = Number(
+    state.data.collection_quality?.collection_duration_seconds
+  );
+  if (Number.isFinite(duration) && duration > 0) {
+    parts.push(
+      `${text.duration}${formatInteger(Math.round(duration))}${text.seconds}`
+    );
+  }
   return parts.join(text.separator);
 }
 
@@ -991,6 +1128,45 @@ function renderSummary() {
   updateFreshnessWarning();
 }
 
+function renderRankPeriodChanges(container, change) {
+  const periods = change?.periods;
+  if (!periods || typeof periods !== "object") return;
+
+  const comparablePeriods = RANK_CHANGE_PERIODS
+    .map(([key, labelKey]) => ({
+      key,
+      label: st(labelKey),
+      value: periods[key],
+    }))
+    .filter(
+      ({ value }) =>
+        value?.comparable === true &&
+        Number.isInteger(Number(value.rank)) &&
+        Number.isFinite(Number(value.rank))
+    );
+  if (comparablePeriods.length === 0) return;
+
+  const list = document.createElement("span");
+  list.className = "rank-period-changes";
+  list.setAttribute("aria-label", "rank period changes");
+  comparablePeriods.forEach(({ key, label, value }) => {
+    const delta = Number(value.rank);
+    const badge = document.createElement("span");
+    badge.className =
+      delta > 0
+        ? "rank-period-change rank-period-up"
+        : delta < 0
+          ? "rank-period-change rank-period-down"
+          : "rank-period-change rank-period-neutral";
+    const symbol = delta > 0 ? `↑${delta}` : delta < 0 ? `↓${Math.abs(delta)}` : "↔";
+    badge.textContent = `${label} ${symbol}`;
+    badge.title = `${label}: ${symbol}`;
+    badge.setAttribute("aria-label", `${label}: ${symbol}`);
+    list.appendChild(badge);
+  });
+  container.appendChild(list);
+}
+
 function renderTable() {
   if (!elements.body) return;
 
@@ -1032,6 +1208,7 @@ function renderTable() {
         rankDelta > 0 ? `↑${rankDelta}` : `↓${Math.abs(rankDelta)}`;
       tdRank.appendChild(changeBadge);
     }
+    renderRankPeriodChanges(tdRank, change);
     tr.appendChild(tdRank);
 
     // キャラクターセル
@@ -1051,7 +1228,10 @@ function renderTable() {
     img.src = char.image || "";
     img.alt = RANK_IMAGE_LABEL[state.language](rank);
     img.className = "character-image";
-    img.loading = "lazy";
+    img.loading = index < 8 ? "eager" : "lazy";
+    img.decoding = "async";
+    img.width = 64;
+    img.height = 64;
     characterButton.appendChild(img);
     tdChar.appendChild(characterButton);
     tr.appendChild(tdChar);
@@ -1141,6 +1321,15 @@ function validateData(data) {
   }
   if (!Number.isFinite(slots) || slots < sampled || slots > sampled * 10) {
     throw new Error(t("occurrenceInvalid"));
+  }
+  const quality = data.collection_quality;
+  if (
+    !quality ||
+    Number(quality.sample_coverage) !== 100 ||
+    Number(quality.detail_fetch_failures) !== 0 ||
+    Number(quality.invalid_player_records) !== 0
+  ) {
+    throw new Error(t("dataError"));
   }
 
   let slotTotal = 0;
@@ -1260,6 +1449,78 @@ async function fetchVerifiedData() {
   throw lastError || new Error(t("loadError"));
 }
 
+function validateHistory(history) {
+  if (!history || !Array.isArray(history.snapshots)) {
+    throw new Error("Invalid history data.");
+  }
+
+  history.snapshots.forEach((snapshot) => {
+    if (
+      !snapshot ||
+      Number.isNaN(new Date(snapshot.updated_at || "").getTime()) ||
+      !Array.isArray(snapshot.characters)
+    ) {
+      throw new Error("Invalid history snapshot.");
+    }
+    const unitCodes = new Set();
+    snapshot.characters.forEach((character) => {
+      const unitCode = String(character?.unit_code || "");
+      const rate = Number(character?.adoption_rate);
+      if (
+        !unitCode ||
+        unitCodes.has(unitCode) ||
+        !Number.isFinite(rate) ||
+        rate < 0 ||
+        rate > 100
+      ) {
+        throw new Error("Invalid character history.");
+      }
+      unitCodes.add(unitCode);
+    });
+  });
+
+  return history;
+}
+
+async function fetchVerifiedHistory() {
+  let lastError = null;
+  for (const delay of DATA_RETRY_DELAYS_MS) {
+    if (delay > 0) await wait(delay);
+    try {
+      const response = await fetch(`${HISTORY_PATH}?v=${Date.now()}`, {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        throw new Error("Could not retrieve history.");
+      }
+      return validateHistory(await response.json());
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Could not retrieve history.");
+}
+
+function ensureHistoryLoaded() {
+  if (state.history) return Promise.resolve(state.history);
+  if (state.historyPromise) return state.historyPromise;
+
+  state.historyPromise = fetchVerifiedHistory()
+    .then((history) => {
+      state.history = history;
+      return history;
+    })
+    .catch((error) => {
+      console.warn("Character history is unavailable.", error);
+      return null;
+    })
+    .finally(() => {
+      state.historyPromise = null;
+    });
+  return state.historyPromise;
+}
+
 function showInitialLoadError(error) {
   const currentTranslations = translations[state.language];
   const knownMessages = Object.values(currentTranslations).filter(
@@ -1286,6 +1547,7 @@ async function loadData({ background = false } = {}) {
   if (state.isLoading) return;
 
   const keepCurrentView = background && Boolean(state.data);
+  const previousUpdatedAt = state.data?.updated_at || null;
   const rankingScrollTop = elements.rankingSection?.scrollTop || 0;
   state.isLoading = true;
   state.lastLoadAttempt = Date.now();
@@ -1305,6 +1567,9 @@ async function loadData({ background = false } = {}) {
 
     state.lastLoadError = false;
     state.data = data;
+    if (previousUpdatedAt !== data.updated_at) {
+      state.history = null;
+    }
     state.characters = Array.isArray(data.characters) ? data.characters : [];
     if (state.selectedCharacter) {
       state.selectedCharacter =
@@ -1436,6 +1701,147 @@ function createEquipmentTab(type, label, isSelected, character) {
   return button;
 }
 
+function getCharacterTrend(unitCode) {
+  const snapshots = Array.isArray(state.history?.snapshots)
+    ? state.history.snapshots
+    : [];
+  const endTime = new Date(state.data?.updated_at || "").getTime();
+  if (!Number.isFinite(endTime)) return [];
+
+  return snapshots
+    .map((snapshot) => {
+      const timestamp = new Date(snapshot.updated_at || "").getTime();
+      const character = Array.isArray(snapshot.characters)
+        ? snapshot.characters.find((row) => row.unit_code === unitCode)
+        : null;
+      return {
+        timestamp,
+        rate: Number(character?.adoption_rate),
+      };
+    })
+    .filter(
+      (point) =>
+        Number.isFinite(point.timestamp) &&
+        Number.isFinite(point.rate) &&
+        point.timestamp >= endTime - TREND_WINDOW_MS &&
+        point.timestamp <= endTime + 60_000
+    )
+    .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+function formatTrendTime(timestamp) {
+  return new Intl.DateTimeFormat(getLocale(), {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: getDisplayTimeZone(),
+  }).format(new Date(timestamp));
+}
+
+function renderCharacterTrend(container, character) {
+  container.textContent = "";
+  const title = document.createElement("h3");
+  title.className = "equipment-trend-title";
+  title.textContent = tt("title");
+  container.appendChild(title);
+
+  const points = getCharacterTrend(character.unit_code);
+  if (points.length < 2) {
+    const empty = document.createElement("p");
+    empty.className = "equipment-trend-empty";
+    empty.textContent = tt("unavailable");
+    container.appendChild(empty);
+    return;
+  }
+
+  const first = points[0];
+  const last = points[points.length - 1];
+  const delta = Math.round((last.rate - first.rate) * 10) / 10;
+  const metrics = document.createElement("div");
+  metrics.className = "equipment-trend-metrics";
+
+  const current = document.createElement("strong");
+  current.textContent = `${last.rate.toFixed(1)}%`;
+  const change = document.createElement("span");
+  change.className =
+    delta > 0
+      ? "trend-change trend-positive"
+      : delta < 0
+        ? "trend-change trend-negative"
+        : "trend-change trend-neutral";
+  const sign = delta > 0 ? "+" : "";
+  change.textContent = `${tt("change")} ${sign}${delta.toFixed(1)}pt`;
+  metrics.append(current, change);
+  container.appendChild(metrics);
+
+  const width = 320;
+  const height = 72;
+  const padding = 7;
+  const rates = points.map((point) => point.rate);
+  let minimum = Math.min(...rates);
+  let maximum = Math.max(...rates);
+  if (minimum === maximum) {
+    minimum -= 0.5;
+    maximum += 0.5;
+  }
+  const startTime = first.timestamp;
+  const endTime = last.timestamp;
+  const timeSpan = Math.max(endTime - startTime, 1);
+  const coordinates = points.map((point) => {
+    const x = padding +
+      ((point.timestamp - startTime) / timeSpan) * (width - padding * 2);
+    const y = height - padding -
+      ((point.rate - minimum) / (maximum - minimum)) * (height - padding * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  const namespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(namespace, "svg");
+  svg.classList.add("equipment-trend-chart");
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.setAttribute("role", "img");
+  svg.setAttribute(
+    "aria-label",
+    tt("aria")(first.rate.toFixed(1), last.rate.toFixed(1))
+  );
+
+  const line = document.createElementNS(namespace, "polyline");
+  line.setAttribute("points", coordinates.join(" "));
+  line.setAttribute("fill", "none");
+  line.setAttribute("vector-effect", "non-scaling-stroke");
+  svg.appendChild(line);
+
+  const [lastX, lastY] = coordinates[coordinates.length - 1].split(",");
+  const marker = document.createElementNS(namespace, "circle");
+  marker.setAttribute("cx", lastX);
+  marker.setAttribute("cy", lastY);
+  marker.setAttribute("r", "3.5");
+  svg.appendChild(marker);
+  container.appendChild(svg);
+
+  const times = document.createElement("div");
+  times.className = "equipment-trend-times";
+  const start = document.createElement("span");
+  const end = document.createElement("span");
+  start.textContent = formatTrendTime(startTime);
+  end.textContent = formatTrendTime(endTime);
+  times.append(start, end);
+  container.appendChild(times);
+}
+
+function loadCharacterTrend(container, character) {
+  container.dataset.unitCode = character.unit_code;
+  container.textContent = tt("loading");
+  ensureHistoryLoaded().then(() => {
+    if (
+      !container.isConnected ||
+      container.dataset.unitCode !== state.selectedCharacter?.unit_code
+    ) {
+      return;
+    }
+    renderCharacterTrend(container, character);
+  });
+}
+
 function renderEquipment(character) {
   const dialog = document.querySelector("#equipment-dialog");
   const title = document.querySelector("#equipment-title");
@@ -1462,6 +1868,9 @@ function renderEquipment(character) {
   characterImage.className = "equipment-character-image";
   characterImage.src = character.image || "";
   characterImage.alt = characterLabel(character);
+  characterImage.decoding = "async";
+  characterImage.width = 64;
+  characterImage.height = 64;
 
   const summaryText = document.createElement("div");
   const description = document.createElement("p");
@@ -1479,6 +1888,12 @@ function renderEquipment(character) {
   summaryText.append(description, characterMeta);
   summary.append(characterImage, summaryText);
   content.appendChild(summary);
+
+  const trend = document.createElement("section");
+  trend.className = "equipment-trend";
+  trend.setAttribute("aria-live", "polite");
+  content.appendChild(trend);
+  loadCharacterTrend(trend, character);
 
   const tabList = document.createElement("div");
   tabList.className = "equipment-tabs";
@@ -1537,6 +1952,9 @@ function renderEquipment(character) {
       image.src = item.image || "";
       image.alt = et("equipment");
       image.loading = "lazy";
+      image.decoding = "async";
+      image.width = 36;
+      image.height = 36;
       itemCell.append(image);
 
       const count = document.createElement("td");

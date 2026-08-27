@@ -9,6 +9,7 @@ from datetime import datetime
 
 EQUIPMENT_TYPES = ("WEAPON", "ARMOR", "ACC")
 MAX_CHARACTERS_PER_PLAYER = 10
+RANK_PERIODS = ("day", "week", "month")
 
 
 def assign_competition_ranks(rows: list[dict]) -> list[dict]:
@@ -87,6 +88,45 @@ def _parse_time(value: object) -> datetime | None:
         return None
 
 
+def _validate_period_change(value: object, errors: list[str]) -> None:
+    """Validate additive day/week/month rank-change metadata."""
+    if not isinstance(value, dict):
+        errors.append("invalid period rank change")
+        return
+    comparable = value.get("comparable")
+    if not isinstance(comparable, bool):
+        errors.append("invalid period comparability")
+        return
+    rank = value.get("rank")
+    source_time = value.get("from_updated_at")
+    interval = value.get("interval_minutes")
+    if not comparable:
+        if rank is not None or source_time is not None or interval is not None:
+            errors.append("non-comparable period contains values")
+        return
+    if not isinstance(rank, int) or isinstance(rank, bool):
+        errors.append("invalid period rank")
+    if _parse_time(source_time) is None:
+        errors.append("invalid period source timestamp")
+    try:
+        interval_number = float(interval)
+    except (TypeError, ValueError):
+        interval_number = -1.0
+    if not math.isfinite(interval_number) or interval_number <= 0:
+        errors.append("invalid period interval")
+
+
+def _validate_periods(value: object, errors: list[str]) -> None:
+    if not isinstance(value, dict):
+        errors.append("invalid period rank changes")
+        return
+    for period in RANK_PERIODS:
+        if period not in value:
+            errors.append(f"missing {period} rank change")
+        else:
+            _validate_period_change(value[period], errors)
+
+
 def _validate_comparison(data: dict, previous: dict, errors: list[str]) -> None:
     comparison = data.get("comparison")
     if not isinstance(comparison, dict):
@@ -95,6 +135,16 @@ def _validate_comparison(data: dict, previous: dict, errors: list[str]) -> None:
 
     if comparison.get("previous_updated_at") != previous.get("updated_at"):
         errors.append("previous timestamp mismatch")
+
+    old_time = _parse_time(previous.get("updated_at"))
+    new_time = _parse_time(data.get("updated_at"))
+    if old_time and new_time:
+        expected_interval = round((new_time - old_time).total_seconds() / 60, 1)
+        if not _number_matches(
+            comparison.get("interval_minutes"),
+            expected_interval,
+        ):
+            errors.append("comparison interval mismatch")
 
     characters = data.get("characters", [])
     previous_rows = {
@@ -124,8 +174,12 @@ def _validate_comparison(data: dict, previous: dict, errors: list[str]) -> None:
             continue
         old = previous_rows.get(code)
         if old is None:
-            if change != {"new": True}:
+            if change.get("new") is not True or any(
+                key not in {"new", "periods"} for key in change
+            ):
                 errors.append("invalid new character change")
+            if "periods" in change:
+                _validate_periods(change["periods"], errors)
             continue
 
         expected = {
@@ -141,8 +195,30 @@ def _validate_comparison(data: dict, previous: dict, errors: list[str]) -> None:
                 1,
             ),
         }
-        if change != expected:
+        if any(change.get(key) != value for key, value in expected.items()):
             errors.append("invalid character change")
+        if any(key not in set(expected) | {"periods"} for key in change):
+            errors.append("invalid character change fields")
+        if "periods" in change:
+            _validate_periods(change["periods"], errors)
+
+    comparison_periods = comparison.get("periods")
+    if comparison_periods is not None:
+        if not isinstance(comparison_periods, dict):
+            errors.append("invalid comparison periods")
+        else:
+            for period in RANK_PERIODS:
+                summary = comparison_periods.get(period)
+                if not isinstance(summary, dict) or not isinstance(
+                    summary.get("comparable"), bool
+                ):
+                    errors.append("invalid comparison period summary")
+                    continue
+                if summary["comparable"]:
+                    if _parse_time(summary.get("updated_at")) is None:
+                        errors.append("invalid comparison period timestamp")
+                elif summary.get("updated_at") is not None:
+                    errors.append("non-comparable comparison period timestamp")
 
 
 def validate_data(data: dict, previous: dict | None = None) -> bool:
@@ -154,7 +230,7 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
     slots = int(data.get("character_slots", 0))
     characters = data.get("characters")
 
-    if schema_version < 7:
+    if schema_version < 8:
         errors.append("unsupported schema")
     if _parse_time(data.get("updated_at")) is None:
         errors.append("invalid updated timestamp")
@@ -309,6 +385,27 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
         errors.append("missing collection quality")
     else:
         expected_equipment_slots = slots * len(EQUIPMENT_TYPES)
+        collection_started_at = _parse_time(quality.get("collection_started_at"))
+        collection_duration = quality.get("collection_duration_seconds")
+        detail_duration = quality.get("detail_fetch_duration_seconds")
+        try:
+            collection_duration = float(collection_duration)
+            detail_duration = float(detail_duration)
+        except (TypeError, ValueError):
+            collection_duration = detail_duration = -1.0
+        updated_at = _parse_time(data.get("updated_at"))
+        if (
+            collection_started_at is None
+            or updated_at is None
+            or collection_started_at > updated_at
+            or not math.isfinite(collection_duration)
+            or not math.isfinite(detail_duration)
+            or collection_duration < 0
+            or collection_duration > 15 * 60
+            or detail_duration < 0
+            or detail_duration > collection_duration
+        ):
+            errors.append("invalid collection timing")
         if int(quality.get("equipment_slots_expected", -1)) != expected_equipment_slots:
             errors.append("equipment slot expectation mismatch")
         if int(quality.get("equipment_slots_collected", -1)) != equipment_slots_collected:
