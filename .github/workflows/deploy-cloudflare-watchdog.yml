@@ -52,7 +52,22 @@ jobs:
           WORKFLOW_TOKEN: ${{ secrets.WATCHDOG_GITHUB_TOKEN }}
         run: |
           if [ -z "$WORKFLOW_TOKEN" ]; then
-            echo "::warning::WATCHDOG_GITHUB_TOKEN is not configured yet; repair dispatch is disabled."
-            exit 0
+            echo "WATCHDOG_GITHUB_TOKEN repository secret is required."
+            exit 1
           fi
           printf '%s' "$WORKFLOW_TOKEN" | npx wrangler secret put GITHUB_ACTIONS_TOKEN
+
+      - name: Verify Worker health endpoint
+        run: |
+          curl --fail --silent --show-error             --retry 8 --retry-delay 3 --retry-all-errors             "https://line-rangers-pvp-watchdog.n-yu1791.workers.dev/"             | jq -e '.status == "ok" and .service == "line-rangers-pvp-watchdog"'
+
+      - name: Verify guarded GitHub repair dispatch
+        env:
+          WORKFLOW_TOKEN: ${{ secrets.WATCHDOG_GITHUB_TOKEN }}
+        run: |
+          status="$(curl --silent --show-error --output /tmp/dispatch-response             --write-out '%{http_code}'             --request POST             --header "Accept: application/vnd.github+json"             --header "Authorization: Bearer $WORKFLOW_TOKEN"             --header "Content-Type: application/json"             "https://api.github.com/repos/line-rangers-fan/line-rangers-pvp/actions/workflows/update-character-usage.yml/dispatches"             --data '{"ref":"main","inputs":{"force_collection":"false"}}')"
+          if [ "$status" != "204" ]; then
+            cat /tmp/dispatch-response
+            echo "GitHub repair dispatch validation failed with HTTP $status."
+            exit 1
+          fi
