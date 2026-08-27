@@ -307,6 +307,62 @@ h1 {
   letter-spacing: 0;
 }
 
+.summary-update-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.freshness-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.6rem;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.freshness-healthy {
+  border-color: rgb(50 213 131 / 55%);
+  color: var(--accent);
+  background: rgb(50 213 131 / 9%);
+}
+
+.freshness-delayed {
+  border-color: rgb(253 176 34 / 55%);
+  color: var(--warning);
+  background: rgb(253 176 34 / 9%);
+}
+
+.freshness-stale {
+  border-color: rgb(255 107 107 / 55%);
+  color: var(--danger);
+  background: rgb(255 107 107 / 9%);
+}
+
+.data-warning {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.data-warning-text {
+  flex: 1 1 18rem;
+}
+
+.data-refresh-button {
+  min-height: 2.3rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
 /* =========================================
    Ranking
    ========================================= */
@@ -448,6 +504,36 @@ tbody tr:active {
   color: var(--muted);
   font-weight: 800;
   text-align: center;
+}
+
+.rank-number {
+  font: inherit;
+}
+
+.rank-change {
+  position: absolute;
+  right: 0.22rem;
+  bottom: 0.2rem;
+  padding: 0.03rem 0.18rem;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.rank-up {
+  color: var(--accent);
+  background: rgb(50 213 131 / 12%);
+}
+
+.rank-down {
+  color: var(--danger);
+  background: rgb(255 107 107 / 12%);
+}
+
+.rank-change-new {
+  color: #64b5ff;
+  background: rgb(100 181 255 / 12%);
 }
 
 .rank-cell[data-rank="1"] {
@@ -751,6 +837,12 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   .rank-cell {
     width: 2.4rem;
     min-width: 2.4rem;
+  }
+
+  .rank-change {
+    right: 0.08rem;
+    bottom: 0.12rem;
+    font-size: 0.52rem;
   }
 
   .rank-cell[data-rank="1"]::before,

@@ -2,6 +2,10 @@
 "use strict";
 
 const DATA_PATH = "./data/character_usage.json";
+const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
+const AUTO_REFRESH_MS = 10 * 60 * 1000;
+const DELAYED_AFTER_MS = 90 * 60 * 1000;
+const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 
 const LANGUAGES = [
   "ja",
@@ -175,6 +179,105 @@ const TAP_HINT = {
   ko: "캐릭터를 탭하면 장비 순위를 볼 수 있습니다.",
 };
 
+const STATUS_TEXT = {
+  ja: {
+    healthy: "正常更新",
+    delayed: "更新が少し遅れています。監視処理が再集計を試みます。",
+    stale: "更新が2時間以上遅れています。前回の正常データを表示中です。",
+    refresh: "今すぐ再読込",
+    refreshing: "再読込中…",
+    refreshError:
+      "最新データの取得に失敗しました。表示中の正常データは保持しています。",
+    separator: "・",
+    coverageSuffix: "人",
+    errors: "取得エラー",
+    equipment: "装備",
+    rankNew: "新",
+  },
+  en: {
+    healthy: "Up to date",
+    delayed: "The update is delayed. The watchdog will retry collection.",
+    stale: "Over two hours late. Showing the last verified dataset.",
+    refresh: "Refresh now",
+    refreshing: "Refreshing…",
+    refreshError:
+      "Could not fetch the latest data. The verified data on screen was kept.",
+    separator: " · ",
+    coverageSuffix: " players",
+    errors: "fetch errors ",
+    equipment: "equipment ",
+    rankNew: "NEW",
+  },
+  zh: {
+    healthy: "更新正常",
+    delayed: "更新稍有延遲，監控程序將嘗試重新收集。",
+    stale: "更新已延遲超過2小時，目前顯示上次驗證成功的資料。",
+    refresh: "立即重新載入",
+    refreshing: "重新載入中…",
+    refreshError: "無法取得最新資料，畫面上的已驗證資料仍會保留。",
+    separator: "・",
+    coverageSuffix: "人",
+    errors: "取得錯誤",
+    equipment: "裝備",
+    rankNew: "新",
+  },
+  th: {
+    healthy: "อัปเดตปกติ",
+    delayed: "การอัปเดตล่าช้า ระบบตรวจสอบจะลองรวบรวมใหม่",
+    stale: "ล่าช้าเกิน 2 ชั่วโมง กำลังแสดงข้อมูลล่าสุดที่ผ่านการตรวจสอบ",
+    refresh: "โหลดใหม่ตอนนี้",
+    refreshing: "กำลังโหลดใหม่…",
+    refreshError: "ดึงข้อมูลล่าสุดไม่ได้ แต่ยังคงข้อมูลที่ตรวจสอบแล้วบนหน้าจอ",
+    separator: " · ",
+    coverageSuffix: " คน",
+    errors: "ข้อผิดพลาด ",
+    equipment: "อุปกรณ์ ",
+    rankNew: "ใหม่",
+  },
+  id: {
+    healthy: "Pembaruan normal",
+    delayed: "Pembaruan terlambat. Pengawas akan mencoba mengumpulkan ulang.",
+    stale: "Terlambat lebih dari 2 jam. Menampilkan data terverifikasi terakhir.",
+    refresh: "Muat ulang",
+    refreshing: "Memuat ulang…",
+    refreshError:
+      "Data terbaru gagal diambil. Data terverifikasi di layar tetap dipertahankan.",
+    separator: " · ",
+    coverageSuffix: " pemain",
+    errors: "galat ",
+    equipment: "perlengkapan ",
+    rankNew: "BARU",
+  },
+  vi: {
+    healthy: "Cập nhật bình thường",
+    delayed: "Cập nhật bị chậm. Trình giám sát sẽ thử thu thập lại.",
+    stale: "Chậm hơn 2 giờ. Đang hiển thị dữ liệu đã xác minh gần nhất.",
+    refresh: "Tải lại ngay",
+    refreshing: "Đang tải lại…",
+    refreshError:
+      "Không lấy được dữ liệu mới nhất. Dữ liệu đã xác minh trên màn hình vẫn được giữ.",
+    separator: " · ",
+    coverageSuffix: " người",
+    errors: "lỗi ",
+    equipment: "trang bị ",
+    rankNew: "MỚI",
+  },
+  ko: {
+    healthy: "정상 업데이트",
+    delayed: "업데이트가 지연되었습니다. 감시 작업이 재집계를 시도합니다.",
+    stale: "2시간 이상 지연되어 마지막 정상 데이터를 표시하고 있습니다.",
+    refresh: "지금 새로고침",
+    refreshing: "새로고침 중…",
+    refreshError:
+      "최신 데이터를 가져오지 못했습니다. 화면의 정상 데이터는 유지됩니다.",
+    separator: " · ",
+    coverageSuffix: "명",
+    errors: "수집 오류 ",
+    equipment: "장비 ",
+    rankNew: "신규",
+  },
+};
+
 const translations = {
   ja: {
     title: "LINEレンジャー レジェンド帯キャラ集計",
@@ -205,7 +308,7 @@ const translations = {
     method5:
       "採用率は「採用人数 ÷ 集計人数」で計算します。",
     method6:
-      "GitHub Actionsの混雑により、更新時刻が遅れる場合があります。",
+      "主集計と独立した監視処理が更新時刻を確認し、遅延時は再集計します。",
     method7:
       "本サイトは非公式サイトであり、ゲーム運営元とは関係ありません。",
     source: "データ出典:",
@@ -263,7 +366,7 @@ const translations = {
     method5:
       "Usage rate is calculated as Players Using ÷ Players Sampled.",
     method6:
-      "GitHub Actions congestion may delay the displayed update time.",
+      "The collector and an independent watchdog verify freshness and retry delayed updates.",
     method7:
       "This is an unofficial fan-made site and is not affiliated with the game operator.",
     source: "Data Source:",
@@ -317,7 +420,7 @@ const translations = {
     method3: "使用人數是至少使用該角色一次的玩家人數。",
     method4: "即使同一玩家使用相同角色多次，使用人數仍只計算1人。",
     method5: "使用率 = 使用人數 ÷ 統計人數。",
-    method6: "GitHub Actions 繁忙時，更新時間可能會延遲。",
+    method6: "主收集程序與獨立監控會檢查資料新鮮度，延遲時自動重試。",
     method7: "本網站為非官方粉絲製作，與遊戲營運商沒有關係。",
     source: "資料來源：",
     footer: "非官方・粉絲製作的統計頁面",
@@ -370,7 +473,7 @@ const translations = {
     method4:
       "แม้ผู้เล่นคนเดียวจะใช้ตัวละครเดียวกันหลายตัว จะนับเป็นผู้เล่นเพียง 1 คน",
     method5: "อัตราการใช้งาน = จำนวนผู้ใช้ ÷ จำนวนผู้เล่นที่รวบรวม",
-    method6: "การทำงานที่หนาแน่นของ GitHub Actions อาจทำให้เวลาอัปเดตล่าช้า",
+    method6: "ตัวรวบรวมหลักและระบบตรวจสอบอิสระจะตรวจเวลาและลองใหม่เมื่ออัปเดตล่าช้า",
     method7:
       "เว็บไซต์นี้เป็นเว็บไซต์แฟนเมดอย่างไม่เป็นทางการและไม่มีความเกี่ยวข้องกับผู้ให้บริการเกม",
     source: "แหล่งข้อมูล:",
@@ -426,7 +529,7 @@ const translations = {
       "Meskipun satu pemain menggunakan karakter yang sama beberapa kali, pemain tersebut tetap dihitung satu orang.",
     method5: "Tingkat penggunaan = Pemain yang Menggunakan ÷ Jumlah Pemain.",
     method6:
-      "Kepadatan GitHub Actions dapat menyebabkan waktu pembaruan terlambat.",
+      "Pengumpul utama dan pengawas independen memeriksa kesegaran serta mencoba ulang jika terlambat.",
     method7:
       "Situs ini adalah situs penggemar tidak resmi dan tidak berafiliasi dengan pengelola game.",
     source: "Sumber Data:",
@@ -483,7 +586,7 @@ const translations = {
     method4:
       "Dù một người chơi sử dụng cùng một nhân vật nhiều lần, người chơi đó vẫn chỉ được tính là một người.",
     method5: "Tỷ lệ sử dụng = Số người sử dụng ÷ Số người được thống kê.",
-    method6: "GitHub Actions quá tải có thể khiến thời gian cập nhật bị chậm.",
+    method6: "Bộ thu thập chính và trình giám sát độc lập kiểm tra độ mới và thử lại khi chậm.",
     method7:
       "Đây là trang do người hâm mộ tạo ra, không chính thức và không liên quan đến nhà vận hành trò chơi.",
     source: "Nguồn dữ liệu:",
@@ -537,7 +640,7 @@ const translations = {
     method4:
       "한 플레이어가 같은 캐릭터를 여러 개 사용해도 사용 인원에서는 1명으로 계산합니다.",
     method5: "사용률 = 사용 인원 ÷ 집계 인원",
-    method6: "GitHub Actions가 혼잡할 경우 업데이트 시간이 지연될 수 있습니다.",
+    method6: "주 집계와 독립 감시 작업이 최신 상태를 확인하고 지연 시 다시 집계합니다.",
     method7: "이 사이트는 비공식 팬 제작 사이트이며 게임 운영사와 관련이 없습니다.",
     source: "데이터 출처:",
     footer: "비공식 팬 제작 통계 페이지",
@@ -572,6 +675,9 @@ const state = {
   selectedEquipmentType: "WEAPON",
   rankingScrollTop: 0,
   suppressCharacterTapUntil: 0,
+  isLoading: false,
+  lastLoadAttempt: 0,
+  lastLoadError: false,
 };
 
 const elements = {
@@ -583,6 +689,8 @@ const elements = {
   slots: document.querySelector("#summary-slots"),
   characters: document.querySelector("#summary-characters"),
   updated: document.querySelector("#summary-updated"),
+  freshness: document.querySelector("#summary-freshness"),
+  health: document.querySelector("#summary-health"),
   body: document.querySelector("#ranking-body"),
   resultCount: document.querySelector("#result-count"),
   sourceLink: document.querySelector("#source-link"),
@@ -594,6 +702,11 @@ function t(key) {
 
 function et(key) {
   return equipmentTranslations[state.language][key];
+}
+
+function st(key) {
+  const language = STATUS_TEXT[state.language] || STATUS_TEXT.en;
+  return language[key];
 }
 
 function getLocale() {
@@ -726,7 +839,7 @@ function applyTranslations() {
   if (state.data) {
     renderSummary();
     renderTable();
-    updateStaleWarning();
+    updateFreshnessWarning();
   }
 
   const dialog = document.querySelector("#equipment-dialog");
@@ -783,32 +896,84 @@ function detectLanguage() {
   return "en";
 }
 
-function updateStaleWarning() {
-  if (!elements.summary) return;
+function getFreshnessLevel() {
+  const updatedTime = new Date(state.data?.updated_at || "").getTime();
+  if (Number.isNaN(updatedTime)) return "stale";
+  const age = Math.max(0, Date.now() - updatedTime);
+  if (age >= STALE_AFTER_MS) return "stale";
+  if (age >= DELAYED_AFTER_MS) return "delayed";
+  return "healthy";
+}
 
-  let banner = document.querySelector("#stale-warning");
-  const updatedAt = state.data?.updated_at;
-  const updatedTime = updatedAt ? new Date(updatedAt).getTime() : NaN;
-  const isStale =
-    !Number.isNaN(updatedTime) &&
-    Date.now() - updatedTime > 1000 * 60 * 60 * 48;
+function formatQualitySummary() {
+  if (!state.data) return "";
+  const text = STATUS_TEXT[state.language] || STATUS_TEXT.en;
+  const sampled = formatInteger(state.data.sampled_players);
+  const target = formatInteger(state.data.target_players);
+  const failures = Number(
+    state.data.collection_quality?.detail_fetch_failures ??
+      state.data.diagnostics?.detail_fetch_failures?.length ??
+      0
+  );
+  const parts = [
+    `${sampled}/${target}${text.coverageSuffix}`,
+    `${text.errors}${formatInteger(failures)}`,
+  ];
+  const fillRate = Number(state.data.collection_quality?.equipment_fill_rate);
+  if (Number.isFinite(fillRate)) {
+    parts.push(`${text.equipment}${fillRate.toFixed(1)}%`);
+  }
+  return parts.join(text.separator);
+}
 
-  if (!isStale) {
-    if (banner) {
-      banner.hidden = true;
-    }
+function ensureDataWarning() {
+  let banner = document.querySelector("#data-warning");
+  if (banner) return banner;
+
+  banner = document.createElement("section");
+  banner.id = "data-warning";
+  banner.setAttribute("role", "status");
+
+  const message = document.createElement("span");
+  message.className = "data-warning-text";
+  const refresh = document.createElement("button");
+  refresh.type = "button";
+  refresh.className = "data-refresh-button";
+  refresh.addEventListener("click", () => {
+    loadData({ background: Boolean(state.data) });
+  });
+  banner.append(message, refresh);
+  elements.summary.insertAdjacentElement("beforebegin", banner);
+  return banner;
+}
+
+function updateFreshnessWarning() {
+  if (!elements.summary || !state.data) return;
+
+  const level = getFreshnessLevel();
+  if (elements.freshness) {
+    elements.freshness.textContent = st(
+      level === "healthy" ? "healthy" : level
+    );
+    elements.freshness.className = `freshness-badge freshness-${level}`;
+  }
+
+  const existing = document.querySelector("#data-warning");
+  if (level === "healthy" && !state.lastLoadError) {
+    if (existing) existing.hidden = true;
     return;
   }
 
-  if (!banner) {
-    banner = document.createElement("p");
-    banner.id = "stale-warning";
-    banner.className = "message message-warning";
-    banner.setAttribute("role", "status");
-    elements.summary.insertAdjacentElement("beforebegin", banner);
-  }
-
-  banner.textContent = t("stale");
+  const banner = ensureDataWarning();
+  const message = banner.querySelector(".data-warning-text");
+  const refresh = banner.querySelector(".data-refresh-button");
+  banner.className =
+    level === "stale"
+      ? "message message-error data-warning"
+      : "message message-warning data-warning";
+  message.textContent = state.lastLoadError ? st("refreshError") : st(level);
+  refresh.textContent = state.isLoading ? st("refreshing") : st("refresh");
+  refresh.disabled = state.isLoading;
   banner.hidden = false;
 }
 
@@ -820,6 +985,10 @@ function renderSummary() {
   elements.slots.textContent = formatUnit(state.data.character_slots, "occurrence");
   elements.characters.textContent = formatUnit(state.data.unique_characters, "characters");
   elements.updated.textContent = formatDate(state.data.updated_at);
+  if (elements.health) {
+    elements.health.textContent = formatQualitySummary();
+  }
+  updateFreshnessWarning();
 }
 
 function renderTable() {
@@ -843,7 +1012,26 @@ function renderTable() {
     const tdRank = document.createElement("td");
     tdRank.className = "rank-cell";
     tdRank.setAttribute("data-rank", rank);
-    tdRank.textContent = rank;
+    const rankNumber = document.createElement("span");
+    rankNumber.className = "rank-number";
+    rankNumber.textContent = rank;
+    tdRank.appendChild(rankNumber);
+
+    const change = char.change;
+    if (change?.new === true) {
+      const changeBadge = document.createElement("span");
+      changeBadge.className = "rank-change rank-change-new";
+      changeBadge.textContent = st("rankNew");
+      tdRank.appendChild(changeBadge);
+    } else if (Number.isFinite(Number(change?.rank)) && Number(change.rank) !== 0) {
+      const rankDelta = Number(change.rank);
+      const changeBadge = document.createElement("span");
+      changeBadge.className =
+        rankDelta > 0 ? "rank-change rank-up" : "rank-change rank-down";
+      changeBadge.textContent =
+        rankDelta > 0 ? `↑${rankDelta}` : `↓${Math.abs(rankDelta)}`;
+      tdRank.appendChild(changeBadge);
+    }
     tr.appendChild(tdRank);
 
     // キャラクターセル
@@ -939,12 +1127,28 @@ function validateData(data) {
   }
 
   const sampled = Number(data.sampled_players);
+  const target = Number(data.target_players);
+  const slots = Number(data.character_slots);
 
-  if (!Number.isFinite(sampled) || sampled <= 0) {
+  if (
+    !Number.isFinite(sampled) ||
+    !Number.isFinite(target) ||
+    sampled <= 0 ||
+    sampled !== target ||
+    data.complete_target !== true
+  ) {
     throw new Error(t("playersInvalid"));
   }
+  if (!Number.isFinite(slots) || slots < sampled || slots > sampled * 10) {
+    throw new Error(t("occurrenceInvalid"));
+  }
 
-  data.characters.forEach((char) => {
+  let slotTotal = 0;
+  let previousCount = null;
+  let previousRank = 0;
+  const unitCodes = new Set();
+
+  data.characters.forEach((char, index) => {
     if (!char || typeof char !== "object") {
       throw new Error(t("characterInvalid"));
     }
@@ -953,9 +1157,14 @@ function validateData(data) {
       throw new Error(t("imageInvalid"));
     }
 
-    if (typeof char.unit_code !== "string" || char.unit_code.length === 0) {
+    if (
+      typeof char.unit_code !== "string" ||
+      char.unit_code.length === 0 ||
+      unitCodes.has(char.unit_code)
+    ) {
       throw new Error(t("characterInvalid"));
     }
+    unitCodes.add(char.unit_code);
 
     if (typeof char.name !== "string" || char.name.trim().length === 0) {
       throw new Error(t("characterInvalid"));
@@ -963,13 +1172,14 @@ function validateData(data) {
 
     const occurrence = Number(char.occurrence_count);
 
-    if (!Number.isFinite(occurrence) || occurrence < 0) {
+    if (!Number.isFinite(occurrence) || occurrence <= 0) {
       throw new Error(t("occurrenceInvalid"));
     }
+    slotTotal += occurrence;
 
     const players = Number(char.player_count);
 
-    if (!Number.isFinite(players) || players < 0) {
+    if (!Number.isFinite(players) || players <= 0) {
       throw new Error(t("playerCountInvalid"));
     }
 
@@ -979,6 +1189,23 @@ function validateData(data) {
 
     if (occurrence < players) {
       throw new Error(t("occurrenceTooLow"));
+    }
+
+    const expectedRank =
+      occurrence === previousCount ? previousRank : index + 1;
+    if (Number(char.rank) !== expectedRank) {
+      throw new Error(t("characterInvalid"));
+    }
+    previousCount = occurrence;
+    previousRank = expectedRank;
+
+    const actualRate = Number(char.adoption_rate);
+    const expectedRate = Math.round((players / sampled) * 1000) / 10;
+    if (
+      !Number.isFinite(actualRate) ||
+      Math.abs(actualRate - expectedRate) > 0.11
+    ) {
+      throw new Error(t("characterInvalid"));
     }
 
     const rankings = char.equipment_rankings;
@@ -993,29 +1220,98 @@ function validateData(data) {
       }
     });
   });
+
+  if (
+    slotTotal !== slots ||
+    Number(data.unique_characters) !== data.characters.length
+  ) {
+    throw new Error(t("dataError"));
+  }
 }
 
-async function loadData() {
-  try {
-    elements.status.textContent = t("loading");
-    elements.status.hidden = false;
-    elements.summary.hidden = true;
-    elements.rankingSection.hidden = true;
+function wait(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
 
-    const response = await fetch(`${DATA_PATH}?v=${Date.now()}`, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) {
-      throw new Error(t("fetchError"));
+async function fetchVerifiedData() {
+  let lastError = null;
+
+  for (const delay of DATA_RETRY_DELAYS_MS) {
+    if (delay > 0) {
+      await wait(delay);
     }
 
-    const data = await response.json();
+    try {
+      const response = await fetch(`${DATA_PATH}?v=${Date.now()}`, {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        throw new Error(t("fetchError"));
+      }
+      const data = await response.json();
+      validateData(data);
+      return data;
+    } catch (error) {
+      lastError = error;
+    }
+  }
 
-    validateData(data);
+  throw lastError || new Error(t("loadError"));
+}
 
+function showInitialLoadError(error) {
+  const currentTranslations = translations[state.language];
+  const knownMessages = Object.values(currentTranslations).filter(
+    (value) => typeof value === "string"
+  );
+  const message = knownMessages.includes(error?.message)
+    ? error.message
+    : t("loadError");
+
+  elements.status.textContent = "";
+  elements.status.className = "message message-error";
+  const text = document.createElement("span");
+  text.textContent = message;
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "data-refresh-button";
+  retry.textContent = st("refresh");
+  retry.addEventListener("click", () => loadData());
+  elements.status.append(text, retry);
+  elements.status.hidden = false;
+}
+
+async function loadData({ background = false } = {}) {
+  if (state.isLoading) return;
+
+  const keepCurrentView = background && Boolean(state.data);
+  const rankingScrollTop = elements.rankingSection?.scrollTop || 0;
+  state.isLoading = true;
+  state.lastLoadAttempt = Date.now();
+
+  try {
+    if (!keepCurrentView) {
+      elements.status.className = "message";
+      elements.status.textContent = t("loading");
+      elements.status.hidden = false;
+      elements.summary.hidden = true;
+      elements.rankingSection.hidden = true;
+    } else {
+      updateFreshnessWarning();
+    }
+
+    const data = await fetchVerifiedData();
+
+    state.lastLoadError = false;
     state.data = data;
     state.characters = Array.isArray(data.characters) ? data.characters : [];
+    if (state.selectedCharacter) {
+      state.selectedCharacter =
+        state.characters.find(
+          (row) => row.unit_code === state.selectedCharacter.unit_code
+        ) || null;
+    }
 
     elements.status.hidden = true;
     elements.summary.hidden = false;
@@ -1024,17 +1320,27 @@ async function loadData() {
     applyTranslations();
     setupRankingTapHint();
     setupRankingScrollGuard();
+    if (keepCurrentView && elements.rankingSection) {
+      requestAnimationFrame(() => {
+        elements.rankingSection.scrollTop = rankingScrollTop;
+      });
+    }
   } catch (error) {
     console.error(error);
-
-    const currentTranslations = translations[state.language];
-    const knownMessages = Object.values(currentTranslations).filter(
-      (value) => typeof value === "string"
-    );
-
-    elements.status.textContent = knownMessages.includes(error?.message)
-      ? error.message
-      : t("loadError");
+    state.lastLoadError = true;
+    if (state.data) {
+      elements.status.hidden = true;
+      elements.summary.hidden = false;
+      elements.rankingSection.hidden = false;
+      updateFreshnessWarning();
+    } else {
+      showInitialLoadError(error);
+    }
+  } finally {
+    state.isLoading = false;
+    if (state.data) {
+      updateFreshnessWarning();
+    }
   }
 }
 
@@ -1082,6 +1388,23 @@ document.addEventListener("DOMContentLoaded", () => {
   setLanguage(initialLang);
 
   loadData();
+
+  window.setInterval(() => {
+    loadData({ background: true });
+  }, AUTO_REFRESH_MS);
+
+  document.addEventListener("visibilitychange", () => {
+    if (
+      document.visibilityState === "visible" &&
+      Date.now() - state.lastLoadAttempt > 60 * 1000
+    ) {
+      loadData({ background: true });
+    }
+  });
+
+  window.addEventListener("online", () => {
+    loadData({ background: true });
+  });
 
   document.querySelectorAll("[data-language]").forEach((button) => {
     button.addEventListener("click", () => {
