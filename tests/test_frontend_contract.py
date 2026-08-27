@@ -44,6 +44,8 @@ def test_history_trend_contract_is_present():
 
     assert 'const HISTORY_PATH = "./data/character_usage_history.json"' in app
     assert "function validateHistory(" in app
+    assert "HISTORY_MAX_SNAPSHOTS" in app
+    assert "History snapshots are not in chronological order." in app
     assert "function renderCharacterTrend(" in app
     assert "const RANK_CHANGE_PERIODS" in app
     assert "function renderRankPeriodChanges(" in app

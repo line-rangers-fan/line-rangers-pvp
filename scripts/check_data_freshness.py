@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,14 +36,24 @@ def has_complete_sample(data: dict) -> bool:
         sampled = int(data.get("sampled_players", 0))
         characters = data.get("characters")
         quality = data.get("collection_quality")
+        if not isinstance(quality, dict):
+            return False
+        collection_duration = float(quality.get("collection_duration_seconds"))
+        detail_duration = float(quality.get("detail_fetch_duration_seconds"))
+        equipment_fill_rate = float(quality.get("equipment_fill_rate"))
         return (
             target > 0
             and sampled == target
             and data.get("complete_target") is True
             and isinstance(characters, list)
             and len(characters) > 0
-            and isinstance(quality, dict)
             and float(quality.get("sample_coverage", 0)) == 100.0
+            and math.isfinite(collection_duration)
+            and 0 <= collection_duration <= 15 * 60
+            and math.isfinite(detail_duration)
+            and 0 <= detail_duration <= collection_duration
+            and math.isfinite(equipment_fill_rate)
+            and 0 <= equipment_fill_rate <= 100
             and int(quality.get("detail_fetch_failures", -1)) == 0
             and int(quality.get("invalid_player_records", -1)) == 0
         )

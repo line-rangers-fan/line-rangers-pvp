@@ -29,6 +29,7 @@ function healthyData(updatedAt, overrides = {}) {
       detail_fetch_failures: 0,
       invalid_player_records: 0,
       collection_duration_seconds: 42.5,
+      detail_fetch_duration_seconds: 40,
     },
     ...overrides,
   };
@@ -110,6 +111,7 @@ test("health snapshot reports freshness and age", async () => {
     detail_fetch_failures: 0,
     invalid_player_records: 0,
     collection_duration_seconds: 42.5,
+    detail_fetch_duration_seconds: 40,
     stale_after_minutes: 55,
     checked_at: "2026-08-27T04:00:00.000Z",
   });
@@ -135,6 +137,19 @@ test("health inspection distinguishes stale and invalid data", () => {
   assert.equal(
     inspectDataHealth(
       healthyData("2026-08-27T03:10:00Z", { sampled_players: 199 }),
+      NOW,
+    ).status,
+    "invalid_data",
+  );
+  assert.equal(
+    inspectDataHealth(
+      healthyData("2026-08-27T03:10:00Z", {
+        collection_quality: {
+          ...healthyData("2026-08-27T03:10:00Z").collection_quality,
+          detail_fetch_duration_seconds: 60,
+          collection_duration_seconds: 30,
+        },
+      }),
       NOW,
     ).status,
     "invalid_data",

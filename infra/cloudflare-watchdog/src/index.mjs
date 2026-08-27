@@ -28,6 +28,7 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
   const invalidRecords = Number(quality?.invalid_player_records);
   const equipmentFillRate = Number(quality?.equipment_fill_rate);
   const collectionDuration = Number(quality?.collection_duration_seconds);
+  const detailDuration = Number(quality?.detail_fetch_duration_seconds);
   const metrics = {
     sampled_players: Number.isFinite(sampledPlayers) ? sampledPlayers : null,
     target_players: Number.isFinite(targetPlayers) ? targetPlayers : null,
@@ -42,6 +43,9 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
       : null,
     collection_duration_seconds: Number.isFinite(collectionDuration)
       ? collectionDuration
+      : null,
+    detail_fetch_duration_seconds: Number.isFinite(detailDuration)
+      ? detailDuration
       : null,
   };
   if (!Number.isFinite(updatedMs)) {
@@ -71,7 +75,16 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
     data.characters.length > 0 &&
     Number(quality?.sample_coverage) === 100 &&
     detailFailures === 0 &&
-    invalidRecords === 0;
+    invalidRecords === 0 &&
+    Number.isFinite(collectionDuration) &&
+    collectionDuration >= 0 &&
+    collectionDuration <= 15 * 60 &&
+    Number.isFinite(detailDuration) &&
+    detailDuration >= 0 &&
+    detailDuration <= collectionDuration &&
+    Number.isFinite(equipmentFillRate) &&
+    equipmentFillRate >= 0 &&
+    equipmentFillRate <= 100;
   if (!completeSample) {
     return {
       status: "invalid_data",
@@ -124,6 +137,7 @@ export async function getHealthSnapshot(
       detail_fetch_failures: null,
       invalid_player_records: null,
       collection_duration_seconds: null,
+      detail_fetch_duration_seconds: null,
     };
   }
 
@@ -139,6 +153,7 @@ export async function getHealthSnapshot(
     detail_fetch_failures: dataHealth.detail_fetch_failures,
     invalid_player_records: dataHealth.invalid_player_records,
     collection_duration_seconds: dataHealth.collection_duration_seconds,
+    detail_fetch_duration_seconds: dataHealth.detail_fetch_duration_seconds,
     stale_after_minutes: MAX_AGE_MS / 60_000,
     checked_at: new Date(nowMs).toISOString(),
   };

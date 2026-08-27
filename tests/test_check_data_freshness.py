@@ -15,6 +15,9 @@ def write_timestamp(path, timestamp):
                 "characters": [{"unit_code": "u-a"}],
                 "collection_quality": {
                     "sample_coverage": 100.0,
+                    "equipment_fill_rate": 99.9,
+                    "collection_duration_seconds": 12.0,
+                    "detail_fetch_duration_seconds": 10.0,
                     "detail_fetch_failures": 0,
                     "invalid_player_records": 0,
                 },
@@ -61,6 +64,21 @@ def test_fresh_but_incomplete_data_is_due(tmp_path):
     write_timestamp(path, now - timedelta(minutes=5))
     data = json.loads(path.read_text(encoding="utf-8"))
     data["sampled_players"] = 199
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = check_freshness(path, 50, now=now)
+
+    assert result.due is True
+    assert result.reason == "invalid_quality"
+
+
+def test_fresh_data_with_impossible_collection_timing_is_due(tmp_path):
+    now = datetime(2026, 8, 27, 3, 0, tzinfo=timezone.utc)
+    path = tmp_path / "ranking.json"
+    write_timestamp(path, now - timedelta(minutes=5))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["collection_quality"]["detail_fetch_duration_seconds"] = 13.0
+    data["collection_quality"]["collection_duration_seconds"] = 12.0
     path.write_text(json.dumps(data), encoding="utf-8")
 
     result = check_freshness(path, 50, now=now)

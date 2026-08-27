@@ -8,6 +8,7 @@ const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const DELAYED_AFTER_MS = 90 * 60 * 1000;
 const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 const TREND_WINDOW_MS = 24 * 60 * 60 * 1000;
+const HISTORY_MAX_SNAPSHOTS = 24 * 31;
 const RANK_CHANGE_PERIODS = [
   ["day", "rankDay"],
   ["week", "rankWeek"],
@@ -1323,11 +1324,23 @@ function validateData(data) {
     throw new Error(t("occurrenceInvalid"));
   }
   const quality = data.collection_quality;
+  const collectionDuration = Number(quality?.collection_duration_seconds);
+  const detailDuration = Number(quality?.detail_fetch_duration_seconds);
+  const equipmentFillRate = Number(quality?.equipment_fill_rate);
   if (
     !quality ||
     Number(quality.sample_coverage) !== 100 ||
     Number(quality.detail_fetch_failures) !== 0 ||
-    Number(quality.invalid_player_records) !== 0
+    Number(quality.invalid_player_records) !== 0 ||
+    !Number.isFinite(collectionDuration) ||
+    collectionDuration < 0 ||
+    collectionDuration > 15 * 60 ||
+    !Number.isFinite(detailDuration) ||
+    detailDuration < 0 ||
+    detailDuration > collectionDuration ||
+    !Number.isFinite(equipmentFillRate) ||
+    equipmentFillRate < 0 ||
+    equipmentFillRate > 100
   ) {
     throw new Error(t("dataError"));
   }
@@ -1453,25 +1466,40 @@ function validateHistory(history) {
   if (!history || !Array.isArray(history.snapshots)) {
     throw new Error("Invalid history data.");
   }
+  if (history.snapshots.length > HISTORY_MAX_SNAPSHOTS) {
+    throw new Error("History contains too many snapshots.");
+  }
 
+  let previousTimestamp = 0;
   history.snapshots.forEach((snapshot) => {
+    const snapshotTimestamp = new Date(snapshot?.updated_at || "").getTime();
     if (
       !snapshot ||
-      Number.isNaN(new Date(snapshot.updated_at || "").getTime()) ||
+      !Number.isFinite(snapshotTimestamp) ||
       !Array.isArray(snapshot.characters)
     ) {
       throw new Error("Invalid history snapshot.");
+    }
+    if (snapshotTimestamp <= previousTimestamp) {
+      throw new Error("History snapshots are not in chronological order.");
+    }
+    previousTimestamp = snapshotTimestamp;
+    if (!Number.isInteger(Number(snapshot.sampled_players)) || snapshot.sampled_players <= 0) {
+      throw new Error("Invalid history sample size.");
     }
     const unitCodes = new Set();
     snapshot.characters.forEach((character) => {
       const unitCode = String(character?.unit_code || "");
       const rate = Number(character?.adoption_rate);
+      const rank = Number(character?.rank);
       if (
         !unitCode ||
         unitCodes.has(unitCode) ||
         !Number.isFinite(rate) ||
         rate < 0 ||
-        rate > 100
+        rate > 100 ||
+        !Number.isInteger(rank) ||
+        rank < 1
       ) {
         throw new Error("Invalid character history.");
       }
