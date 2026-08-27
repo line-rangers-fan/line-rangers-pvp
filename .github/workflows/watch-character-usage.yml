@@ -1,0 +1,48 @@
+name: ranking-freshness-watchdog
+
+on:
+  workflow_dispatch:
+  schedule:
+    # This independent workflow checks between the collector's two slots.
+    - cron: "7,37 * * * *"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: pvp-freshness-watchdog
+  cancel-in-progress: false
+
+jobs:
+  repair-if-stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check published data age
+        id: freshness
+        run: |
+          python scripts/check_data_freshness.py \
+            --max-age-minutes 55 \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Trigger a repair collection
+        if: steps.freshness.outputs.due == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "update-character-usage.yml",
+              ref: "main",
+              inputs: { force_collection: "true" },
+            });
