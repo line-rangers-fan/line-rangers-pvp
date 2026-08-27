@@ -5,7 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"
+    # GitHub Actions is busiest at the start of the hour. Two off-peak
+    # opportunities plus the freshness gate below keep collection hourly while
+    # allowing the second slot to recover from a missed scheduled run.
+    - cron: "17,47 * * * *"
 
 permissions:
   contents: write
@@ -36,12 +39,38 @@ jobs:
           PYTHONPATH=. pytest -q
           node --check docs/assets/app.js
 
+      - name: Check whether scheduled collection is due
+        id: collection_due
+        if: github.event_name == 'schedule'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          due = True
+          try:
+              data = json.loads(Path("docs/data/character_usage.json").read_text(encoding="utf-8"))
+              updated_at = datetime.fromisoformat(data["updated_at"].replace("Z", "+00:00"))
+              if updated_at.tzinfo is None:
+                  updated_at = updated_at.replace(tzinfo=timezone.utc)
+              due = datetime.now(timezone.utc) - updated_at >= timedelta(minutes=50)
+          except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+              # Missing or malformed freshness metadata should trigger a repair run.
+              due = True
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"due={'true' if due else 'false'}\n")
+          print(f"Scheduled collection due: {due}")
+          PY
+
       - name: Run scraper
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[collect-now]')
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[collect-now]') || (github.event_name == 'schedule' && steps.collection_due.outputs.due == 'true')
         run: python scripts/scrape_character_usage.py
 
       - name: Save collected data
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[collect-now]')
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[collect-now]') || (github.event_name == 'schedule' && steps.collection_due.outputs.due == 'true')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
