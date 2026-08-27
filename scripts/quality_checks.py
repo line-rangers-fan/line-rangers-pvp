@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
+from datetime import datetime
 
 
 EQUIPMENT_TYPES = ("WEAPON", "ARMOR", "ACC")
+MAX_CHARACTERS_PER_PLAYER = 10
 
 
 def assign_competition_ranks(rows: list[dict]) -> list[dict]:
@@ -22,13 +25,7 @@ def assign_competition_ranks(rows: list[dict]) -> list[dict]:
 
 
 def equipment_rankings(records: list[dict]) -> dict[str, list[dict]]:
-    """Aggregate equipment records while deduplicating players per item.
-
-    ``records`` represents character occurrences grouped by player. A player
-    may use the same character and the same item more than once, so its use
-    counts toward ``occurrence_count`` every time but toward ``player_count``
-    only once.
-    """
+    """Aggregate equipment while counting copies and unique players separately."""
     totals = {
         kind: defaultdict(
             lambda: {
@@ -73,37 +70,163 @@ def equipment_rankings(records: list[dict]) -> dict[str, list[dict]]:
     return result
 
 
+def _number_matches(actual: object, expected: float, tolerance: float = 0.001) -> bool:
+    try:
+        number = float(actual)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(number) and abs(number - expected) <= tolerance
+
+
+def _parse_time(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _validate_comparison(data: dict, previous: dict, errors: list[str]) -> None:
+    comparison = data.get("comparison")
+    if not isinstance(comparison, dict):
+        errors.append("missing previous comparison")
+        return
+
+    if comparison.get("previous_updated_at") != previous.get("updated_at"):
+        errors.append("previous timestamp mismatch")
+
+    characters = data.get("characters", [])
+    previous_rows = {
+        str(row.get("unit_code")): row
+        for row in previous.get("characters", [])
+        if isinstance(row, dict) and row.get("unit_code")
+    }
+    current_codes = {
+        str(row.get("unit_code"))
+        for row in characters
+        if isinstance(row, dict) and row.get("unit_code")
+    }
+    expected_new = sum(
+        1 for row in characters if str(row.get("unit_code")) not in previous_rows
+    )
+    expected_removed = len(set(previous_rows) - current_codes)
+    if int(comparison.get("new_characters", -1)) != expected_new:
+        errors.append("new character comparison mismatch")
+    if int(comparison.get("removed_characters", -1)) != expected_removed:
+        errors.append("removed character comparison mismatch")
+
+    for row in characters:
+        code = str(row.get("unit_code"))
+        change = row.get("change")
+        if not isinstance(change, dict):
+            errors.append("missing character change")
+            continue
+        old = previous_rows.get(code)
+        if old is None:
+            if change != {"new": True}:
+                errors.append("invalid new character change")
+            continue
+
+        expected = {
+            "new": False,
+            "rank": int(old.get("rank", 0)) - int(row.get("rank", 0)),
+            "occurrence_count": int(row.get("occurrence_count", 0))
+            - int(old.get("occurrence_count", 0)),
+            "player_count": int(row.get("player_count", 0))
+            - int(old.get("player_count", 0)),
+            "adoption_rate": round(
+                float(row.get("adoption_rate", 0))
+                - float(old.get("adoption_rate", 0)),
+                1,
+            ),
+        }
+        if change != expected:
+            errors.append("invalid character change")
+
+
 def validate_data(data: dict, previous: dict | None = None) -> bool:
-    """Reject incomplete or internally inconsistent published data."""
+    """Reject incomplete, inconsistent, or statistically impossible output."""
     errors: list[str] = []
+    schema_version = int(data.get("schema_version", 0))
     players = int(data.get("sampled_players", 0))
     target_players = int(data.get("target_players", 0))
     slots = int(data.get("character_slots", 0))
     characters = data.get("characters")
 
-    if players <= 0 or not isinstance(characters, list):
+    if schema_version < 7:
+        errors.append("unsupported schema")
+    if _parse_time(data.get("updated_at")) is None:
+        errors.append("invalid updated timestamp")
+    if players <= 0 or not isinstance(characters, list) or not characters:
         errors.append("invalid sample")
         characters = []
-
-    if target_players <= 0 or players != target_players or data.get("complete_target") is not True:
+    if (
+        target_players <= 0
+        or players != target_players
+        or data.get("complete_target") is not True
+    ):
         errors.append("incomplete sample")
-
+    if slots < players or slots > players * MAX_CHARACTERS_PER_PLAYER:
+        errors.append("invalid slot range")
     if sum(int(char.get("occurrence_count", 0)) for char in characters) != slots:
         errors.append("slot total mismatch")
+    if int(data.get("unique_characters", -1)) != len(characters):
+        errors.append("unique character total mismatch")
 
     unit_codes = [str(char.get("unit_code") or "") for char in characters]
     if any(not code for code in unit_codes) or len(unit_codes) != len(set(unit_codes)):
         errors.append("duplicate or missing character unit code")
 
-    for character in characters:
+    expected_order = sorted(
+        characters,
+        key=lambda row: (
+            -int(row.get("occurrence_count", 0)),
+            -int(row.get("player_count", 0)),
+            str(row.get("unit_code") or ""),
+        ),
+    )
+    if unit_codes != [str(row.get("unit_code") or "") for row in expected_order]:
+        errors.append("character sort order mismatch")
+
+    equipment_slots_collected = 0
+    previous_character_count: int | None = None
+    previous_character_rank = 0
+    for index, character in enumerate(characters, start=1):
         if not str(character.get("name") or "").strip():
             errors.append("missing character name")
             continue
         occurrence_count = int(character.get("occurrence_count", 0))
         player_count = int(character.get("player_count", 0))
-        if occurrence_count < player_count or player_count > players:
+        if (
+            occurrence_count <= 0
+            or player_count <= 0
+            or occurrence_count < player_count
+            or player_count > players
+        ):
             errors.append("invalid character counts")
             continue
+
+        expected_rank = (
+            index
+            if occurrence_count != previous_character_count
+            else previous_character_rank
+        )
+        if int(character.get("rank", 0)) != expected_rank:
+            errors.append("invalid character rank")
+        previous_character_count = occurrence_count
+        previous_character_rank = expected_rank
+
+        if not _number_matches(
+            character.get("adoption_rate"),
+            round(player_count / players * 100, 1),
+        ):
+            errors.append("character adoption rate mismatch")
+        if not _number_matches(
+            character.get("slot_rate"),
+            round(occurrence_count / slots * 100, 2),
+        ):
+            errors.append("character slot rate mismatch")
 
         rankings = character.get("equipment_rankings")
         if not isinstance(rankings, dict):
@@ -128,15 +251,30 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
             ):
                 errors.append(f"invalid {equipment_type} totals")
                 continue
+            equipment_slots_collected += category_occurrences
 
+            expected_items = sorted(
+                items,
+                key=lambda item: (
+                    -int(item.get("occurrence_count", 0)),
+                    -int(item.get("player_count", 0)),
+                    str(item.get("item_code") or ""),
+                ),
+            )
+            if items != expected_items:
+                errors.append(f"invalid {equipment_type} sort order")
+
+            item_codes: set[str] = set()
             item_occurrences = 0
             previous_item_count: int | None = None
             previous_rank = 0
-            for index, item in enumerate(items, start=1):
+            for item_index, item in enumerate(items, start=1):
+                item_code = str(item.get("item_code") or "").strip()
                 item_count = int(item.get("occurrence_count", 0))
                 item_players = int(item.get("player_count", 0))
                 if (
-                    not str(item.get("item_code") or "").strip()
+                    not item_code
+                    or item_code in item_codes
                     or item_count <= 0
                     or item_players <= 0
                     or item_count < item_players
@@ -145,28 +283,108 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
                 ):
                     errors.append(f"invalid {equipment_type} item")
                     break
+                item_codes.add(item_code)
 
-                rank = int(item.get("rank", 0))
-                expected_rank = (
-                    index if item_count != previous_item_count else previous_rank
+                expected_item_rank = (
+                    item_index if item_count != previous_item_count else previous_rank
                 )
-                if rank != expected_rank:
+                if int(item.get("rank", 0)) != expected_item_rank:
                     errors.append(f"invalid {equipment_type} rank")
                     break
+                if not _number_matches(
+                    item.get("adoption_rate"),
+                    round(item_players / player_count * 100, 1),
+                ):
+                    errors.append(f"invalid {equipment_type} adoption rate")
 
                 item_occurrences += item_count
                 previous_item_count = item_count
-                previous_rank = rank
+                previous_rank = expected_item_rank
 
             if item_occurrences != category_occurrences:
                 errors.append(f"{equipment_type} total mismatch")
 
+    quality = data.get("collection_quality")
+    if not isinstance(quality, dict):
+        errors.append("missing collection quality")
+    else:
+        expected_equipment_slots = slots * len(EQUIPMENT_TYPES)
+        if int(quality.get("equipment_slots_expected", -1)) != expected_equipment_slots:
+            errors.append("equipment slot expectation mismatch")
+        if int(quality.get("equipment_slots_collected", -1)) != equipment_slots_collected:
+            errors.append("equipment slot collection mismatch")
+        if int(quality.get("equipment_slots_missing", -1)) != (
+            expected_equipment_slots - equipment_slots_collected
+        ):
+            errors.append("equipment slot missing total mismatch")
+        if not _number_matches(
+            quality.get("equipment_fill_rate"),
+            round(equipment_slots_collected / expected_equipment_slots * 100, 1),
+        ):
+            errors.append("equipment fill rate mismatch")
+        if not _number_matches(
+            quality.get("sample_coverage"),
+            round(players / target_players * 100, 1),
+        ):
+            errors.append("sample coverage mismatch")
+        if int(quality.get("detail_fetch_failures", -1)) != 0:
+            errors.append("detail fetch failures present")
+        if int(quality.get("invalid_player_records", -1)) != 0:
+            errors.append("invalid player records present")
+
+    diagnostics = data.get("diagnostics")
+    if not isinstance(diagnostics, dict):
+        errors.append("missing diagnostics")
+    else:
+        if int(diagnostics.get("valid_players", -1)) != players:
+            errors.append("diagnostic player total mismatch")
+        if int(diagnostics.get("detail_fetches_requested", -1)) != target_players:
+            errors.append("diagnostic fetch total mismatch")
+        failure_keys = (
+            "detail_fetch_failures",
+            "missing_player_info",
+            "invalid_players",
+            "invalid_unit_codes",
+            "invalid_equipment",
+            "invalid_rank_records",
+        )
+        if any(diagnostics.get(key) for key in failure_keys):
+            errors.append("diagnostic collection errors present")
+        distribution = diagnostics.get("team_size_distribution")
+        if not isinstance(distribution, dict):
+            errors.append("missing team size distribution")
+        else:
+            try:
+                team_total = sum(int(count) for count in distribution.values())
+                slot_total = sum(
+                    int(size) * int(count)
+                    for size, count in distribution.items()
+                )
+                sizes_valid = all(
+                    1 <= int(size) <= MAX_CHARACTERS_PER_PLAYER
+                    and int(count) >= 0
+                    for size, count in distribution.items()
+                )
+            except (TypeError, ValueError):
+                team_total = slot_total = -1
+                sizes_valid = False
+            if not sizes_valid or team_total != players or slot_total != slots:
+                errors.append("team size distribution mismatch")
+
     if previous:
+        previous_target = int(previous.get("target_players", target_players))
+        if previous_target != target_players:
+            errors.append("target player count changed")
         for key in ("sampled_players", "character_slots"):
             old = int(previous.get(key, 0))
             new = int(data.get(key, 0))
             if old and new < old * 0.5:
                 errors.append(f"{key} dropped by 50% or more")
+        old_time = _parse_time(previous.get("updated_at"))
+        new_time = _parse_time(data.get("updated_at"))
+        if old_time and new_time and new_time <= old_time:
+            errors.append("updated timestamp did not advance")
+        _validate_comparison(data, previous, errors)
 
     if errors:
         raise ValueError("; ".join(errors))

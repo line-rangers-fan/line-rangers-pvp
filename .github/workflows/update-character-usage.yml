@@ -4,22 +4,34 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      force_collection:
+        description: Collect even when the current data is still fresh
+        required: false
+        type: boolean
+        default: true
+  repository_dispatch:
+    types: [collect-pvp-data]
   schedule:
-    # GitHub Actions is busiest at the start of the hour. Two off-peak
-    # opportunities plus the freshness gate below keep collection hourly while
-    # allowing the second slot to recover from a missed scheduled run.
+    # Two off-peak opportunities make a dropped cron event recoverable. The
+    # freshness gate still limits successful collection to about once an hour.
     - cron: "17,47 * * * *"
 
 permissions:
   contents: write
 
+# A collection must never be cancelled by a UI deployment or a later timer.
+# Queue overlapping runs so the last known-good JSON always remains publishable.
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pvp-collection-and-pages
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      should_deploy: ${{ steps.decision.outputs.should_deploy }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -38,43 +50,38 @@ jobs:
         run: |
           PYTHONPATH=. pytest -q
           node --check docs/assets/app.js
+          node --test tests/test_cloudflare_watchdog.mjs
 
-      - name: Check whether scheduled collection is due
-        id: collection_due
-        if: github.event_name == 'schedule'
+      - name: Decide whether collection is due
+        id: decision
+        env:
+          FORCE_COLLECTION: ${{ (github.event_name == 'workflow_dispatch' && inputs.force_collection) || contains(github.event.head_commit.message, '[collect-now]') }}
         run: |
-          python - <<'PY'
-          import json
-          import os
-          from datetime import datetime, timedelta, timezone
-          from pathlib import Path
-
-          due = True
-          try:
-              data = json.loads(Path("docs/data/character_usage.json").read_text(encoding="utf-8"))
-              updated_at = datetime.fromisoformat(data["updated_at"].replace("Z", "+00:00"))
-              if updated_at.tzinfo is None:
-                  updated_at = updated_at.replace(tzinfo=timezone.utc)
-              due = datetime.now(timezone.utc) - updated_at >= timedelta(minutes=50)
-          except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
-              # Missing or malformed freshness metadata should trigger a repair run.
-              due = True
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"due={'true' if due else 'false'}\n")
-          print(f"Scheduled collection due: {due}")
-          PY
+          args=(--max-age-minutes 50 --github-output "$GITHUB_OUTPUT")
+          if [ "$FORCE_COLLECTION" = "true" ]; then
+            args+=(--force)
+          fi
+          python scripts/check_data_freshness.py "${args[@]}"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          elif grep -q '^due=true$' "$GITHUB_OUTPUT"; then
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run scraper
-        if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[collect-now]') || (github.event_name == 'schedule' && steps.collection_due.outputs.due == 'true')
+        if: steps.decision.outputs.due == 'true'
+        env:
+          DEBUG: "1"
         run: python scripts/scrape_character_usage.py
 
       - name: Save collected data
-        if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[collect-now]') || (github.event_name == 'schedule' && steps.collection_due.outputs.due == 'true')
+        if: steps.decision.outputs.due == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/data/character_usage.json
+          git add docs/data/character_usage.json docs/data/character_usage_history.json
           if git diff --cached --quiet; then
             exit 0
           fi
@@ -85,20 +92,24 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-artifacts
+          name: debug-artifacts-${{ github.run_id }}
           path: .artifacts/debug/
+          if-no-files-found: ignore
 
       - name: Upload Pages artifact
+        if: steps.decision.outputs.should_deploy == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./docs
 
   deploy:
+    if: needs.build.outputs.should_deploy == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       pages: write
       id-token: write

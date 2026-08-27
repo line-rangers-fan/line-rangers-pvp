@@ -32,11 +32,11 @@
 
   <link
     rel="stylesheet"
-    href="./assets/style.css?v=20260826-5"
+    href="./assets/style.css?v=20260827-1"
   >
 
   <script
-    src="./assets/app.js?v=20260826-3"
+    src="./assets/app.js?v=20260827-1"
     defer
   ></script>
 
@@ -107,7 +107,7 @@
             zh: "※PVP排名於週六重置，部分 Legend 階級下位玩家轉移至 Master 階級，集計時分母暫時減少屬正常現象，非系統錯誤。<br>敬請見諒。",
             th: "※การรีเซ็ตอันดับ PVP เกิดขึ้นในวันเสาร์ ผู้เล่นระดับ Legend ระดับล่างจะถูกปรับไปอยู่ระดับ Master จำนวนกลุ่มตัวอย่างที่ลดลงชั่วคราวระหว่างการเก็บข้อมูลไม่ใช่ข้อผิดพลาด<br>โปรดเข้าใจและรับทราบ",
             id: "※Peringkat PVP direset pada hari Sabtu, memindahkan pemain Legend tingkat bawah ke Master. Penurunan sementara jumlah sampel saat pengumpulan data adalah normal, bukan kesalahan.<br>Mohon dimaklumi.",
-            vi: "※Xếp hạng PVP được đặt lại vào thứ Bảy, người chơi Legend hạng dưới sẽ chuyển sang Master. Số lượng mẫu giảm tạm文字 khi tổng hợp không phải là lỗi.<br>Rất mong quý vị thông cảm.",
+            vi: "※Xếp hạng PVP được đặt lại vào thứ Bảy, người chơi Legend hạng dưới sẽ chuyển sang Master. Số lượng mẫu giảm tạm thời khi tổng hợp không phải là lỗi.<br>Rất mong quý vị thông cảm.",
             ko: "※토요일에 PVP 랭킹이 초기화되어 레전드 하위 구간 플레이어가 마스터 구간으로 이동합니다. 집계 시 분모가 일시적으로 줄어들 수 있으나 오류가 아니니 양해 부탁드립니다."
           };
 
@@ -121,7 +121,7 @@
           }
 
           // 初期表示時の言語（保存されている言語またはデフォルトja）
-          const currentLang = localStorage.getItem("language") || "ja";
+          const currentLang = localStorage.getItem("line-rangers-language") || "ja";
           renderNotice(currentLang);
 
           // 言語切り替えボタンがクリックされた時の連動処理
@@ -224,6 +224,16 @@
         <strong id="summary-updated">
           -
         </strong>
+
+        <div class="summary-update-meta" aria-live="polite">
+          <span id="summary-freshness" class="freshness-badge">
+            -
+          </span>
+
+          <span id="summary-health">
+            -
+          </span>
+        </div>
       </article>
     </section>
 
