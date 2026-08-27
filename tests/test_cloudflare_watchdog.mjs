@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   dataNeedsCollection,
+  getHealthSnapshot,
+  inspectDataHealth,
   runWatchdog,
 } from "../infra/cloudflare-watchdog/src/index.mjs";
 
@@ -66,5 +68,44 @@ test("missing and future timestamps request repair", () => {
   assert.equal(
     dataNeedsCollection({ updated_at: "2026-08-27T04:11:00Z" }, NOW),
     true,
+  );
+});
+
+
+test("health snapshot reports freshness and age", async () => {
+  const fetchImpl = async () => new Response(
+    JSON.stringify({ updated_at: "2026-08-27T03:10:00Z" }),
+    { status: 200 },
+  );
+
+  const health = await getHealthSnapshot(ENV, { fetchImpl, nowMs: NOW });
+
+  assert.deepEqual(health, {
+    status: "ok",
+    service: "line-rangers-pvp-watchdog",
+    schedule: "27 * * * *",
+    updated_at: "2026-08-27T03:10:00Z",
+    age_minutes: 50,
+    stale_after_minutes: 55,
+    checked_at: "2026-08-27T04:00:00.000Z",
+  });
+});
+
+
+test("health inspection distinguishes stale and invalid data", () => {
+  assert.equal(
+    inspectDataHealth(
+      { updated_at: "2026-08-27T03:05:00Z" },
+      NOW,
+    ).status,
+    "stale",
+  );
+  assert.equal(inspectDataHealth({}, NOW).status, "unreadable");
+  assert.equal(
+    inspectDataHealth(
+      { updated_at: "2026-08-27T04:11:00Z" },
+      NOW,
+    ).status,
+    "invalid_timestamp",
   );
 });

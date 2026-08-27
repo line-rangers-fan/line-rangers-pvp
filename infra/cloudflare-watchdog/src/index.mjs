@@ -1,5 +1,7 @@
 const MAX_AGE_MS = 55 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000;
+const SERVICE_NAME = "line-rangers-pvp-watchdog";
+const SCHEDULE = "27 * * * *";
 
 
 function requiredEnvironment(env, name) {
@@ -12,10 +14,75 @@ function requiredEnvironment(env, name) {
 
 
 export function dataNeedsCollection(data, nowMs = Date.now()) {
-  const updatedMs = Date.parse(data?.updated_at || "");
-  if (!Number.isFinite(updatedMs)) return true;
+  return inspectDataHealth(data, nowMs).status !== "ok";
+}
+
+
+export function inspectDataHealth(data, nowMs = Date.now()) {
+  const updatedAt = String(data?.updated_at || "");
+  const updatedMs = Date.parse(updatedAt);
+  if (!Number.isFinite(updatedMs)) {
+    return { status: "unreadable", updated_at: null, age_minutes: null };
+  }
+
   const ageMs = nowMs - updatedMs;
-  return ageMs >= MAX_AGE_MS || ageMs < -MAX_FUTURE_SKEW_MS;
+  const ageMinutes = Math.round((ageMs / 60_000) * 10) / 10;
+  if (ageMs < -MAX_FUTURE_SKEW_MS) {
+    return {
+      status: "invalid_timestamp",
+      updated_at: updatedAt,
+      age_minutes: ageMinutes,
+    };
+  }
+  return {
+    status: ageMs >= MAX_AGE_MS ? "stale" : "ok",
+    updated_at: updatedAt,
+    age_minutes: ageMinutes,
+  };
+}
+
+
+async function fetchPublishedData(dataUrl, fetchImpl, nowMs, queryName) {
+  const response = await fetchImpl(`${dataUrl}?${queryName}=${nowMs}`, {
+    headers: {
+      Accept: "application/json",
+      "Cache-Control": "no-cache",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Published data request failed: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+
+export async function getHealthSnapshot(
+  env,
+  { fetchImpl = fetch, nowMs = Date.now() } = {},
+) {
+  const dataUrl = requiredEnvironment(env, "DATA_URL");
+  let dataHealth;
+  try {
+    const data = await fetchPublishedData(dataUrl, fetchImpl, nowMs, "health");
+    dataHealth = inspectDataHealth(data, nowMs);
+  } catch (error) {
+    console.warn("Health check could not read published data.", error);
+    dataHealth = {
+      status: "unreadable",
+      updated_at: null,
+      age_minutes: null,
+    };
+  }
+
+  return {
+    status: dataHealth.status,
+    service: SERVICE_NAME,
+    schedule: SCHEDULE,
+    updated_at: dataHealth.updated_at,
+    age_minutes: dataHealth.age_minutes,
+    stale_after_minutes: MAX_AGE_MS / 60_000,
+    checked_at: new Date(nowMs).toISOString(),
+  };
 }
 
 
@@ -28,18 +95,13 @@ export async function runWatchdog(
 
   let stale = true;
   try {
-    const dataResponse = await fetchImpl(
-      `${dataUrl}?watchdog=${nowMs}`,
-      {
-        headers: {
-          Accept: "application/json",
-          "Cache-Control": "no-cache",
-        },
-      },
+    const data = await fetchPublishedData(
+      dataUrl,
+      fetchImpl,
+      nowMs,
+      "watchdog",
     );
-    if (dataResponse.ok) {
-      stale = dataNeedsCollection(await dataResponse.json(), nowMs);
-    }
+    stale = dataNeedsCollection(data, nowMs);
   } catch (error) {
     console.warn("Freshness check failed; requesting a guarded repair.", error);
   }
@@ -75,14 +137,12 @@ export async function runWatchdog(
 
 
 export default {
-  fetch() {
+  async fetch(_request, env) {
+    const health = await getHealthSnapshot(env);
     return new Response(
-      JSON.stringify({
-        status: "ok",
-        service: "line-rangers-pvp-watchdog",
-        schedule: "27 * * * *",
-      }),
+      JSON.stringify(health),
       {
+        status: health.status === "ok" ? 200 : 503,
         headers: {
           "Cache-Control": "no-store",
           "Content-Type": "application/json; charset=utf-8",
