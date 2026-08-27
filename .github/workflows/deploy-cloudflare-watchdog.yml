@@ -30,3 +30,16 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: infra/cloudflare-watchdog
           command: deploy
+
+      - name: Set Worker GitHub dispatch secret
+        working-directory: infra/cloudflare-watchdog
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WORKFLOW_TOKEN: ${{ secrets.GITHUB_ACTIONS_TOKEN }}
+        run: |
+          if [ -z "$WORKFLOW_TOKEN" ]; then
+            echo "GITHUB_ACTIONS_TOKEN repository secret is required."
+            exit 1
+          fi
+          printf '%s' "$WORKFLOW_TOKEN" | npx wrangler secret put GITHUB_ACTIONS_TOKEN
