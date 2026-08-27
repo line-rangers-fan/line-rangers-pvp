@@ -40,12 +40,14 @@ def test_all_pvp_groups_and_duplicate_units_are_preserved():
     assert players[1]["units"] == ["u-alpha", "u-alpha", "u-beta"]
     assert diagnostics["team_size_distribution"] == {1: 1, 3: 1}
 
-    data = scraper.build_statistics(players, diagnostics)
+    data = scraper.build_statistics(players, diagnostics, target_players=2)
     by_image = {row["image"]: row for row in data["characters"]}
     alpha = by_image[scraper.character_image_url("u-alpha")]
     beta = by_image[scraper.character_image_url("u-beta")]
 
     assert data["character_slots"] == 4
+    assert data["schema_version"] == 7
+    assert data["collection_quality"]["sample_coverage"] == 100.0
     assert alpha["occurrence_count"] == 2
     assert alpha["player_count"] == 1
     assert beta["occurrence_count"] == 2
@@ -139,6 +141,27 @@ def test_insufficient_ranked_players_refuses_publish(monkeypatch):
         scraper.scrape()
 
 
+def test_detail_failure_stops_before_later_batches(monkeypatch):
+    requested = []
+
+    def fetch(mid):
+        requested.append(mid)
+        if mid == "player-1":
+            raise RuntimeError("temporary outage")
+        return {"mid": mid}
+
+    monkeypatch.setattr(scraper, "PLAYER_FETCH_WORKERS", 1)
+    monkeypatch.setattr(scraper, "fetch_player_detail", fetch)
+
+    details, failures = scraper.fetch_ranked_player_details(
+        ["player-1", "player-2", "player-3", "player-4"]
+    )
+
+    assert failures == [{"mid": "player-1", "error": "temporary outage"}]
+    assert set(requested) == {"player-1", "player-2"}
+    assert "player-3" not in details
+
+
 def test_failed_collection_keeps_previous_published_data(tmp_path, monkeypatch):
     output_path = tmp_path / "character_usage.json"
     previous = {"updated_at": "previous", "sampled_players": 200}
@@ -154,3 +177,91 @@ def test_failed_collection_keeps_previous_published_data(tmp_path, monkeypatch):
         scraper.main()
 
     assert scraper.load_json(output_path) == previous
+
+
+def test_previous_comparison_uses_positive_values_for_upward_rank_moves():
+    previous = {
+        "updated_at": "2026-08-27T01:00:00+00:00",
+        "sampled_players": 2,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 3,
+                "occurrence_count": 1,
+                "player_count": 1,
+                "adoption_rate": 50.0,
+            },
+            {
+                "unit_code": "u-removed",
+                "rank": 1,
+                "occurrence_count": 2,
+                "player_count": 2,
+                "adoption_rate": 100.0,
+            },
+        ],
+    }
+    current = {
+        "updated_at": "2026-08-27T02:00:00+00:00",
+        "sampled_players": 2,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": 2,
+                "player_count": 2,
+                "adoption_rate": 100.0,
+            },
+            {
+                "unit_code": "u-new",
+                "rank": 2,
+                "occurrence_count": 1,
+                "player_count": 1,
+                "adoption_rate": 50.0,
+            },
+        ],
+    }
+
+    scraper.add_previous_comparison(current, previous)
+
+    assert current["characters"][0]["change"]["rank"] == 2
+    assert current["characters"][0]["change"]["occurrence_count"] == 1
+    assert current["characters"][1]["change"] == {"new": True}
+    assert current["comparison"]["new_characters"] == 1
+    assert current["comparison"]["removed_characters"] == 1
+
+
+def test_history_is_compact_deduplicated_and_bounded():
+    data = {
+        "updated_at": "2026-08-27T02:00:00+00:00",
+        "sampled_players": 200,
+        "character_slots": 1980,
+        "unique_characters": 1,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": 2,
+                "player_count": 2,
+                "adoption_rate": 1.0,
+                "image": "not-copied",
+                "equipment_rankings": {"not": "copied"},
+            }
+        ],
+    }
+    history = {
+        "snapshots": [
+            {"updated_at": "old-1"},
+            {"updated_at": "old-2"},
+            {"updated_at": data["updated_at"]},
+        ]
+    }
+
+    result = scraper.update_history(data, history, limit=2)
+
+    assert [row["updated_at"] for row in result["snapshots"]] == [
+        "old-2",
+        data["updated_at"],
+    ]
+    character = result["snapshots"][-1]["characters"][0]
+    assert "image" not in character
+    assert "equipment_rankings" not in character
