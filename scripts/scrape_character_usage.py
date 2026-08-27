@@ -56,6 +56,8 @@ REQUEST_TIMEOUT_SECONDS = 30
 # source access. A failed incomplete run is never published.
 REQUEST_ATTEMPTS = 3
 OUTPUT_PATH = Path("docs/data/character_usage.json")
+HISTORY_PATH = Path("docs/data/character_usage_history.json")
+HISTORY_LIMIT = 24 * 7
 DEBUG_DIR = Path(".artifacts/debug")
 
 # IDs are only used in known source URLs. Strict validation avoids publishing a
@@ -188,30 +190,47 @@ def extract_ranked_mids(payload: dict, target_players: int) -> tuple[list[str], 
 
 
 def fetch_ranked_player_details(mids: list[str]) -> tuple[dict[str, dict], list[dict]]:
-    """Fetch every ranked player's detailed formation concurrently."""
+    """Fetch details in bounded batches and stop after the first failed batch.
+
+    One missing player already makes a 200-player publication impossible.
+    Continuing through all remaining IDs during an upstream outage would only
+    extend the run and add avoidable load to the public source.
+    """
     details: dict[str, dict] = {}
     failures: list[dict] = []
+    batch_size = PLAYER_FETCH_WORKERS * 2
 
-    with ThreadPoolExecutor(max_workers=PLAYER_FETCH_WORKERS) as executor:
-        future_by_mid = {
-            executor.submit(fetch_player_detail, mid): mid
-            for mid in mids
-        }
-        for future in as_completed(future_by_mid):
-            mid = future_by_mid[future]
-            try:
-                details[mid] = future.result()
-            except Exception as error:  # Gather every failure for diagnostics.
-                failures.append({"mid": mid, "error": str(error)})
+    for start in range(0, len(mids), batch_size):
+        batch = mids[start : start + batch_size]
+        batch_failures: list[dict] = []
+        with ThreadPoolExecutor(max_workers=PLAYER_FETCH_WORKERS) as executor:
+            future_by_mid = {
+                executor.submit(fetch_player_detail, mid): mid for mid in batch
+            }
+            for future in as_completed(future_by_mid):
+                mid = future_by_mid[future]
+                try:
+                    details[mid] = future.result()
+                except Exception as error:
+                    batch_failures.append({"mid": mid, "error": str(error)})
+        if batch_failures:
+            failures.extend(batch_failures)
+            break
 
     return details, sorted(failures, key=lambda item: item["mid"])
 
 
 def extract_unit_equipment(unit: dict, mid: str, diagnostics: dict) -> dict[str, str]:
     """Extract the three equipment slots attached to one character occurrence."""
+    missing_slots = diagnostics.setdefault(
+        "missing_equipment_slots",
+        {equipment_type: 0 for equipment_type in EQUIPMENT_TYPES},
+    )
     equip_map = unit.get("equipMap")
     if equip_map is None:
         diagnostics["units_without_equipment"] += 1
+        for equipment_type in EQUIPMENT_TYPES:
+            missing_slots[equipment_type] += 1
         return {}
     if not isinstance(equip_map, dict):
         raise ValueError(f"{mid}: equipMap is not an object")
@@ -220,6 +239,7 @@ def extract_unit_equipment(unit: dict, mid: str, diagnostics: dict) -> dict[str,
     for equipment_type in EQUIPMENT_TYPES:
         slot = equip_map.get(equipment_type)
         if slot is None:
+            missing_slots[equipment_type] += 1
             continue
         if not isinstance(slot, dict):
             raise ValueError(f"{mid}: {equipment_type} slot is not an object")
@@ -267,6 +287,9 @@ def extract_ranked_players(
         "invalid_unit_codes": [],
         "invalid_equipment": [],
         "units_without_equipment": 0,
+        "missing_equipment_slots": {
+            equipment_type: 0 for equipment_type in EQUIPMENT_TYPES
+        },
     }
 
     for rank_record in rankings:
@@ -484,8 +507,14 @@ def build_statistics(
         for character in characters
         for category in character["equipment_rankings"].values()
     )
+    equipment_slots_collected = sum(
+        int(category["equipped_occurrence_count"])
+        for character in characters
+        for category in character["equipment_rankings"].values()
+    )
+    equipment_slots_expected = total_slots * len(EQUIPMENT_TYPES)
     return {
-        "schema_version": 6,
+        "schema_version": 7,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "source": {"name": SOURCE_NAME, "url": TARGET_URL},
         "league": "レジェンド",
@@ -497,6 +526,31 @@ def build_statistics(
         "pages_scanned": 1,
         "termination_reason": "api_target_reached",
         "complete_target": sampled_players >= target_players,
+        "collection_quality": {
+            "sample_coverage": round(sampled_players / target_players * 100, 1),
+            "equipment_slots_collected": equipment_slots_collected,
+            "equipment_slots_expected": equipment_slots_expected,
+            "equipment_slots_missing": (
+                equipment_slots_expected - equipment_slots_collected
+            ),
+            "equipment_fill_rate": round(
+                equipment_slots_collected / equipment_slots_expected * 100,
+                1,
+            ),
+            "detail_fetch_failures": len(
+                diagnostics.get("detail_fetch_failures", [])
+            ),
+            "invalid_player_records": sum(
+                len(diagnostics.get(key, []))
+                for key in (
+                    "missing_player_info",
+                    "invalid_players",
+                    "invalid_unit_codes",
+                    "invalid_equipment",
+                    "invalid_rank_records",
+                )
+            ),
+        },
         "characters": characters,
         "diagnostics": diagnostics,
     }
@@ -515,6 +569,20 @@ def scrape() -> dict:
         )
 
     details, detail_failures = fetch_ranked_player_details(mids)
+    if detail_failures:
+        if os.environ.get("DEBUG", "0") == "1":
+            save_json(
+                DEBUG_DIR / "detail_fetch_failures.json",
+                {
+                    "requested": len(mids),
+                    "completed_before_abort": len(details),
+                    "failures": detail_failures,
+                },
+            )
+        raise RuntimeError(
+            "Player detail collection failed after bounded retries; "
+            f"aborted without publishing ({len(detail_failures)} failures)."
+        )
     players, diagnostics = extract_ranked_players(
         payload, TARGET_PLAYER_COUNT, player_details=details
     )
@@ -542,10 +610,108 @@ def scrape() -> dict:
     )
 
 
-def write_output(data: dict) -> None:
-    temporary_path = OUTPUT_PATH.with_suffix(".json.tmp")
-    save_json(temporary_path, data)
-    temporary_path.replace(OUTPUT_PATH)
+def add_previous_comparison(data: dict, previous: dict | None) -> dict:
+    """Attach exact hour-over-hour changes without publishing player IDs."""
+    if not previous or not isinstance(previous.get("characters"), list):
+        data["comparison"] = {
+            "previous_updated_at": None,
+            "comparable": False,
+            "new_characters": 0,
+            "removed_characters": 0,
+        }
+        return data
+
+    previous_rows = {
+        str(row.get("unit_code")): row
+        for row in previous["characters"]
+        if isinstance(row, dict) and row.get("unit_code")
+    }
+    current_codes: set[str] = set()
+    new_characters = 0
+    for row in data["characters"]:
+        unit_code = str(row["unit_code"])
+        current_codes.add(unit_code)
+        old = previous_rows.get(unit_code)
+        if old is None:
+            row["change"] = {"new": True}
+            new_characters += 1
+            continue
+        row["change"] = {
+            "new": False,
+            # Positive means the character moved up the ranking.
+            "rank": int(old.get("rank", 0)) - int(row["rank"]),
+            "occurrence_count": int(row["occurrence_count"])
+            - int(old.get("occurrence_count", 0)),
+            "player_count": int(row["player_count"])
+            - int(old.get("player_count", 0)),
+            "adoption_rate": round(
+                float(row["adoption_rate"])
+                - float(old.get("adoption_rate", 0)),
+                1,
+            ),
+        }
+
+    data["comparison"] = {
+        "previous_updated_at": previous.get("updated_at"),
+        "comparable": (
+            int(previous.get("sampled_players", 0))
+            == int(data.get("sampled_players", 0))
+        ),
+        "new_characters": new_characters,
+        "removed_characters": len(set(previous_rows) - current_codes),
+    }
+    return data
+
+
+def history_snapshot(data: dict) -> dict:
+    """Keep only compact, non-identifying values needed for future trends."""
+    return {
+        "updated_at": data["updated_at"],
+        "sampled_players": data["sampled_players"],
+        "character_slots": data["character_slots"],
+        "unique_characters": data["unique_characters"],
+        "characters": [
+            {
+                "unit_code": row["unit_code"],
+                "rank": row["rank"],
+                "occurrence_count": row["occurrence_count"],
+                "player_count": row["player_count"],
+                "adoption_rate": row["adoption_rate"],
+            }
+            for row in data["characters"]
+        ],
+    }
+
+
+def update_history(
+    data: dict,
+    history: dict | None,
+    limit: int = HISTORY_LIMIT,
+) -> dict:
+    if limit < 1:
+        raise ValueError("history limit must be positive")
+    snapshots = history.get("snapshots", []) if isinstance(history, dict) else []
+    snapshots = [
+        item
+        for item in snapshots
+        if isinstance(item, dict) and item.get("updated_at") != data["updated_at"]
+    ]
+    snapshots.append(history_snapshot(data))
+    return {
+        "schema_version": 1,
+        "generated_at": data["updated_at"],
+        "retention_hours": limit,
+        "snapshots": snapshots[-limit:],
+    }
+
+
+def write_outputs(data: dict, history: dict) -> None:
+    temporary_output = OUTPUT_PATH.with_suffix(".json.tmp")
+    temporary_history = HISTORY_PATH.with_suffix(".json.tmp")
+    save_json(temporary_output, data)
+    save_json(temporary_history, history)
+    temporary_history.replace(HISTORY_PATH)
+    temporary_output.replace(OUTPUT_PATH)
 
 
 def dump_debug(data: dict) -> None:
@@ -555,10 +721,13 @@ def dump_debug(data: dict) -> None:
 
 def main() -> None:
     previous = load_json(OUTPUT_PATH)
+    previous_history = load_json(HISTORY_PATH)
     try:
         data = scrape()
+        add_previous_comparison(data, previous)
         validate_data(data, previous)
-        write_output(data)
+        history = update_history(data, previous_history)
+        write_outputs(data, history)
         dump_debug(data)
         print(
             "[DONE] "
