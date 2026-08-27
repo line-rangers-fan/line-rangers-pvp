@@ -25,7 +25,6 @@ export async function runWatchdog(
 ) {
   const repository = requiredEnvironment(env, "GITHUB_REPOSITORY");
   const dataUrl = requiredEnvironment(env, "DATA_URL");
-  const token = requiredEnvironment(env, "GITHUB_ACTIONS_TOKEN");
 
   let stale = true;
   try {
@@ -49,6 +48,7 @@ export async function runWatchdog(
     return { dispatched: false, reason: "fresh" };
   }
 
+  const token = requiredEnvironment(env, "GITHUB_ACTIONS_TOKEN");
   const dispatchResponse = await fetchImpl(
     `https://api.github.com/repos/${repository}/actions/workflows/update-character-usage.yml/dispatches`,
     {
@@ -75,6 +75,22 @@ export async function runWatchdog(
 
 
 export default {
+  fetch() {
+    return new Response(
+      JSON.stringify({
+        status: "ok",
+        service: "line-rangers-pvp-watchdog",
+        schedule: "27 * * * *",
+      }),
+      {
+        headers: {
+          "Cache-Control": "no-store",
+          "Content-Type": "application/json; charset=utf-8",
+        },
+      },
+    );
+  },
+
   scheduled(_controller, env, context) {
     context.waitUntil(
       runWatchdog(env).then((result) => {
