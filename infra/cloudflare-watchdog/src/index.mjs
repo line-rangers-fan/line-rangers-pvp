@@ -21,8 +21,36 @@ export function dataNeedsCollection(data, nowMs = Date.now()) {
 export function inspectDataHealth(data, nowMs = Date.now()) {
   const updatedAt = String(data?.updated_at || "");
   const updatedMs = Date.parse(updatedAt);
+  const quality = data?.collection_quality;
+  const sampledPlayers = Number(data?.sampled_players);
+  const targetPlayers = Number(data?.target_players);
+  const detailFailures = Number(quality?.detail_fetch_failures);
+  const invalidRecords = Number(quality?.invalid_player_records);
+  const equipmentFillRate = Number(quality?.equipment_fill_rate);
+  const collectionDuration = Number(quality?.collection_duration_seconds);
+  const metrics = {
+    sampled_players: Number.isFinite(sampledPlayers) ? sampledPlayers : null,
+    target_players: Number.isFinite(targetPlayers) ? targetPlayers : null,
+    equipment_fill_rate: Number.isFinite(equipmentFillRate)
+      ? equipmentFillRate
+      : null,
+    detail_fetch_failures: Number.isFinite(detailFailures)
+      ? detailFailures
+      : null,
+    invalid_player_records: Number.isFinite(invalidRecords)
+      ? invalidRecords
+      : null,
+    collection_duration_seconds: Number.isFinite(collectionDuration)
+      ? collectionDuration
+      : null,
+  };
   if (!Number.isFinite(updatedMs)) {
-    return { status: "unreadable", updated_at: null, age_minutes: null };
+    return {
+      status: "unreadable",
+      updated_at: null,
+      age_minutes: null,
+      ...metrics,
+    };
   }
 
   const ageMs = nowMs - updatedMs;
@@ -32,12 +60,31 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
       status: "invalid_timestamp",
       updated_at: updatedAt,
       age_minutes: ageMinutes,
+      ...metrics,
+    };
+  }
+  const completeSample =
+    targetPlayers > 0 &&
+    sampledPlayers === targetPlayers &&
+    data?.complete_target === true &&
+    Array.isArray(data?.characters) &&
+    data.characters.length > 0 &&
+    Number(quality?.sample_coverage) === 100 &&
+    detailFailures === 0 &&
+    invalidRecords === 0;
+  if (!completeSample) {
+    return {
+      status: "invalid_data",
+      updated_at: updatedAt,
+      age_minutes: ageMinutes,
+      ...metrics,
     };
   }
   return {
     status: ageMs >= MAX_AGE_MS ? "stale" : "ok",
     updated_at: updatedAt,
     age_minutes: ageMinutes,
+    ...metrics,
   };
 }
 
@@ -71,6 +118,12 @@ export async function getHealthSnapshot(
       status: "unreadable",
       updated_at: null,
       age_minutes: null,
+      sampled_players: null,
+      target_players: null,
+      equipment_fill_rate: null,
+      detail_fetch_failures: null,
+      invalid_player_records: null,
+      collection_duration_seconds: null,
     };
   }
 
@@ -80,6 +133,12 @@ export async function getHealthSnapshot(
     schedule: SCHEDULE,
     updated_at: dataHealth.updated_at,
     age_minutes: dataHealth.age_minutes,
+    sampled_players: dataHealth.sampled_players,
+    target_players: dataHealth.target_players,
+    equipment_fill_rate: dataHealth.equipment_fill_rate,
+    detail_fetch_failures: dataHealth.detail_fetch_failures,
+    invalid_player_records: dataHealth.invalid_player_records,
+    collection_duration_seconds: dataHealth.collection_duration_seconds,
     stale_after_minutes: MAX_AGE_MS / 60_000,
     checked_at: new Date(nowMs).toISOString(),
   };
@@ -93,7 +152,7 @@ export async function runWatchdog(
   const repository = requiredEnvironment(env, "GITHUB_REPOSITORY");
   const dataUrl = requiredEnvironment(env, "DATA_URL");
 
-  let stale = true;
+  let repairReason = "unreadable";
   try {
     const data = await fetchPublishedData(
       dataUrl,
@@ -101,12 +160,12 @@ export async function runWatchdog(
       nowMs,
       "watchdog",
     );
-    stale = dataNeedsCollection(data, nowMs);
+    repairReason = inspectDataHealth(data, nowMs).status;
   } catch (error) {
     console.warn("Freshness check failed; requesting a guarded repair.", error);
   }
 
-  if (!stale) {
+  if (repairReason === "ok") {
     return { dispatched: false, reason: "fresh" };
   }
 
@@ -132,7 +191,7 @@ export async function runWatchdog(
       `GitHub workflow dispatch failed: HTTP ${dispatchResponse.status}`,
     );
   }
-  return { dispatched: true, reason: "stale_or_unreadable" };
+  return { dispatched: true, reason: repairReason };
 }
 
 

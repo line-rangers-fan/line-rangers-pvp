@@ -68,7 +68,7 @@ def valid_data(sampled_players=2, character_slots=None):
         previous_rank = rank
 
     return {
-        "schema_version": 7,
+        "schema_version": 8,
         "updated_at": "2026-08-27T03:00:00+00:00",
         "target_players": sampled_players,
         "sampled_players": sampled_players,
@@ -76,6 +76,9 @@ def valid_data(sampled_players=2, character_slots=None):
         "character_slots": character_slots,
         "unique_characters": 2,
         "collection_quality": {
+            "collection_started_at": "2026-08-27T02:59:00+00:00",
+            "collection_duration_seconds": 60.0,
+            "detail_fetch_duration_seconds": 45.0,
             "sample_coverage": 100.0,
             "equipment_slots_collected": 0,
             "equipment_slots_expected": character_slots * 3,
@@ -137,4 +140,12 @@ def test_wrong_rate_rank_and_quality_are_rejected():
     data["complete_target"] = True
     data["target_players"] = 3
     with pytest.raises(ValueError, match="incomplete sample"):
+        validate_data(data)
+
+
+def test_invalid_collection_timing_is_rejected():
+    data = valid_data()
+    data["collection_quality"]["detail_fetch_duration_seconds"] = 61.0
+
+    with pytest.raises(ValueError, match="collection timing"):
         validate_data(data)

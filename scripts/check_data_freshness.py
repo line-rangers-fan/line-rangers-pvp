@@ -28,6 +28,28 @@ def parse_timestamp(value: object) -> datetime:
     return timestamp.astimezone(timezone.utc)
 
 
+def has_complete_sample(data: dict) -> bool:
+    """Check the publication guard fields without re-running full statistics."""
+    try:
+        target = int(data.get("target_players", 0))
+        sampled = int(data.get("sampled_players", 0))
+        characters = data.get("characters")
+        quality = data.get("collection_quality")
+        return (
+            target > 0
+            and sampled == target
+            and data.get("complete_target") is True
+            and isinstance(characters, list)
+            and len(characters) > 0
+            and isinstance(quality, dict)
+            and float(quality.get("sample_coverage", 0)) == 100.0
+            and int(quality.get("detail_fetch_failures", -1)) == 0
+            and int(quality.get("invalid_player_records", -1)) == 0
+        )
+    except (TypeError, ValueError):
+        return False
+
+
 def check_freshness(
     path: Path = DEFAULT_DATA_PATH,
     max_age_minutes: float = 50,
@@ -51,6 +73,8 @@ def check_freshness(
             data = json.load(file)
         if not isinstance(data, dict):
             raise ValueError("ranking JSON root is not an object")
+        if not has_complete_sample(data):
+            return Freshness(True, None, "invalid_quality")
         updated_at = parse_timestamp(data.get("updated_at"))
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         return Freshness(True, None, "missing_or_invalid_data")
