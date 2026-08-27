@@ -1,0 +1,10 @@
+name = "line-rangers-pvp-watchdog"
+main = "src/index.mjs"
+compatibility_date = "2026-08-27"
+
+[triggers]
+crons = ["27 * * * *"]
+
+[vars]
+GITHUB_REPOSITORY = "line-rangers-fan/line-rangers-pvp"
+DATA_URL = "https://line-rangers-fan.github.io/line-rangers-pvp/data/character_usage.json"
