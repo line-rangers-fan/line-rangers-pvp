@@ -215,6 +215,7 @@ const STATUS_TEXT = {
     rankDay: "1日",
     rankWeek: "1週",
     rankMonth: "1月",
+    rankHistoryPending: "履歴待ち",
   },
   en: {
     healthy: "Up to date",
@@ -234,6 +235,7 @@ const STATUS_TEXT = {
     rankDay: "1d",
     rankWeek: "7d",
     rankMonth: "30d",
+    rankHistoryPending: "History pending",
   },
   zh: {
     healthy: "更新正常",
@@ -252,6 +254,7 @@ const STATUS_TEXT = {
     rankDay: "1日",
     rankWeek: "1週",
     rankMonth: "1月",
+    rankHistoryPending: "等待歷史資料",
   },
   th: {
     healthy: "อัปเดตปกติ",
@@ -270,6 +273,7 @@ const STATUS_TEXT = {
     rankDay: "1 วัน",
     rankWeek: "1 สัปดาห์",
     rankMonth: "1 เดือน",
+    rankHistoryPending: "รอประวัติข้อมูล",
   },
   id: {
     healthy: "Pembaruan normal",
@@ -289,6 +293,7 @@ const STATUS_TEXT = {
     rankDay: "1h",
     rankWeek: "7h",
     rankMonth: "30h",
+    rankHistoryPending: "Menunggu riwayat",
   },
   vi: {
     healthy: "Cập nhật bình thường",
@@ -308,6 +313,7 @@ const STATUS_TEXT = {
     rankDay: "1 ngày",
     rankWeek: "1 tuần",
     rankMonth: "1 tháng",
+    rankHistoryPending: "Đang chờ lịch sử",
   },
   ko: {
     healthy: "정상 업데이트",
@@ -327,6 +333,7 @@ const STATUS_TEXT = {
     rankDay: "1일",
     rankWeek: "1주",
     rankMonth: "1개월",
+    rankHistoryPending: "기록 대기",
   },
 };
 
@@ -1074,12 +1081,12 @@ function renderSummary() {
 }
 
 function renderRankPeriodChanges(container, change, options = {}) {
-  const alwaysShowZero = options.alwaysShowZero === true;
+  const alwaysShow = options.alwaysShow === true || options.alwaysShowZero === true;
   const selectedPeriod = String(options.period || "");
   const metric = options.metric || "rank";
   const includePeriodLabel = options.includePeriodLabel !== false;
   const periods = change?.periods;
-  if (!alwaysShowZero && (!periods || typeof periods !== "object")) return;
+  if (!alwaysShow && (!periods || typeof periods !== "object")) return;
 
   const periodDefinitions = selectedPeriod
     ? RANK_CHANGE_PERIODS.filter(([key]) => key === selectedPeriod)
@@ -1090,28 +1097,33 @@ function renderRankPeriodChanges(container, change, options = {}) {
       label: st(labelKey),
       value: periods?.[key],
     }))
-    .filter(({ value }) => alwaysShowZero || value?.comparable === true);
-  if (!alwaysShowZero && comparablePeriods.length === 0) return;
+    .filter(({ value }) => alwaysShow || value?.comparable === true);
+  if (!alwaysShow && comparablePeriods.length === 0) return;
 
   const list = document.createElement("span");
   list.className = "rank-period-changes";
   list.setAttribute("aria-label", "period changes");
   comparablePeriods.forEach(({ key, label, value }) => {
+    const isComparable = value?.comparable === true;
     const parsedDelta = Number(
       metric === "occurrence" ? value?.occurrence_count : value?.rank
     );
-    const delta = Number.isInteger(parsedDelta) && Number.isFinite(parsedDelta)
+    const hasDelta = isComparable && Number.isInteger(parsedDelta) && Number.isFinite(parsedDelta);
+    const delta = hasDelta
       ? parsedDelta
       : 0;
     const badge = document.createElement("span");
     badge.className =
-      delta > 0
+      !hasDelta
+        ? "rank-period-change rank-period-pending"
+        : delta > 0
         ? "rank-period-change rank-period-up"
         : delta < 0
           ? "rank-period-change rank-period-down"
           : "rank-period-change rank-period-neutral";
-    const movement =
-      metric === "occurrence"
+    const movement = !hasDelta
+      ? st("rankHistoryPending")
+      : metric === "occurrence"
         ? delta > 0
           ? `+${formatUnit(delta, "occurrence")}`
           : delta < 0
@@ -1857,11 +1869,11 @@ function renderEquipment(character) {
       rankNumber.className = "rank-number";
       rankNumber.textContent = String(item.rank || "-");
       rank.appendChild(rankNumber);
-      // Equipment rows use the same compact day/week/month movement badges as
-      // the character table.  Missing history is intentionally rendered as 0
-      // instead of hiding the comparison, so every item has the same layout.
+      // Equipment rows use the same compact day/week/month count-change badges
+      // as the character table. A neutral 0 is shown only after a valid
+      // comparison; unavailable history is labelled rather than fabricated.
       renderRankPeriodChanges(rank, item.change, {
-        alwaysShowZero: true,
+        alwaysShow: true,
         period: state.selectedRankPeriod,
         metric: "occurrence",
       });

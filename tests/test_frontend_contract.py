@@ -49,10 +49,11 @@ def test_history_and_equipment_change_contract_is_present():
     assert "History snapshots are not in chronological order." in app
     assert "const RANK_CHANGE_PERIODS" in app
     assert "function renderRankPeriodChanges(" in app
-    assert "alwaysShowZero: true" in app
+    assert "alwaysShow: true" in app
     assert "selectedRankPeriod" in app
     assert "setupRankPeriodSelector" in app
     assert 'metric: "occurrence"' in app
+    assert 'rankHistoryPending' in app
     assert "includePeriodLabel: false" in app
     assert "renderRankPeriodChanges(rank, item.change" in app
     assert ".rank-period-changes" in style

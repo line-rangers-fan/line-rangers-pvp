@@ -746,6 +746,29 @@ def _find_history_equipment(
     return None
 
 
+def _exact_int(value: object) -> int | None:
+    """Return an integer value while excluding booleans and malformed data."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _occurrence_delta(current_value: object, previous_value: object | None) -> int | None:
+    """Return a count delta, using zero only for an item absent from a valid snapshot.
+
+    A missing item in an otherwise valid reference snapshot means it was used zero
+    times.  A malformed count is different: it remains unavailable so the page
+    does not quietly turn uncertain data into a false zero.
+    """
+    current_count = _exact_int(current_value)
+    if current_count is None:
+        return None
+    if previous_value is None:
+        return current_count
+    previous_count = _exact_int(previous_value)
+    if previous_count is None:
+        return None
+    return current_count - previous_count
+
+
 def _period_change(
     current_row: dict,
     reference: dict | None,
@@ -769,17 +792,22 @@ def _period_change(
         if isinstance(row, dict) and row.get("unit_code")
     }
     old = old_rows.get(str(current_row.get("unit_code")))
-    if not old or reference_time is None or current_time is None:
+    if reference_time is None or current_time is None:
         return result
+
+    old_rank = _exact_int(old.get("rank")) if isinstance(old, dict) else None
+    current_rank = _exact_int(current_row.get("rank"))
+    old_count = old.get("occurrence_count") if isinstance(old, dict) else None
 
     result.update(
         {
             "comparable": True,
-            # Positive means the character moved up the ranking.
-            "rank": int(old.get("rank", 0)) - int(current_row.get("rank", 0)),
+            # Ranks cannot be inferred for a character absent from a snapshot.
+            "rank": old_rank - current_rank if old_rank is not None and current_rank is not None else None,
             # Positive means this character is used in more defence-team slots.
-            "occurrence_count": int(current_row.get("occurrence_count", 0))
-            - int(old.get("occurrence_count", 0)),
+            "occurrence_count": _occurrence_delta(
+                current_row.get("occurrence_count"), old_count
+            ),
             "from_updated_at": reference.get("updated_at"),
             "interval_minutes": round(
                 (current_time - reference_time).total_seconds() / 60,
@@ -799,9 +827,10 @@ def _equipment_period_change(
 ) -> dict:
     """Compare one equipment item with the verified period snapshot.
 
-    Missing history is deliberately represented as non-comparable.  The
-    frontend renders that state as 0, while the metadata remains truthful and
-    can be distinguished from a real unchanged rank.
+    Missing snapshots are deliberately represented as non-comparable.  The
+    frontend labels that state as waiting for history, which is distinct from a
+    real unchanged count (0).  An item missing from a valid snapshot, however,
+    has a known prior count of zero and therefore has a real positive delta.
     """
     result = {
         "comparable": False,
@@ -820,22 +849,16 @@ def _equipment_period_change(
         equipment_type,
         str(current_item.get("item_code") or ""),
     )
-    if old_item is None:
-        # A newly observed item has no defensible prior rank.  Keep it
-        # non-comparable so the UI shows the requested neutral 0 instead of a
-        # fabricated movement.
-        return result
+    old_rank = _exact_int(old_item.get("rank")) if isinstance(old_item, dict) else None
+    current_rank = _exact_int(current_item.get("rank"))
+    old_count = old_item.get("occurrence_count") if isinstance(old_item, dict) else None
 
     result.update(
         {
             "comparable": True,
-            "rank": int(old_item.get("rank", 0)) - int(current_item.get("rank", 0)),
-            "occurrence_count": (
-                int(current_item.get("occurrence_count", 0))
-                - int(old_item.get("occurrence_count", 0))
-                if isinstance(old_item.get("occurrence_count"), int)
-                and isinstance(current_item.get("occurrence_count"), int)
-                else None
+            "rank": old_rank - current_rank if old_rank is not None and current_rank is not None else None,
+            "occurrence_count": _occurrence_delta(
+                current_item.get("occurrence_count"), old_count
             ),
             "from_updated_at": reference.get("updated_at"),
             "interval_minutes": round(

@@ -110,7 +110,7 @@ def _validate_period_change(value: object, errors: list[str]) -> None:
         ):
             errors.append("non-comparable period contains values")
         return
-    if not isinstance(rank, int) or isinstance(rank, bool):
+    if rank is not None and (not isinstance(rank, int) or isinstance(rank, bool)):
         errors.append("invalid period rank")
     if occurrence_count is not None and (
         not isinstance(occurrence_count, int) or isinstance(occurrence_count, bool)

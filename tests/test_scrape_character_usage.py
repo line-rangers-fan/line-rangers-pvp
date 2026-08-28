@@ -314,6 +314,29 @@ def test_period_rank_changes_are_unavailable_when_history_gap_is_too_large():
     assert periods["day"]["rank"] is None
 
 
+def test_period_count_change_treats_missing_character_as_zero_in_valid_snapshot():
+    current = {
+        "updated_at": "2026-08-28T02:00:00+00:00",
+        "sampled_players": 2,
+        "characters": [{"unit_code": "u-new", "rank": 40, "occurrence_count": 3}],
+    }
+    history = {
+        "snapshots": [
+            {
+                "updated_at": "2026-08-27T02:00:00+00:00",
+                "characters": [{"unit_code": "u-existing", "rank": 1, "occurrence_count": 10}],
+            }
+        ]
+    }
+
+    scraper.add_previous_comparison(current, None, history)
+    day = current["characters"][0]["change"]["periods"]["day"]
+
+    assert day["comparable"] is True
+    assert day["rank"] is None
+    assert day["occurrence_count"] == 3
+
+
 def test_equipment_period_rank_changes_use_previous_jst_calendar_date():
     previous = {
         "updated_at": "2026-08-27T00:00:00+00:00",
@@ -383,7 +406,7 @@ def test_equipment_period_rank_changes_use_previous_jst_calendar_date():
     }
 
 
-def test_equipment_without_prior_item_keeps_truthful_zero_fallback_metadata():
+def test_equipment_without_prior_item_uses_zero_count_from_valid_snapshot():
     current = {
         "updated_at": "2026-08-28T00:30:00+00:00",
         "sampled_players": 1,
@@ -395,7 +418,7 @@ def test_equipment_without_prior_item_keeps_truthful_zero_fallback_metadata():
                 "player_count": 1,
                 "adoption_rate": 100.0,
                 "equipment_rankings": {
-                    "WEAPON": {"items": [{"item_code": "new", "rank": 1}]},
+                    "WEAPON": {"items": [{"item_code": "new", "rank": 1, "occurrence_count": 3}]},
                     "ARMOR": {"items": []},
                     "ACC": {"items": []},
                 },
@@ -426,7 +449,10 @@ def test_equipment_without_prior_item_keeps_truthful_zero_fallback_metadata():
 
     assert item["change"]["new"] is True
     assert item["change"]["rank"] == 0
-    assert item["change"]["periods"]["day"]["comparable"] is False
+    day = item["change"]["periods"]["day"]
+    assert day["comparable"] is True
+    assert day["rank"] is None
+    assert day["occurrence_count"] == 3
 
 
 def test_history_snapshot_keeps_equipment_counts_for_period_deltas():
