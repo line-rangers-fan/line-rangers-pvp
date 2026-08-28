@@ -35,11 +35,11 @@
 
   <link
     rel="stylesheet"
-    href="./assets/style.css?v=20260828-2"
+    href="./assets/style.css?v=20260828-3"
   >
 
   <script
-    src="./assets/app.js?v=20260828-2"
+    src="./assets/app.js?v=20260828-3"
     defer
   ></script>
 </head>
@@ -258,81 +258,3 @@
 
     <dialog id="equipment-dialog" class="equipment-dialog">
       <button type="button" id="equipment-close" class="equipment-close" aria-label="Close">×</button>
-      <h2 id="equipment-title">Equipment rankings</h2>
-      <div id="equipment-content"></div>
-    </dialog>
-
-    <section class="notes">
-      <h2 id="method-title">
-        集計方法
-      </h2>
-
-      <ul>
-        <li id="method-1">
-          編成数は、各プレイヤーの防衛チームに編成された
-          キャラクターの総数です。
-        </li>
-
-        <li id="method-2">
-          同じプレイヤーが同一キャラクターを複数体使用している場合、
-          編成数には使用された体数分を加算します。
-        </li>
-
-        <li id="method-3">
-          採用人数は、そのキャラクターを1体以上使用した
-          プレイヤー数です。
-        </li>
-
-        <li id="method-4">
-          同じプレイヤーが同一キャラクターを複数体使用していても、
-          採用人数では1人として計算します。
-        </li>
-
-        <li id="method-5">
-          採用率は「採用人数 ÷ 集計人数」で計算します。
-        </li>
-
-        <li id="method-6">
-          GitHub Actionsの混雑により、
-          更新時刻が遅れる場合があります。
-        </li>
-
-        <li id="method-7">
-          本サイトは非公式サイトであり、
-          ゲーム運営元とは関係ありません。
-        </li>
-      </ul>
-
-      <p>
-        <span id="source-label">データ出典:</span>
-
-        <a
-          id="source-link"
-          href="https://rangers.lerico.net/ja/pvp-tracker"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          LINE Rangers Handbook PvP Tracker
-        </a>
-      </p>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <p id="footer-text">
-      非公式・ファン作成の統計ページ
-    </p>
-
-    <p id="footer-contact">
-      X:
-      <a
-        href="https://x.com/line288372"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        @line288372
-      </a>
-    </p>
-  </footer>
-</body>
-</html>
