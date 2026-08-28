@@ -1136,21 +1136,10 @@ function renderTable() {
     tdRank.appendChild(rankNumber);
 
     const change = char.change;
-    if (change?.new === true) {
-      const changeBadge = document.createElement("span");
-      changeBadge.className = "rank-change rank-change-new";
-      changeBadge.textContent = st("rankNew");
-      tdRank.appendChild(changeBadge);
-    } else if (Number.isFinite(Number(change?.rank)) && Number(change.rank) !== 0) {
-      const rankDelta = Number(change.rank);
-      const changeBadge = document.createElement("span");
-      changeBadge.className =
-        rankDelta > 0 ? "rank-change rank-up" : "rank-change rank-down";
-      changeBadge.textContent =
-        rankDelta > 0 ? `↑${rankDelta}` : `↓${Math.abs(rankDelta)}`;
-      tdRank.appendChild(changeBadge);
-    }
-    renderRankPeriodChanges(tdRank, change);
+    // Every character reserves the same compact three-line area.  A zero is
+    // shown both for an unchanged rank and while a new period baseline is
+    // being accumulated, preventing cells from jumping between updates.
+    renderRankPeriodChanges(tdRank, change, { alwaysShowZero: true });
     tr.appendChild(tdRank);
 
     // キャラクターセル

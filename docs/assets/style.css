@@ -515,10 +515,13 @@ tbody tr:active {
   color: var(--muted);
   font-weight: 800;
   text-align: center;
+  vertical-align: middle;
 }
 
 .rank-number {
+  display: block;
   font: inherit;
+  line-height: 1.1;
 }
 
 .rank-change {
@@ -547,17 +550,18 @@ tbody tr:active {
   background: rgb(100 181 255 / 12%);
 }
 
-/* Longer-period changes sit under the rank number and stay compact enough for
-   the narrow mobile rank column.  They are intentionally text-only badges so
-   row height and the established character image size do not change. */
+/* Longer-period changes remain in the normal document flow below the rank.
+   Absolute positioning made the labels overlap the number on compact mobile
+   rows.  The column is naturally sized by its character image, so this keeps
+   all three periods visible without moving into a neighbouring cell. */
 .rank-period-changes {
-  position: absolute;
-  top: 2.05rem;
-  right: 0.08rem;
-  left: 0.08rem;
+  position: static;
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: max-content;
+  max-width: 100%;
+  margin: 0.28rem auto 0;
   gap: 1px;
   color: var(--muted);
   font-size: 0.46rem;
@@ -899,9 +903,6 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   }
 
   .rank-period-changes {
-    top: 2.02rem;
-    right: 0;
-    left: 0;
     font-size: 0.42rem;
   }
 
@@ -1131,13 +1132,9 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 .equipment-rank-cell {
   width: auto;
   min-width: 0;
-  padding-bottom: 1.45rem !important;
 }
 
 .equipment-rank-cell .rank-period-changes {
-  top: 1.45rem;
-  right: 0;
-  left: 0;
   gap: 0;
   font-size: 0.42rem;
 }
