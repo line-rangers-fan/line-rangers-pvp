@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from scripts import scrape_character_usage as scraper
@@ -485,6 +487,37 @@ def test_history_snapshot_keeps_equipment_counts_for_period_deltas():
     item = snapshot["characters"][0]["equipment_rankings"]["WEAPON"]["items"][0]
 
     assert item == {"item_code": "w1", "rank": 1, "occurrence_count": 4}
+
+
+def test_load_json_ignores_damaged_comparison_context(tmp_path):
+    path = tmp_path / "damaged.json"
+    path.write_text("{not valid json", encoding="utf-8")
+
+    assert scraper.load_json(path) is None
+
+
+def test_debug_artifact_redacts_player_identifiers(tmp_path, monkeypatch):
+    monkeypatch.setenv("DEBUG", "1")
+    monkeypatch.setattr(scraper, "DEBUG_DIR", tmp_path)
+    data = {
+        "diagnostics": {
+            "valid_players": 200,
+            "team_size_distribution": {"10": 200},
+            "detail_fetch_failures": [{"mid": "private-player", "error": "timeout"}],
+            "missing_player_info": ["private-player"],
+            "invalid_players": ["private-player"],
+            "invalid_unit_codes": ["u-bad"],
+            "invalid_equipment": ["private-player"],
+            "invalid_rank_records": ["private-player"],
+        }
+    }
+
+    scraper.dump_debug(data)
+    artifact = json.loads((tmp_path / "diagnostics.json").read_text(encoding="utf-8"))
+
+    assert artifact["valid_players"] == 200
+    assert artifact["diagnostic_error_counts"]["detail_fetch_failures"] == 1
+    assert "private-player" not in json.dumps(artifact)
 
 
 def test_history_is_compact_deduplicated_and_bounded():

@@ -54,9 +54,32 @@ def test_history_and_equipment_change_contract_is_present():
     assert "setupRankPeriodSelector" in app
     assert 'metric: "occurrence"' in app
     assert 'rankHistoryPending' in app
+    assert "fetchJsonWithLimits" in app
+    assert "REQUEST_TIMEOUT_MS" in app
+    assert "isTrustedCharacterImage" in app
+    assert "validateEquipmentRankings" in app
     assert "includePeriodLabel: false" in app
     assert "renderRankPeriodChanges(rank, item.change" in app
     assert ".rank-period-changes" in style
     assert ".rank-period-selector" in style
     assert ".ranking-section {\n  overflow: visible;" in style
     assert ".equipment-rank-cell .rank-period-changes" in style
+    assert ".rank-period-pending" in style
+
+
+def test_workflows_pin_external_actions_and_fail_shell_scripts_safely():
+    workflows = (ROOT / ".github/workflows")
+    update = (workflows / "update-character-usage.yml").read_text(encoding="utf-8")
+    watcher = (workflows / "watch-character-usage.yml").read_text(encoding="utf-8")
+    cloudflare = (workflows / "deploy-cloudflare-watchdog.yml").read_text(
+        encoding="utf-8"
+    )
+
+    for content in (update, watcher, cloudflare):
+        assert "uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in content
+        assert "uses: actions/checkout@v4" not in content
+    assert "uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in update
+    assert "uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b" in watcher
+    assert "uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd" in cloudflare
+    assert "set -euo pipefail" in update
+    assert "set -euo pipefail" in cloudflare

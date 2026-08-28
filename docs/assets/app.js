@@ -4,6 +4,8 @@
 const DATA_PATH = "./data/character_usage.json";
 const HISTORY_PATH = "./data/character_usage_history.json";
 const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
+const REQUEST_TIMEOUT_MS = 12_000;
+const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const DELAYED_AFTER_MS = 90 * 60 * 1000;
 const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
@@ -13,6 +15,8 @@ const RANK_CHANGE_PERIODS = [
   ["week", "rankWeek"],
   ["month", "rankMonth"],
 ];
+const TRUSTED_ASSET_ORIGIN = "https://rangers.lerico.net";
+const SAFE_ASSET_CODE = /^[A-Za-z0-9_-]+$/;
 
 const LANGUAGES = [
   "ja",
@@ -1303,6 +1307,112 @@ function renderTable() {
   elements.resultCount.textContent = label(formatInteger(state.characters.length));
 }
 
+function isSafeInteger(value, minimum, maximum) {
+  return (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= minimum &&
+    value <= maximum
+  );
+}
+
+function hasExpectedRate(value, expected, tolerance = 0.11) {
+  return typeof value === "number" && Number.isFinite(value) && Math.abs(value - expected) <= tolerance;
+}
+
+function isTrustedRangersAsset(value, expectedPath) {
+  if (typeof value !== "string" || value.length === 0 || value.length > 512) {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return (
+      url.origin === TRUSTED_ASSET_ORIGIN &&
+      url.pathname === expectedPath &&
+      url.search === "" &&
+      url.hash === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isTrustedCharacterImage(value, unitCode) {
+  return (
+    typeof unitCode === "string" &&
+    SAFE_ASSET_CODE.test(unitCode) &&
+    isTrustedRangersAsset(value, `/res/${unitCode}/${unitCode}-thum.png`)
+  );
+}
+
+function isTrustedEquipmentImage(value, itemCode) {
+  return (
+    typeof itemCode === "string" &&
+    SAFE_ASSET_CODE.test(itemCode) &&
+    isTrustedRangersAsset(value, `/res/gear_icon/${itemCode}_icon.png`)
+  );
+}
+
+function validateEquipmentRankings(rankings, character) {
+  if (!rankings || typeof rankings !== "object") {
+    throw new Error(t("characterInvalid"));
+  }
+
+  EQUIPMENT_TYPES.forEach(([type]) => {
+    const category = rankings[type];
+    if (!category || !Array.isArray(category.items)) {
+      throw new Error(t("characterInvalid"));
+    }
+
+    const equippedOccurrences = category.equipped_occurrence_count;
+    const equippedPlayers = category.equipped_player_count;
+    if (
+      !isSafeInteger(equippedOccurrences, 0, character.occurrence_count) ||
+      !isSafeInteger(equippedPlayers, 0, character.player_count) ||
+      equippedPlayers > equippedOccurrences
+    ) {
+      throw new Error(t("characterInvalid"));
+    }
+
+    let itemTotal = 0;
+    let previousCount = null;
+    let previousRank = 0;
+    const itemCodes = new Set();
+    category.items.forEach((item, index) => {
+      const itemCode = item?.item_code;
+      const occurrenceCount = item?.occurrence_count;
+      const playerCount = item?.player_count;
+      const expectedRank =
+        occurrenceCount === previousCount ? previousRank : index + 1;
+      if (
+        !item ||
+        typeof item !== "object" ||
+        typeof itemCode !== "string" ||
+        !SAFE_ASSET_CODE.test(itemCode) ||
+        itemCodes.has(itemCode) ||
+        !isTrustedEquipmentImage(item.image, itemCode) ||
+        !isSafeInteger(occurrenceCount, 1, equippedOccurrences) ||
+        !isSafeInteger(playerCount, 1, equippedPlayers) ||
+        occurrenceCount < playerCount ||
+        playerCount > character.player_count ||
+        !isSafeInteger(item.rank, 1, category.items.length) ||
+        item.rank !== expectedRank ||
+        !hasExpectedRate(item.adoption_rate, Math.round((playerCount / character.player_count) * 1000) / 10)
+      ) {
+        throw new Error(t("characterInvalid"));
+      }
+      itemCodes.add(itemCode);
+      itemTotal += occurrenceCount;
+      previousCount = occurrenceCount;
+      previousRank = expectedRank;
+    });
+
+    if (itemTotal !== equippedOccurrences) {
+      throw new Error(t("characterInvalid"));
+    }
+  });
+}
+
 function validateData(data) {
   if (!data || typeof data !== "object") {
     throw new Error(t("dataError"));
@@ -1312,20 +1422,23 @@ function validateData(data) {
     throw new Error(t("charactersMissing"));
   }
 
-  const sampled = Number(data.sampled_players);
-  const target = Number(data.target_players);
-  const slots = Number(data.character_slots);
+  const sampled = data.sampled_players;
+  const target = data.target_players;
+  const slots = data.character_slots;
+  const updatedAt = Date.parse(String(data.updated_at || ""));
 
   if (
-    !Number.isFinite(sampled) ||
-    !Number.isFinite(target) ||
-    sampled <= 0 ||
+    !isSafeInteger(Number(data.schema_version), 9, 99) ||
+    !Number.isFinite(updatedAt) ||
+    updatedAt > Date.now() + 10 * 60 * 1000 ||
+    !isSafeInteger(sampled, 1, 10_000) ||
+    !isSafeInteger(target, 1, 10_000) ||
     sampled !== target ||
     data.complete_target !== true
   ) {
     throw new Error(t("playersInvalid"));
   }
-  if (!Number.isFinite(slots) || slots < sampled || slots > sampled * 10) {
+  if (!isSafeInteger(slots, sampled, sampled * 10) || data.characters.length > slots) {
     throw new Error(t("occurrenceInvalid"));
   }
   const quality = data.collection_quality;
@@ -1360,33 +1473,37 @@ function validateData(data) {
       throw new Error(t("characterInvalid"));
     }
 
-    if (typeof char.image !== "string" || char.image.length === 0) {
-      throw new Error(t("imageInvalid"));
-    }
-
     if (
       typeof char.unit_code !== "string" ||
-      char.unit_code.length === 0 ||
+      !SAFE_ASSET_CODE.test(char.unit_code) ||
       unitCodes.has(char.unit_code)
     ) {
       throw new Error(t("characterInvalid"));
     }
     unitCodes.add(char.unit_code);
 
-    if (typeof char.name !== "string" || char.name.trim().length === 0) {
+    if (!isTrustedCharacterImage(char.image, char.unit_code)) {
+      throw new Error(t("imageInvalid"));
+    }
+
+    if (
+      typeof char.name !== "string" ||
+      char.name.trim().length === 0 ||
+      char.name.length > 256
+    ) {
       throw new Error(t("characterInvalid"));
     }
 
-    const occurrence = Number(char.occurrence_count);
+    const occurrence = char.occurrence_count;
 
-    if (!Number.isFinite(occurrence) || occurrence <= 0) {
+    if (!isSafeInteger(occurrence, 1, slots)) {
       throw new Error(t("occurrenceInvalid"));
     }
     slotTotal += occurrence;
 
-    const players = Number(char.player_count);
+    const players = char.player_count;
 
-    if (!Number.isFinite(players) || players <= 0) {
+    if (!isSafeInteger(players, 1, sampled)) {
       throw new Error(t("playerCountInvalid"));
     }
 
@@ -1400,32 +1517,22 @@ function validateData(data) {
 
     const expectedRank =
       occurrence === previousCount ? previousRank : index + 1;
-    if (Number(char.rank) !== expectedRank) {
+    if (!isSafeInteger(char.rank, 1, data.characters.length) || char.rank !== expectedRank) {
       throw new Error(t("characterInvalid"));
     }
     previousCount = occurrence;
     previousRank = expectedRank;
 
-    const actualRate = Number(char.adoption_rate);
     const expectedRate = Math.round((players / sampled) * 1000) / 10;
+    const expectedSlotRate = Math.round((occurrence / slots) * 10_000) / 100;
     if (
-      !Number.isFinite(actualRate) ||
-      Math.abs(actualRate - expectedRate) > 0.11
+      !hasExpectedRate(char.adoption_rate, expectedRate) ||
+      !hasExpectedRate(char.slot_rate, expectedSlotRate, 0.011)
     ) {
       throw new Error(t("characterInvalid"));
     }
 
-    const rankings = char.equipment_rankings;
-    if (!rankings || typeof rankings !== "object") {
-      throw new Error(t("characterInvalid"));
-    }
-
-    EQUIPMENT_TYPES.forEach(([type]) => {
-      const category = rankings[type];
-      if (!category || !Array.isArray(category.items)) {
-        throw new Error(t("characterInvalid"));
-      }
-    });
+    validateEquipmentRankings(char.equipment_rankings, char);
   });
 
   if (
@@ -1440,6 +1547,37 @@ function wait(milliseconds) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
+async function fetchJsonWithLimits(path, failureMessage) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${path}?v=${Date.now()}`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(failureMessage);
+    }
+    const length = Number(response.headers.get("Content-Length"));
+    if (Number.isFinite(length) && length > MAX_JSON_TEXT_CHARACTERS) {
+      throw new Error(failureMessage);
+    }
+    const text = await response.text();
+    if (text.length > MAX_JSON_TEXT_CHARACTERS) {
+      throw new Error(failureMessage);
+    }
+    return JSON.parse(text);
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(failureMessage);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 async function fetchVerifiedData() {
   let lastError = null;
 
@@ -1449,14 +1587,7 @@ async function fetchVerifiedData() {
     }
 
     try {
-      const response = await fetch(`${DATA_PATH}?v=${Date.now()}`, {
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      });
-      if (!response.ok) {
-        throw new Error(t("fetchError"));
-      }
-      const data = await response.json();
+      const data = await fetchJsonWithLimits(DATA_PATH, t("fetchError"));
       validateData(data);
       return data;
     } catch (error) {
@@ -1555,14 +1686,9 @@ async function fetchVerifiedHistory() {
   for (const delay of DATA_RETRY_DELAYS_MS) {
     if (delay > 0) await wait(delay);
     try {
-      const response = await fetch(`${HISTORY_PATH}?v=${Date.now()}`, {
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      });
-      if (!response.ok) {
-        throw new Error("Could not retrieve history.");
-      }
-      return validateHistory(await response.json());
+      return validateHistory(
+        await fetchJsonWithLimits(HISTORY_PATH, "Could not retrieve history.")
+      );
     } catch (error) {
       lastError = error;
     }

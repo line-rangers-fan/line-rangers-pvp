@@ -1,3 +1,5 @@
 # The scraper uses Python's standard library to read the public PvP API.
-# Pytest protects the published aggregation rules in GitHub Actions.
-pytest>=8,<9
+# Pytest protects the published aggregation rules in GitHub Actions. Pin the
+# version used in CI so a new major/minor resolver result cannot silently alter
+# the release gate; Dependabot proposes reviewed updates.
+pytest==8.4.2

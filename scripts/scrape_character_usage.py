@@ -54,6 +54,10 @@ PLAYER_FETCH_WORKERS = min(
 MIN_CHARACTERS_PER_PLAYER = 1
 MAX_CHARACTERS_PER_PLAYER = 10
 REQUEST_TIMEOUT_SECONDS = 30
+# The public APIs are expected to return compact JSON.  A firm cap prevents a
+# malformed upstream response from exhausting the runner while still allowing
+# the translation catalogue to grow substantially.
+MAX_JSON_RESPONSE_BYTES = 4 * 1024 * 1024
 # Three total attempts balance temporary network failures with respectful
 # source access. A failed incomplete run is never published.
 REQUEST_ATTEMPTS = 3
@@ -84,14 +88,44 @@ def save_json(path: Path, value: object) -> None:
     with path.open("w", encoding="utf-8") as file:
         json.dump(value, file, ensure_ascii=False, indent=2)
         file.write("\n")
+        file.flush()
+        os.fsync(file.fileno())
 
 
 def load_json(path: Path) -> dict | None:
     if not path.exists():
         return None
-    with path.open("r", encoding="utf-8") as file:
-        value = json.load(file)
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            value = json.load(file)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        # A previous local file is only comparison context.  Treating a damaged
+        # copy as absent lets a fully validated fresh collection repair itself;
+        # the new result still must pass every publication quality gate.
+        return None
     return value if isinstance(value, dict) else None
+
+
+def _read_json_response(response: object, label: str) -> object:
+    """Read a bounded JSON response and make size failures explicit."""
+    headers = getattr(response, "headers", None)
+    content_length = headers.get("Content-Length") if headers else None
+    if content_length:
+        try:
+            if int(content_length) > MAX_JSON_RESPONSE_BYTES:
+                raise RuntimeError(f"{label} response exceeds the safety limit.")
+        except ValueError:
+            # A malformed header is not trusted; the bounded body read below is
+            # still authoritative.
+            pass
+
+    body = response.read(MAX_JSON_RESPONSE_BYTES + 1)
+    if len(body) > MAX_JSON_RESPONSE_BYTES:
+        raise RuntimeError(f"{label} response exceeds the safety limit.")
+    try:
+        return json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"{label} did not return valid UTF-8 JSON.") from error
 
 
 def fetch_json(url: str, label: str) -> object:
@@ -110,16 +144,13 @@ def fetch_json(url: str, label: str) -> object:
                 status = getattr(response, "status", 200)
                 if status >= 400:
                     raise RuntimeError(f"{label} returned HTTP {status}.")
-                return json.loads(response.read().decode("utf-8"))
+                return _read_json_response(response, label)
         except HTTPError as error:
             last_error = RuntimeError(f"{label} returned HTTP {error.code}.")
             if error.code < 500 and error.code != 429:
                 break
         except URLError as error:
             last_error = RuntimeError(f"{label} request failed: {error.reason}")
-        except json.JSONDecodeError as error:
-            raise RuntimeError(f"{label} did not return valid JSON.") from error
-
         if attempt < REQUEST_ATTEMPTS:
             import time
 
@@ -1140,7 +1171,31 @@ def write_outputs(data: dict, history: dict) -> None:
 
 def dump_debug(data: dict) -> None:
     if os.environ.get("DEBUG", "0") == "1":
-        save_json(DEBUG_DIR / "diagnostics.json", data["diagnostics"])
+        diagnostics = data.get("diagnostics")
+        diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+        sensitive_lists = (
+            "detail_fetch_failures",
+            "missing_player_info",
+            "invalid_players",
+            "invalid_unit_codes",
+            "invalid_equipment",
+            "invalid_rank_records",
+        )
+        # Debug artifacts can be retained by the CI service. Keep useful
+        # aggregate health information without storing player identifiers or
+        # upstream payload fragments in an artifact.
+        safe_diagnostics = {
+            key: value
+            for key, value in diagnostics.items()
+            if key not in sensitive_lists
+        }
+        safe_diagnostics["diagnostic_error_counts"] = {
+            key: len(diagnostics.get(key))
+            if isinstance(diagnostics.get(key), list)
+            else 0
+            for key in sensitive_lists
+        }
+        save_json(DEBUG_DIR / "diagnostics.json", safe_diagnostics)
 
 
 def main() -> None:

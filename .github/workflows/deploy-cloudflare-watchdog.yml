@@ -21,23 +21,24 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Resolve Cloudflare account ID
         id: cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
+          set -euo pipefail
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "CLOUDFLARE_API_TOKEN repository secret is required."
             exit 1
           fi
-          response="$(curl --fail-with-body --silent --show-error --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+          response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
           account_id="$(printf '%s' "$response" | jq -er '.result | if length == 1 then .[0].id else error("Token must access exactly one Cloudflare account") end')"
           echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
 
       - name: Deploy Worker and Cron trigger
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ steps.cloudflare.outputs.account_id }}
@@ -51,6 +52,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ steps.cloudflare.outputs.account_id }}
           WORKFLOW_TOKEN: ${{ secrets.WATCHDOG_GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           if [ -z "$WORKFLOW_TOKEN" ]; then
             echo "WATCHDOG_GITHUB_TOKEN repository secret is required."
             exit 1
@@ -59,12 +61,14 @@ jobs:
 
       - name: Verify Worker health endpoint
         run: |
-          curl --fail --silent --show-error             --retry 8 --retry-delay 3 --retry-all-errors             "https://line-rangers-pvp-watchdog.n-yu1791.workers.dev/"             | jq -e '.status == "ok" and .service == "line-rangers-pvp-watchdog"'
+          set -euo pipefail
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 --retry-all-errors "https://line-rangers-pvp-watchdog.n-yu1791.workers.dev/" | jq -e '.status == "ok" and .service == "line-rangers-pvp-watchdog"'
 
       - name: Verify guarded GitHub repair dispatch
         env:
           WORKFLOW_TOKEN: ${{ secrets.WATCHDOG_GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           status="$(curl --silent --show-error --output /tmp/dispatch-response             --write-out '%{http_code}'             --request POST             --header "Accept: application/vnd.github+json"             --header "Authorization: Bearer $WORKFLOW_TOKEN"             --header "Content-Type: application/json"             "https://api.github.com/repos/line-rangers-fan/line-rangers-pvp/actions/workflows/update-character-usage.yml/dispatches"             --data '{"ref":"main","inputs":{"force_collection":"false"}}')"
           if [ "$status" != "204" ]; then
             cat /tmp/dispatch-response

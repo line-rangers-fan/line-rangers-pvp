@@ -177,3 +177,15 @@ test("fresh but incomplete data triggers repair", async () => {
   assert.deepEqual(result, { dispatched: true, reason: "invalid_data" });
   assert.equal(calls.length, 2);
 });
+
+
+test("watchdog rejects unsafe repository and data URL configuration", async () => {
+  await assert.rejects(
+    runWatchdog({ ...ENV, GITHUB_REPOSITORY: "owner/repo/extra" }),
+    /owner\/repository/,
+  );
+  await assert.rejects(
+    getHealthSnapshot({ ...ENV, DATA_URL: "http://example.test/data.json" }),
+    /credential-free HTTPS URL/,
+  );
+});

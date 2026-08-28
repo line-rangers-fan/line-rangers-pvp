@@ -1,7 +1,9 @@
 const MAX_AGE_MS = 55 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000;
+const EXTERNAL_REQUEST_TIMEOUT_MS = 12_000;
 const SERVICE_NAME = "line-rangers-pvp-watchdog";
 const SCHEDULE = "27 * * * *";
+const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
 
 function requiredEnvironment(env, name) {
@@ -10,6 +12,48 @@ function requiredEnvironment(env, name) {
     throw new Error(`Missing Cloudflare secret or variable: ${name}`);
   }
   return value;
+}
+
+
+function requiredRepository(env) {
+  const repository = requiredEnvironment(env, "GITHUB_REPOSITORY");
+  if (!REPOSITORY_PATTERN.test(repository)) {
+    throw new Error("GITHUB_REPOSITORY must be an owner/repository value.");
+  }
+  return repository;
+}
+
+
+function requiredHttpsUrl(env, name) {
+  const value = requiredEnvironment(env, name);
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      !url.hostname ||
+      url.username ||
+      url.password
+    ) {
+      throw new Error("invalid URL");
+    }
+    return url.toString();
+  } catch {
+    throw new Error(`${name} must be a credential-free HTTPS URL.`);
+  }
+}
+
+
+async function fetchWithTimeout(fetchImpl, url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    EXTERNAL_REQUEST_TIMEOUT_MS,
+  );
+  try {
+    return await fetchImpl(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 
@@ -103,7 +147,9 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
 
 
 async function fetchPublishedData(dataUrl, fetchImpl, nowMs, queryName) {
-  const response = await fetchImpl(`${dataUrl}?${queryName}=${nowMs}`, {
+  const url = new URL(dataUrl);
+  url.searchParams.set(queryName, String(nowMs));
+  const response = await fetchWithTimeout(fetchImpl, url.toString(), {
     headers: {
       Accept: "application/json",
       "Cache-Control": "no-cache",
@@ -120,7 +166,7 @@ export async function getHealthSnapshot(
   env,
   { fetchImpl = fetch, nowMs = Date.now() } = {},
 ) {
-  const dataUrl = requiredEnvironment(env, "DATA_URL");
+  const dataUrl = requiredHttpsUrl(env, "DATA_URL");
   let dataHealth;
   try {
     const data = await fetchPublishedData(dataUrl, fetchImpl, nowMs, "health");
@@ -164,8 +210,8 @@ export async function runWatchdog(
   env,
   { fetchImpl = fetch, nowMs = Date.now() } = {},
 ) {
-  const repository = requiredEnvironment(env, "GITHUB_REPOSITORY");
-  const dataUrl = requiredEnvironment(env, "DATA_URL");
+  const repository = requiredRepository(env);
+  const dataUrl = requiredHttpsUrl(env, "DATA_URL");
 
   let repairReason = "unreadable";
   try {
@@ -185,7 +231,8 @@ export async function runWatchdog(
   }
 
   const token = requiredEnvironment(env, "GITHUB_ACTIONS_TOKEN");
-  const dispatchResponse = await fetchImpl(
+  const dispatchResponse = await fetchWithTimeout(
+    fetchImpl,
     `https://api.github.com/repos/${repository}/actions/workflows/update-character-usage.yml/dispatches`,
     {
       method: "POST",
@@ -229,6 +276,10 @@ export default {
     context.waitUntil(
       runWatchdog(env).then((result) => {
         console.log(JSON.stringify(result));
+      }).catch((error) => {
+        // Scheduled events have no caller to receive an exception. Log a
+        // concise failure while allowing the next hourly event to retry.
+        console.error("Watchdog run failed.", error);
       }),
     );
   },
