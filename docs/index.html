@@ -35,11 +35,11 @@
 
   <link
     rel="stylesheet"
-    href="./assets/style.css?v=20260828-4"
+    href="./assets/style.css?v=20260828-5"
   >
 
   <script
-    src="./assets/app.js?v=20260828-4"
+    src="./assets/app.js?v=20260828-5"
     defer
   ></script>
 </head>
@@ -195,6 +195,17 @@
           <p id="ranking-description">
             編成数が多い順に表示しています。
           </p>
+        </div>
+
+        <div
+          id="rank-period-selector"
+          class="rank-period-selector"
+          role="group"
+          aria-label="順位変動の表示期間"
+        >
+          <button type="button" data-rank-period="day"></button>
+          <button type="button" data-rank-period="week"></button>
+          <button type="button" data-rank-period="month"></button>
         </div>
       </div>
 

@@ -368,6 +368,7 @@ h1 {
    ========================================= */
 
 .ranking-section {
+  --ranking-heading-height: 0px;
   max-height: min(76svh, 50rem);
   overflow-x: hidden;
   overflow-y: auto;
@@ -382,12 +383,16 @@ h1 {
 }
 
 .table-heading {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   justify-content: space-between;
   gap: 1rem;
   align-items: center;
   padding: 1.25rem;
   border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .table-heading h2 {
@@ -399,6 +404,40 @@ h1 {
   margin: 0.25rem 0 0;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* The period selector lets each visitor choose one compact movement label.
+   Keeping it in the sticky heading prevents the ranking column from becoming
+   crowded with three simultaneous date ranges. */
+.rank-period-selector {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+}
+
+.rank-period-selector button {
+  min-height: 2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-period-selector button:hover {
+  background: var(--surface-light);
+}
+
+.rank-period-selector button.rank-period-selected {
+  border-color: var(--accent-dark);
+  color: #062417;
+  background: var(--accent);
 }
 
 /* =========================================
@@ -485,7 +524,7 @@ td {
 
 thead th {
   position: sticky;
-  top: 0;
+  top: var(--ranking-heading-height, 0px);
   z-index: 2;
   color: var(--muted);
   background: #0a1729;
@@ -821,6 +860,10 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   .table-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .rank-period-selector {
+    align-self: flex-end;
   }
 
   .table-wrapper {

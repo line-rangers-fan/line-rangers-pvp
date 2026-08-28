@@ -32,6 +32,7 @@ def test_frontend_assets_keep_strict_csp_and_required_controls():
         "summary-health",
         "ranking-section",
         "ranking-body",
+        "rank-period-selector",
         "equipment-dialog",
         "sunday-notice",
     ):
@@ -49,6 +50,11 @@ def test_history_and_equipment_change_contract_is_present():
     assert "const RANK_CHANGE_PERIODS" in app
     assert "function renderRankPeriodChanges(" in app
     assert "alwaysShowZero: true" in app
+    assert "selectedRankPeriod" in app
+    assert "setupRankPeriodSelector" in app
+    assert "setupRankingStickyHeader" in app
     assert "renderRankPeriodChanges(rank, item.change" in app
     assert ".rank-period-changes" in style
+    assert ".rank-period-selector" in style
+    assert "--ranking-heading-height" in style
     assert ".equipment-rank-cell .rank-period-changes" in style

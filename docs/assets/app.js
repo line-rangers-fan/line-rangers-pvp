@@ -727,6 +727,7 @@ const state = {
   language: "ja",
   selectedCharacter: null,
   selectedEquipmentType: "WEAPON",
+  selectedRankPeriod: "day",
   rankingScrollTop: 0,
   suppressCharacterTapUntil: 0,
   isLoading: false,
@@ -883,6 +884,7 @@ function applyTranslations() {
 
   setText("#ranking-title", tr.ranking);
   setText("#ranking-description", tr.rankingDescription);
+  renderRankPeriodSelector();
 
   setText("#ranking-caption", tr.ranking);
 
@@ -918,6 +920,8 @@ function applyTranslations() {
   if (dialog?.open && state.selectedCharacter) {
     renderEquipment(state.selectedCharacter);
   }
+
+  requestAnimationFrame(syncRankingStickyOffset);
 }
 
 function setText(selector, value) {
@@ -1073,10 +1077,14 @@ function renderSummary() {
 
 function renderRankPeriodChanges(container, change, options = {}) {
   const alwaysShowZero = options.alwaysShowZero === true;
+  const selectedPeriod = String(options.period || "");
   const periods = change?.periods;
   if (!alwaysShowZero && (!periods || typeof periods !== "object")) return;
 
-  const comparablePeriods = RANK_CHANGE_PERIODS
+  const periodDefinitions = selectedPeriod
+    ? RANK_CHANGE_PERIODS.filter(([key]) => key === selectedPeriod)
+    : RANK_CHANGE_PERIODS;
+  const comparablePeriods = periodDefinitions
     .map(([key, labelKey]) => ({
       key,
       label: st(labelKey),
@@ -1109,6 +1117,64 @@ function renderRankPeriodChanges(container, change, options = {}) {
   container.appendChild(list);
 }
 
+function renderRankPeriodSelector() {
+  document.querySelectorAll("[data-rank-period]").forEach((button) => {
+    const period = button.dataset.rankPeriod;
+    const definition = RANK_CHANGE_PERIODS.find(([key]) => key === period);
+    if (!definition) return;
+
+    const [, labelKey] = definition;
+    const label = st(labelKey);
+    const active = period === state.selectedRankPeriod;
+    button.textContent = label;
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-pressed", String(active));
+    button.classList.toggle("rank-period-selected", active);
+  });
+}
+
+function syncRankingStickyOffset() {
+  const section = elements.rankingSection;
+  const heading = section?.querySelector(".table-heading");
+  if (!section || !heading) return;
+  section.style.setProperty(
+    "--ranking-heading-height",
+    `${Math.ceil(heading.getBoundingClientRect().height)}px`
+  );
+}
+
+function setupRankPeriodSelector() {
+  document.querySelectorAll("[data-rank-period]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const period = button.dataset.rankPeriod;
+      if (!RANK_CHANGE_PERIODS.some(([key]) => key === period)) return;
+
+      state.selectedRankPeriod = period;
+      renderRankPeriodSelector();
+      renderTable();
+
+      const dialog = document.querySelector("#equipment-dialog");
+      if (dialog?.open && state.selectedCharacter) {
+        renderEquipment(state.selectedCharacter);
+      }
+    });
+  });
+}
+
+function setupRankingStickyHeader() {
+  const section = elements.rankingSection;
+  const heading = section?.querySelector(".table-heading");
+  if (!section || !heading || section.dataset.stickyHeaderReady === "true") return;
+
+  syncRankingStickyOffset();
+  if (typeof ResizeObserver === "function") {
+    const observer = new ResizeObserver(syncRankingStickyOffset);
+    observer.observe(heading);
+  }
+  section.dataset.stickyHeaderReady = "true";
+}
+
 function renderTable() {
   if (!elements.body) return;
 
@@ -1139,7 +1205,10 @@ function renderTable() {
     // Every character reserves the same compact three-line area.  A zero is
     // shown both for an unchanged rank and while a new period baseline is
     // being accumulated, preventing cells from jumping between updates.
-    renderRankPeriodChanges(tdRank, change, { alwaysShowZero: true });
+    renderRankPeriodChanges(tdRank, change, {
+      alwaysShowZero: true,
+      period: state.selectedRankPeriod,
+    });
     tr.appendChild(tdRank);
 
     // キャラクターセル
@@ -1644,6 +1713,9 @@ function setupRankingScrollGuard() {
 document.addEventListener("DOMContentLoaded", () => {
   const initialLang = detectLanguage();
   setLanguage(initialLang);
+  setupRankPeriodSelector();
+  setupRankingStickyHeader();
+  syncRankingStickyOffset();
 
   loadData();
 
@@ -1796,7 +1868,10 @@ function renderEquipment(character) {
       // Equipment rows use the same compact day/week/month movement badges as
       // the character table.  Missing history is intentionally rendered as 0
       // instead of hiding the comparison, so every item has the same layout.
-      renderRankPeriodChanges(rank, item.change, { alwaysShowZero: true });
+      renderRankPeriodChanges(rank, item.change, {
+        alwaysShowZero: true,
+        period: state.selectedRankPeriod,
+      });
 
       const itemCell = document.createElement("td");
       itemCell.className = "equipment-icon-cell";
