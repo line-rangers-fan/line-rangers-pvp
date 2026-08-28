@@ -52,9 +52,10 @@ def test_history_and_equipment_change_contract_is_present():
     assert "alwaysShowZero: true" in app
     assert "selectedRankPeriod" in app
     assert "setupRankPeriodSelector" in app
-    assert "setupRankingStickyHeader" in app
+    assert "compactTransition: true" in app
+    assert "includePeriodLabel: false" in app
     assert "renderRankPeriodChanges(rank, item.change" in app
     assert ".rank-period-changes" in style
     assert ".rank-period-selector" in style
-    assert "--ranking-heading-height" in style
+    assert ".ranking-section {\n  overflow: visible;" in style
     assert ".equipment-rank-cell .rank-period-changes" in style

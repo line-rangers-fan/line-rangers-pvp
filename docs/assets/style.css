@@ -368,14 +368,8 @@ h1 {
    ========================================= */
 
 .ranking-section {
-  --ranking-heading-height: 0px;
-  max-height: min(76svh, 50rem);
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-y: auto;
-  scrollbar-gutter: stable;
-  touch-action: pan-y pinch-zoom;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
+  touch-action: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
@@ -383,9 +377,6 @@ h1 {
 }
 
 .table-heading {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   display: flex;
   justify-content: space-between;
   gap: 1rem;
@@ -523,9 +514,7 @@ td {
 }
 
 thead th {
-  position: sticky;
-  top: var(--ranking-heading-height, 0px);
-  z-index: 2;
+  position: static;
   color: var(--muted);
   background: #0a1729;
   box-shadow: 0 1px 0 var(--border);
@@ -876,10 +865,6 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
    ========================================= */
 
 @media (max-width: 480px) {
-  .ranking-section {
-    max-height: min(100svh, 56rem);
-  }
-
   .site-header {
     padding-top: 3rem;
   }

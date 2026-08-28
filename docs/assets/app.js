@@ -920,8 +920,6 @@ function applyTranslations() {
   if (dialog?.open && state.selectedCharacter) {
     renderEquipment(state.selectedCharacter);
   }
-
-  requestAnimationFrame(syncRankingStickyOffset);
 }
 
 function setText(selector, value) {
@@ -1078,6 +1076,9 @@ function renderSummary() {
 function renderRankPeriodChanges(container, change, options = {}) {
   const alwaysShowZero = options.alwaysShowZero === true;
   const selectedPeriod = String(options.period || "");
+  const currentRank = Number(options.currentRank);
+  const compactTransition = options.compactTransition === true;
+  const includePeriodLabel = options.includePeriodLabel !== false;
   const periods = change?.periods;
   if (!alwaysShowZero && (!periods || typeof periods !== "object")) return;
 
@@ -1109,9 +1110,22 @@ function renderRankPeriodChanges(container, change, options = {}) {
           ? "rank-period-change rank-period-down"
           : "rank-period-change rank-period-neutral";
     const symbol = delta > 0 ? `↑${delta}` : delta < 0 ? `↓${Math.abs(delta)}` : "0";
-    badge.textContent = `${label} ${symbol}`;
-    badge.title = `${label}: ${symbol}`;
-    badge.setAttribute("aria-label", `${label}: ${symbol}`);
+    const previousRank =
+      Number.isInteger(currentRank) && Number.isFinite(currentRank)
+        ? currentRank + delta
+        : null;
+    const movement =
+      delta !== 0 && compactTransition && previousRank !== null
+        ? `${previousRank}→${currentRank}`
+        : symbol;
+    const visibleLabel = includePeriodLabel ? `${label} ${movement}` : movement;
+    const detail =
+      delta !== 0 && previousRank !== null
+        ? `${label}: ${previousRank} → ${currentRank} (${symbol})`
+        : `${label}: ${movement}`;
+    badge.textContent = visibleLabel;
+    badge.title = detail;
+    badge.setAttribute("aria-label", detail);
     list.appendChild(badge);
   });
   container.appendChild(list);
@@ -1134,16 +1148,6 @@ function renderRankPeriodSelector() {
   });
 }
 
-function syncRankingStickyOffset() {
-  const section = elements.rankingSection;
-  const heading = section?.querySelector(".table-heading");
-  if (!section || !heading) return;
-  section.style.setProperty(
-    "--ranking-heading-height",
-    `${Math.ceil(heading.getBoundingClientRect().height)}px`
-  );
-}
-
 function setupRankPeriodSelector() {
   document.querySelectorAll("[data-rank-period]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1160,19 +1164,6 @@ function setupRankPeriodSelector() {
       }
     });
   });
-}
-
-function setupRankingStickyHeader() {
-  const section = elements.rankingSection;
-  const heading = section?.querySelector(".table-heading");
-  if (!section || !heading || section.dataset.stickyHeaderReady === "true") return;
-
-  syncRankingStickyOffset();
-  if (typeof ResizeObserver === "function") {
-    const observer = new ResizeObserver(syncRankingStickyOffset);
-    observer.observe(heading);
-  }
-  section.dataset.stickyHeaderReady = "true";
 }
 
 function renderTable() {
@@ -1208,6 +1199,9 @@ function renderTable() {
     renderRankPeriodChanges(tdRank, change, {
       alwaysShowZero: true,
       period: state.selectedRankPeriod,
+      currentRank: rank,
+      compactTransition: true,
+      includePeriodLabel: false,
     });
     tr.appendChild(tdRank);
 
@@ -1714,8 +1708,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const initialLang = detectLanguage();
   setLanguage(initialLang);
   setupRankPeriodSelector();
-  setupRankingStickyHeader();
-  syncRankingStickyOffset();
 
   loadData();
 
@@ -1871,6 +1863,8 @@ function renderEquipment(character) {
       renderRankPeriodChanges(rank, item.change, {
         alwaysShowZero: true,
         period: state.selectedRankPeriod,
+        currentRank: item.rank,
+        compactTransition: true,
       });
 
       const itemCell = document.createElement("td");
