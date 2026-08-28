@@ -38,7 +38,7 @@ def test_frontend_assets_keep_strict_csp_and_required_controls():
         assert f'id="{element_id}"' in index
 
 
-def test_history_trend_contract_is_present():
+def test_history_and_equipment_change_contract_is_present():
     app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
     style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
 
@@ -46,8 +46,9 @@ def test_history_trend_contract_is_present():
     assert "function validateHistory(" in app
     assert "HISTORY_MAX_SNAPSHOTS" in app
     assert "History snapshots are not in chronological order." in app
-    assert "function renderCharacterTrend(" in app
     assert "const RANK_CHANGE_PERIODS" in app
     assert "function renderRankPeriodChanges(" in app
+    assert "alwaysShowZero: true" in app
+    assert "renderRankPeriodChanges(rank, item.change" in app
     assert ".rank-period-changes" in style
-    assert ".equipment-trend-chart" in style
+    assert ".equipment-rank-cell .rank-period-changes" in style

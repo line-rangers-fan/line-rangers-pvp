@@ -7,7 +7,6 @@ const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const DELAYED_AFTER_MS = 90 * 60 * 1000;
 const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
-const TREND_WINDOW_MS = 24 * 60 * 60 * 1000;
 const HISTORY_MAX_SNAPSHOTS = 24 * 31;
 const RANK_CHANGE_PERIODS = [
   ["day", "rankDay"],
@@ -195,58 +194,6 @@ const WEEKLY_NOTICE = {
   id: "Setelah reset PVP hari Sabtu, data terverifikasi terakhir dapat tetap ditampilkan hingga 200 pemain lengkap. Hasil parsial tidak dipublikasikan.",
   vi: "Sau khi xếp hạng PVP được đặt lại vào thứ Bảy, dữ liệu đã xác minh gần nhất có thể tiếp tục hiển thị cho đến khi đủ 200 người chơi. Kết quả chưa đầy đủ sẽ không được công bố.",
   ko: "토요일 PVP 랭킹 초기화 직후에는 200명이 모두 확인될 때까지 마지막 정상 데이터를 표시할 수 있습니다. 일부만 집계된 결과는 공개하지 않습니다.",
-};
-
-const TREND_TEXT = {
-  ja: {
-    title: "過去24時間の採用率",
-    loading: "履歴を読み込んでいます…",
-    unavailable: "比較できる履歴がまだありません。",
-    change: "表示期間差",
-    aria: (start, end) => `採用率は${start}%から${end}%へ変化しました。`,
-  },
-  en: {
-    title: "Usage rate over 24 hours",
-    loading: "Loading history…",
-    unavailable: "There is not enough history to compare yet.",
-    change: "Window change",
-    aria: (start, end) => `Usage rate changed from ${start}% to ${end}%.`,
-  },
-  zh: {
-    title: "過去24小時使用率",
-    loading: "正在載入歷史資料……",
-    unavailable: "目前沒有足夠的歷史資料可供比較。",
-    change: "顯示期間變化",
-    aria: (start, end) => `使用率由${start}%變為${end}%。`,
-  },
-  th: {
-    title: "อัตราการใช้งานใน 24 ชั่วโมง",
-    loading: "กำลังโหลดประวัติ…",
-    unavailable: "ยังมีประวัติไม่เพียงพอสำหรับการเปรียบเทียบ",
-    change: "การเปลี่ยนแปลงในช่วงที่แสดง",
-    aria: (start, end) => `อัตราการใช้งานเปลี่ยนจาก ${start}% เป็น ${end}%`,
-  },
-  id: {
-    title: "Tingkat penggunaan 24 jam",
-    loading: "Memuat riwayat…",
-    unavailable: "Riwayat belum cukup untuk dibandingkan.",
-    change: "Perubahan periode",
-    aria: (start, end) => `Tingkat penggunaan berubah dari ${start}% menjadi ${end}%.`,
-  },
-  vi: {
-    title: "Tỷ lệ sử dụng trong 24 giờ",
-    loading: "Đang tải lịch sử…",
-    unavailable: "Chưa có đủ lịch sử để so sánh.",
-    change: "Thay đổi trong khoảng hiển thị",
-    aria: (start, end) => `Tỷ lệ sử dụng thay đổi từ ${start}% thành ${end}%.`,
-  },
-  ko: {
-    title: "최근 24시간 사용률",
-    loading: "기록을 불러오는 중…",
-    unavailable: "아직 비교할 기록이 충분하지 않습니다.",
-    change: "표시 기간 변화",
-    aria: (start, end) => `사용률이 ${start}%에서 ${end}%로 변했습니다.`,
-  },
 };
 
 const STATUS_TEXT = {
@@ -816,11 +763,6 @@ function st(key) {
   return language[key];
 }
 
-function tt(key) {
-  const language = TREND_TEXT[state.language] || TREND_TEXT.en;
-  return language[key];
-}
-
 function getLocale() {
   const locales = {
     ja: "ja-JP",
@@ -1129,29 +1071,28 @@ function renderSummary() {
   updateFreshnessWarning();
 }
 
-function renderRankPeriodChanges(container, change) {
+function renderRankPeriodChanges(container, change, options = {}) {
+  const alwaysShowZero = options.alwaysShowZero === true;
   const periods = change?.periods;
-  if (!periods || typeof periods !== "object") return;
+  if (!alwaysShowZero && (!periods || typeof periods !== "object")) return;
 
   const comparablePeriods = RANK_CHANGE_PERIODS
     .map(([key, labelKey]) => ({
       key,
       label: st(labelKey),
-      value: periods[key],
+      value: periods?.[key],
     }))
-    .filter(
-      ({ value }) =>
-        value?.comparable === true &&
-        Number.isInteger(Number(value.rank)) &&
-        Number.isFinite(Number(value.rank))
-    );
-  if (comparablePeriods.length === 0) return;
+    .filter(({ value }) => alwaysShowZero || value?.comparable === true);
+  if (!alwaysShowZero && comparablePeriods.length === 0) return;
 
   const list = document.createElement("span");
   list.className = "rank-period-changes";
   list.setAttribute("aria-label", "rank period changes");
   comparablePeriods.forEach(({ key, label, value }) => {
-    const delta = Number(value.rank);
+    const parsedDelta = Number(value?.rank);
+    const delta = Number.isInteger(parsedDelta) && Number.isFinite(parsedDelta)
+      ? parsedDelta
+      : 0;
     const badge = document.createElement("span");
     badge.className =
       delta > 0
@@ -1159,7 +1100,7 @@ function renderRankPeriodChanges(container, change) {
         : delta < 0
           ? "rank-period-change rank-period-down"
           : "rank-period-change rank-period-neutral";
-    const symbol = delta > 0 ? `↑${delta}` : delta < 0 ? `↓${Math.abs(delta)}` : "↔";
+    const symbol = delta > 0 ? `↑${delta}` : delta < 0 ? `↓${Math.abs(delta)}` : "0";
     badge.textContent = `${label} ${symbol}`;
     badge.title = `${label}: ${symbol}`;
     badge.setAttribute("aria-label", `${label}: ${symbol}`);
@@ -1484,6 +1425,13 @@ function validateHistory(history) {
       throw new Error("History snapshots are not in chronological order.");
     }
     previousTimestamp = snapshotTimestamp;
+    if (
+      snapshot.calendar_date !== undefined &&
+      (typeof snapshot.calendar_date !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(snapshot.calendar_date))
+    ) {
+      throw new Error("Invalid history calendar date.");
+    }
     if (!Number.isInteger(Number(snapshot.sampled_players)) || snapshot.sampled_players <= 0) {
       throw new Error("Invalid history sample size.");
     }
@@ -1504,6 +1452,34 @@ function validateHistory(history) {
         throw new Error("Invalid character history.");
       }
       unitCodes.add(unitCode);
+
+      const equipmentRankings = character.equipment_rankings;
+      if (equipmentRankings !== undefined) {
+        if (!equipmentRankings || typeof equipmentRankings !== "object") {
+          throw new Error("Invalid equipment history.");
+        }
+        EQUIPMENT_TYPES.forEach(([equipmentType]) => {
+          const category = equipmentRankings[equipmentType];
+          const items = category?.items;
+          if (!category || !Array.isArray(items)) {
+            throw new Error("Invalid equipment history.");
+          }
+          const itemCodes = new Set();
+          items.forEach((item) => {
+            const itemCode = String(item?.item_code || "");
+            const rank = Number(item?.rank);
+            if (
+              !itemCode ||
+              itemCodes.has(itemCode) ||
+              !Number.isInteger(rank) ||
+              rank < 1
+            ) {
+              throw new Error("Invalid equipment history.");
+            }
+            itemCodes.add(itemCode);
+          });
+        });
+      }
     });
   });
 
@@ -1729,147 +1705,6 @@ function createEquipmentTab(type, label, isSelected, character) {
   return button;
 }
 
-function getCharacterTrend(unitCode) {
-  const snapshots = Array.isArray(state.history?.snapshots)
-    ? state.history.snapshots
-    : [];
-  const endTime = new Date(state.data?.updated_at || "").getTime();
-  if (!Number.isFinite(endTime)) return [];
-
-  return snapshots
-    .map((snapshot) => {
-      const timestamp = new Date(snapshot.updated_at || "").getTime();
-      const character = Array.isArray(snapshot.characters)
-        ? snapshot.characters.find((row) => row.unit_code === unitCode)
-        : null;
-      return {
-        timestamp,
-        rate: Number(character?.adoption_rate),
-      };
-    })
-    .filter(
-      (point) =>
-        Number.isFinite(point.timestamp) &&
-        Number.isFinite(point.rate) &&
-        point.timestamp >= endTime - TREND_WINDOW_MS &&
-        point.timestamp <= endTime + 60_000
-    )
-    .sort((a, b) => a.timestamp - b.timestamp);
-}
-
-function formatTrendTime(timestamp) {
-  return new Intl.DateTimeFormat(getLocale(), {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: getDisplayTimeZone(),
-  }).format(new Date(timestamp));
-}
-
-function renderCharacterTrend(container, character) {
-  container.textContent = "";
-  const title = document.createElement("h3");
-  title.className = "equipment-trend-title";
-  title.textContent = tt("title");
-  container.appendChild(title);
-
-  const points = getCharacterTrend(character.unit_code);
-  if (points.length < 2) {
-    const empty = document.createElement("p");
-    empty.className = "equipment-trend-empty";
-    empty.textContent = tt("unavailable");
-    container.appendChild(empty);
-    return;
-  }
-
-  const first = points[0];
-  const last = points[points.length - 1];
-  const delta = Math.round((last.rate - first.rate) * 10) / 10;
-  const metrics = document.createElement("div");
-  metrics.className = "equipment-trend-metrics";
-
-  const current = document.createElement("strong");
-  current.textContent = `${last.rate.toFixed(1)}%`;
-  const change = document.createElement("span");
-  change.className =
-    delta > 0
-      ? "trend-change trend-positive"
-      : delta < 0
-        ? "trend-change trend-negative"
-        : "trend-change trend-neutral";
-  const sign = delta > 0 ? "+" : "";
-  change.textContent = `${tt("change")} ${sign}${delta.toFixed(1)}pt`;
-  metrics.append(current, change);
-  container.appendChild(metrics);
-
-  const width = 320;
-  const height = 72;
-  const padding = 7;
-  const rates = points.map((point) => point.rate);
-  let minimum = Math.min(...rates);
-  let maximum = Math.max(...rates);
-  if (minimum === maximum) {
-    minimum -= 0.5;
-    maximum += 0.5;
-  }
-  const startTime = first.timestamp;
-  const endTime = last.timestamp;
-  const timeSpan = Math.max(endTime - startTime, 1);
-  const coordinates = points.map((point) => {
-    const x = padding +
-      ((point.timestamp - startTime) / timeSpan) * (width - padding * 2);
-    const y = height - padding -
-      ((point.rate - minimum) / (maximum - minimum)) * (height - padding * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-
-  const namespace = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(namespace, "svg");
-  svg.classList.add("equipment-trend-chart");
-  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.setAttribute("role", "img");
-  svg.setAttribute(
-    "aria-label",
-    tt("aria")(first.rate.toFixed(1), last.rate.toFixed(1))
-  );
-
-  const line = document.createElementNS(namespace, "polyline");
-  line.setAttribute("points", coordinates.join(" "));
-  line.setAttribute("fill", "none");
-  line.setAttribute("vector-effect", "non-scaling-stroke");
-  svg.appendChild(line);
-
-  const [lastX, lastY] = coordinates[coordinates.length - 1].split(",");
-  const marker = document.createElementNS(namespace, "circle");
-  marker.setAttribute("cx", lastX);
-  marker.setAttribute("cy", lastY);
-  marker.setAttribute("r", "3.5");
-  svg.appendChild(marker);
-  container.appendChild(svg);
-
-  const times = document.createElement("div");
-  times.className = "equipment-trend-times";
-  const start = document.createElement("span");
-  const end = document.createElement("span");
-  start.textContent = formatTrendTime(startTime);
-  end.textContent = formatTrendTime(endTime);
-  times.append(start, end);
-  container.appendChild(times);
-}
-
-function loadCharacterTrend(container, character) {
-  container.dataset.unitCode = character.unit_code;
-  container.textContent = tt("loading");
-  ensureHistoryLoaded().then(() => {
-    if (
-      !container.isConnected ||
-      container.dataset.unitCode !== state.selectedCharacter?.unit_code
-    ) {
-      return;
-    }
-    renderCharacterTrend(container, character);
-  });
-}
-
 function renderEquipment(character) {
   const dialog = document.querySelector("#equipment-dialog");
   const title = document.querySelector("#equipment-title");
@@ -1916,12 +1751,6 @@ function renderEquipment(character) {
   summaryText.append(description, characterMeta);
   summary.append(characterImage, summaryText);
   content.appendChild(summary);
-
-  const trend = document.createElement("section");
-  trend.className = "equipment-trend";
-  trend.setAttribute("aria-live", "polite");
-  content.appendChild(trend);
-  loadCharacterTrend(trend, character);
 
   const tabList = document.createElement("div");
   tabList.className = "equipment-tabs";
@@ -1971,7 +1800,14 @@ function renderEquipment(character) {
       const rank = document.createElement("td");
       rank.className = "rank-cell equipment-rank-cell";
       rank.dataset.rank = String(item.rank || "");
-      rank.textContent = String(item.rank || "-");
+      const rankNumber = document.createElement("span");
+      rankNumber.className = "rank-number";
+      rankNumber.textContent = String(item.rank || "-");
+      rank.appendChild(rankNumber);
+      // Equipment rows use the same compact day/week/month movement badges as
+      // the character table.  Missing history is intentionally rendered as 0
+      // instead of hiding the comparison, so every item has the same layout.
+      renderRankPeriodChanges(rank, item.change, { alwaysShowZero: true });
 
       const itemCell = document.createElement("td");
       itemCell.className = "equipment-icon-cell";

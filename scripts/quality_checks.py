@@ -230,7 +230,7 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
     slots = int(data.get("character_slots", 0))
     characters = data.get("characters")
 
-    if schema_version < 8:
+    if schema_version < 9:
         errors.append("unsupported schema")
     if _parse_time(data.get("updated_at")) is None:
         errors.append("invalid updated timestamp")
@@ -372,6 +372,22 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
                     round(item_players / player_count * 100, 1),
                 ):
                     errors.append(f"invalid {equipment_type} adoption rate")
+
+                item_change = item.get("change")
+                if item_change is not None:
+                    if not isinstance(item_change, dict):
+                        errors.append(f"invalid {equipment_type} item change")
+                    else:
+                        if not isinstance(item_change.get("new"), bool):
+                            errors.append(f"invalid {equipment_type} item change flag")
+                        if not isinstance(item_change.get("rank"), int) or isinstance(
+                            item_change.get("rank"), bool
+                        ):
+                            errors.append(f"invalid {equipment_type} item change rank")
+                        if "periods" not in item_change:
+                            errors.append(f"missing {equipment_type} item period changes")
+                        else:
+                            _validate_periods(item_change["periods"], errors)
 
                 item_occurrences += item_count
                 previous_item_count = item_count

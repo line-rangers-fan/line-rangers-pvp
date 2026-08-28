@@ -68,7 +68,7 @@ def valid_data(sampled_players=2, character_slots=None):
         previous_rank = rank
 
     return {
-        "schema_version": 8,
+        "schema_version": 9,
         "updated_at": "2026-08-27T03:00:00+00:00",
         "target_players": sampled_players,
         "sampled_players": sampled_players,

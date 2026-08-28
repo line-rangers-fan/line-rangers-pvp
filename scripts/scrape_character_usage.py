@@ -15,13 +15,14 @@ import re
 import sys
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
 from time import monotonic
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 try:
     from quality_checks import (
@@ -62,6 +63,7 @@ HISTORY_PATH = Path("docs/data/character_usage_history.json")
 # history file contains only compact aggregate rows (never player IDs), so it
 # remains small while allowing a true calendar-month comparison.
 HISTORY_LIMIT = 24 * 31
+HISTORY_TIME_ZONE = ZoneInfo("Asia/Tokyo")
 RANK_COMPARISON_PERIODS = {
     "day": 24 * 60 * 60,
     "week": 7 * 24 * 60 * 60,
@@ -525,7 +527,9 @@ def build_statistics(
     )
     equipment_slots_expected = total_slots * len(EQUIPMENT_TYPES)
     return {
-        "schema_version": 8,
+        # Version 9 adds compact equipment-rank history/change metadata while
+        # preserving the existing character and equipment count semantics.
+        "schema_version": 9,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "source": {"name": SOURCE_NAME, "url": TARGET_URL},
         "league": "レジェンド",
@@ -649,10 +653,25 @@ def _parse_history_time(value: object) -> datetime | None:
         return None
 
 
+def _history_date_key(value: datetime | None) -> str | None:
+    """Return the calendar date used by the Japanese-facing daily comparison.
+
+    Stored timestamps are UTC, but the site is operated and read primarily in
+    Japan.  Keeping an explicit date key prevents a snapshot around 00:00 JST
+    from being assigned to the wrong comparison day.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(HISTORY_TIME_ZONE).date().isoformat()
+
+
 def _period_reference(
     history: dict | None,
     current_time: datetime | None,
     period_seconds: int,
+    period_name: str | None = None,
 ) -> dict | None:
     """Return a sufficiently close, earlier verified snapshot for a period.
 
@@ -667,12 +686,26 @@ def _period_reference(
         return None
 
     target_time = current_time.timestamp() - period_seconds
+    previous_calendar_date: date | None = None
+    if period_name == "day":
+        previous_calendar_date = (
+            current_time.astimezone(HISTORY_TIME_ZONE).date() - timedelta(days=1)
+        )
     candidates: list[tuple[float, dict]] = []
     for snapshot in snapshots:
         if not isinstance(snapshot, dict) or not isinstance(snapshot.get("characters"), list):
             continue
         timestamp = _parse_history_time(snapshot.get("updated_at"))
         if timestamp is None:
+            continue
+        if (
+            previous_calendar_date is not None
+            and timestamp.astimezone(HISTORY_TIME_ZONE).date() == previous_calendar_date
+        ):
+            # A daily comparison is a calendar-day comparison in JST.  The
+            # latest verified snapshot from the preceding JST date is the
+            # least surprising baseline after midnight or a delayed run.
+            candidates.append((timestamp.timestamp(), snapshot))
             continue
         age = current_time.timestamp() - timestamp.timestamp()
         if (
@@ -684,6 +717,33 @@ def _period_reference(
     if not candidates:
         return None
     return max(candidates, key=lambda item: item[0])[1]
+
+
+def _find_history_character(reference: dict | None, unit_code: str) -> dict | None:
+    if not isinstance(reference, dict):
+        return None
+    for row in reference.get("characters", []):
+        if isinstance(row, dict) and str(row.get("unit_code")) == str(unit_code):
+            return row
+    return None
+
+
+def _find_history_equipment(
+    reference_character: dict | None,
+    equipment_type: str,
+    item_code: str,
+) -> dict | None:
+    if not isinstance(reference_character, dict):
+        return None
+    rankings = reference_character.get("equipment_rankings")
+    category = rankings.get(equipment_type) if isinstance(rankings, dict) else None
+    items = category.get("items") if isinstance(category, dict) else None
+    if not isinstance(items, list):
+        return None
+    for item in items:
+        if isinstance(item, dict) and str(item.get("item_code")) == str(item_code):
+            return item
+    return None
 
 
 def _period_change(
@@ -726,6 +786,103 @@ def _period_change(
     return result
 
 
+def _equipment_period_change(
+    current_item: dict,
+    reference: dict | None,
+    unit_code: str,
+    equipment_type: str,
+    current_time: datetime | None,
+) -> dict:
+    """Compare one equipment item with the verified period snapshot.
+
+    Missing history is deliberately represented as non-comparable.  The
+    frontend renders that state as 0, while the metadata remains truthful and
+    can be distinguished from a real unchanged rank.
+    """
+    result = {
+        "comparable": False,
+        "rank": None,
+        "from_updated_at": None,
+        "interval_minutes": None,
+    }
+    reference_character = _find_history_character(reference, unit_code)
+    reference_time = _parse_history_time(reference.get("updated_at")) if reference else None
+    if reference_character is None or reference_time is None or current_time is None:
+        return result
+
+    old_item = _find_history_equipment(
+        reference_character,
+        equipment_type,
+        str(current_item.get("item_code") or ""),
+    )
+    if old_item is None:
+        # A newly observed item has no defensible prior rank.  Keep it
+        # non-comparable so the UI shows the requested neutral 0 instead of a
+        # fabricated movement.
+        return result
+
+    result.update(
+        {
+            "comparable": True,
+            "rank": int(old_item.get("rank", 0)) - int(current_item.get("rank", 0)),
+            "from_updated_at": reference.get("updated_at"),
+            "interval_minutes": round(
+                (current_time - reference_time).total_seconds() / 60,
+                1,
+            ),
+        }
+    )
+    return result
+
+
+def _attach_equipment_comparison(
+    current_row: dict,
+    previous_row: dict | None,
+    period_references: dict[str, dict | None],
+    current_time: datetime | None,
+) -> None:
+    """Attach hourly and day/week/month rank changes to every equipment item."""
+    previous_rankings = previous_row.get("equipment_rankings", {}) if isinstance(previous_row, dict) else {}
+    current_rankings = current_row.get("equipment_rankings", {})
+    for equipment_type in EQUIPMENT_TYPES:
+        category = current_rankings.get(equipment_type)
+        items = category.get("items") if isinstance(category, dict) else None
+        if not isinstance(items, list):
+            continue
+        previous_category = (
+            previous_rankings.get(equipment_type)
+            if isinstance(previous_rankings, dict)
+            else None
+        )
+        previous_items = previous_category.get("items", []) if isinstance(previous_category, dict) else []
+        previous_by_code = {
+            str(item.get("item_code")): item
+            for item in previous_items
+            if isinstance(item, dict) and item.get("item_code")
+        }
+        for item in items:
+            item_code = str(item.get("item_code") or "")
+            old_item = previous_by_code.get(item_code)
+            item["change"] = {
+                "new": old_item is None,
+                "rank": (
+                    int(old_item.get("rank", 0)) - int(item.get("rank", 0))
+                    if old_item is not None
+                    else 0
+                ),
+                "periods": {
+                    name: _equipment_period_change(
+                        item,
+                        reference,
+                        str(current_row.get("unit_code") or ""),
+                        equipment_type,
+                        current_time,
+                    )
+                    for name, reference in period_references.items()
+                },
+            }
+
+
 def add_previous_comparison(
     data: dict,
     previous: dict | None,
@@ -734,19 +891,25 @@ def add_previous_comparison(
     """Attach hour-over-hour and period rank changes without player IDs."""
     current_time = _parse_history_time(data.get("updated_at"))
     period_references = {
-        name: _period_reference(history, current_time, seconds)
+        name: _period_reference(history, current_time, seconds, name)
         for name, seconds in RANK_COMPARISON_PERIODS.items()
     }
     period_summary = {
         name: {
             "comparable": reference is not None,
             "updated_at": reference.get("updated_at") if reference else None,
+            "calendar_date": _history_date_key(
+                _parse_history_time(reference.get("updated_at"))
+            )
+            if reference
+            else None,
         }
         for name, reference in period_references.items()
     }
     if not previous or not isinstance(previous.get("characters"), list):
         data["comparison"] = {
             "previous_updated_at": None,
+            "calendar_date": _history_date_key(current_time),
             "interval_minutes": None,
             "comparable": False,
             "new_characters": 0,
@@ -760,6 +923,12 @@ def add_previous_comparison(
                     name: _period_change(row, reference, current_time)
                     for name, reference in period_references.items()
                 }
+                _attach_equipment_comparison(
+                    row,
+                    None,
+                    period_references,
+                    current_time,
+                )
         return data
 
     previous_rows = {
@@ -796,6 +965,12 @@ def add_previous_comparison(
                 name: _period_change(row, reference, current_time)
                 for name, reference in period_references.items()
             }
+            _attach_equipment_comparison(
+                row,
+                old,
+                period_references,
+                current_time,
+            )
 
     # New characters still carry explicit period entries so consumers can
     # distinguish "new" from a missing or malformed field.
@@ -806,6 +981,12 @@ def add_previous_comparison(
                     name: _period_change(row, reference, current_time)
                     for name, reference in period_references.items()
                 }
+                _attach_equipment_comparison(
+                    row,
+                    previous_rows.get(str(row.get("unit_code"))),
+                    period_references,
+                    current_time,
+                )
 
     try:
         previous_time = datetime.fromisoformat(
@@ -823,6 +1004,7 @@ def add_previous_comparison(
 
     data["comparison"] = {
         "previous_updated_at": previous.get("updated_at"),
+        "calendar_date": _history_date_key(current_time),
         "interval_minutes": interval_minutes,
         "comparable": (
             int(previous.get("sampled_players", 0))
@@ -837,8 +1019,32 @@ def add_previous_comparison(
 
 def history_snapshot(data: dict) -> dict:
     """Keep only compact, non-identifying values needed for future trends."""
+    timestamp = _parse_history_time(data["updated_at"])
+
+    def compact_equipment_rankings(row: dict) -> dict[str, dict[str, list[dict]]]:
+        rankings = row.get("equipment_rankings")
+        rankings = rankings if isinstance(rankings, dict) else {}
+        compact: dict[str, dict[str, list[dict]]] = {}
+        for equipment_type in EQUIPMENT_TYPES:
+            category = rankings.get(equipment_type)
+            items = category.get("items") if isinstance(category, dict) else []
+            compact[equipment_type] = {
+                "items": [
+                    {
+                        "item_code": item["item_code"],
+                        "rank": item["rank"],
+                    }
+                    for item in items
+                    if isinstance(item, dict)
+                    and item.get("item_code")
+                    and isinstance(item.get("rank"), int)
+                ]
+            }
+        return compact
+
     return {
         "updated_at": data["updated_at"],
+        "calendar_date": _history_date_key(timestamp),
         "sampled_players": data["sampled_players"],
         "character_slots": data["character_slots"],
         "unique_characters": data["unique_characters"],
@@ -852,6 +1058,7 @@ def history_snapshot(data: dict) -> dict:
                 "occurrence_count": row["occurrence_count"],
                 "player_count": row["player_count"],
                 "adoption_rate": row["adoption_rate"],
+                "equipment_rankings": compact_equipment_rankings(row),
             }
             for row in data["characters"]
         ],
@@ -873,7 +1080,7 @@ def update_history(
     ]
     snapshots.append(history_snapshot(data))
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at": data["updated_at"],
         "retention_hours": limit,
         "snapshots": snapshots[-limit:],

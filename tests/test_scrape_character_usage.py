@@ -46,7 +46,7 @@ def test_all_pvp_groups_and_duplicate_units_are_preserved():
     beta = by_image[scraper.character_image_url("u-beta")]
 
     assert data["character_slots"] == 4
-    assert data["schema_version"] == 8
+    assert data["schema_version"] == 9
     assert data["collection_quality"]["sample_coverage"] == 100.0
     assert alpha["occurrence_count"] == 2
     assert alpha["player_count"] == 1
@@ -305,6 +305,120 @@ def test_period_rank_changes_are_unavailable_when_history_gap_is_too_large():
     assert periods["day"]["rank"] is None
 
 
+def test_equipment_period_rank_changes_use_previous_jst_calendar_date():
+    previous = {
+        "updated_at": "2026-08-27T00:00:00+00:00",
+        "sampled_players": 2,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": 2,
+                "player_count": 2,
+                "adoption_rate": 100.0,
+                "equipment_rankings": {
+                    "WEAPON": {"items": [{"item_code": "w1", "rank": 2}]},
+                    "ARMOR": {"items": []},
+                    "ACC": {"items": []},
+                },
+            }
+        ],
+    }
+    current = {
+        "updated_at": "2026-08-28T00:30:00+00:00",  # 09:30 JST on Aug 28
+        "sampled_players": 2,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": 2,
+                "player_count": 2,
+                "adoption_rate": 100.0,
+                "equipment_rankings": {
+                    "WEAPON": {"items": [{"item_code": "w1", "rank": 1}]},
+                    "ARMOR": {"items": []},
+                    "ACC": {"items": []},
+                },
+            }
+        ],
+    }
+    history = {
+        "snapshots": [
+            {
+                "updated_at": "2026-08-27T13:00:00+00:00",  # 22:00 JST, prior date
+                "characters": [
+                    {
+                        "unit_code": "u-alpha",
+                        "rank": 1,
+                        "equipment_rankings": {
+                            "WEAPON": {"items": [{"item_code": "w1", "rank": 3}]},
+                            "ARMOR": {"items": []},
+                            "ACC": {"items": []},
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+
+    scraper.add_previous_comparison(current, previous, history)
+    item = current["characters"][0]["equipment_rankings"]["WEAPON"]["items"][0]
+
+    assert item["change"]["rank"] == 1
+    assert item["change"]["periods"]["day"] == {
+        "comparable": True,
+        "rank": 2,
+        "from_updated_at": "2026-08-27T13:00:00+00:00",
+        "interval_minutes": 690.0,
+    }
+
+
+def test_equipment_without_prior_item_keeps_truthful_zero_fallback_metadata():
+    current = {
+        "updated_at": "2026-08-28T00:30:00+00:00",
+        "sampled_players": 1,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": 1,
+                "player_count": 1,
+                "adoption_rate": 100.0,
+                "equipment_rankings": {
+                    "WEAPON": {"items": [{"item_code": "new", "rank": 1}]},
+                    "ARMOR": {"items": []},
+                    "ACC": {"items": []},
+                },
+            }
+        ],
+    }
+    history = {
+        "snapshots": [
+            {
+                "updated_at": "2026-08-27T13:00:00+00:00",
+                "characters": [
+                    {
+                        "unit_code": "u-alpha",
+                        "rank": 1,
+                        "equipment_rankings": {
+                            "WEAPON": {"items": []},
+                            "ARMOR": {"items": []},
+                            "ACC": {"items": []},
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+
+    scraper.add_previous_comparison(current, None, history)
+    item = current["characters"][0]["equipment_rankings"]["WEAPON"]["items"][0]
+
+    assert item["change"]["new"] is True
+    assert item["change"]["rank"] == 0
+    assert item["change"]["periods"]["day"]["comparable"] is False
+
+
 def test_history_is_compact_deduplicated_and_bounded():
     data = {
         "updated_at": "2026-08-27T02:00:00+00:00",
@@ -338,5 +452,11 @@ def test_history_is_compact_deduplicated_and_bounded():
         data["updated_at"],
     ]
     character = result["snapshots"][-1]["characters"][0]
+    assert result["schema_version"] == 2
+    assert result["snapshots"][-1]["calendar_date"] == "2026-08-27"
     assert "image" not in character
-    assert "equipment_rankings" not in character
+    assert character["equipment_rankings"] == {
+        "WEAPON": {"items": []},
+        "ARMOR": {"items": []},
+        "ACC": {"items": []},
+    }
