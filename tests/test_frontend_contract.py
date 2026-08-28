@@ -54,6 +54,7 @@ def test_history_and_equipment_change_contract_is_present():
     assert "setupRankPeriodSelector" in app
     assert 'metric: "occurrence"' in app
     assert 'rankHistoryPending' in app
+    assert '"±0"' in app
     assert "fetchJsonWithLimits" in app
     assert "REQUEST_TIMEOUT_MS" in app
     assert "isTrustedCharacterImage" in app

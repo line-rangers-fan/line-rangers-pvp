@@ -1132,7 +1132,7 @@ function renderRankPeriodChanges(container, change, options = {}) {
           ? `+${formatUnit(delta, "occurrence")}`
           : delta < 0
             ? `-${formatUnit(Math.abs(delta), "occurrence")}`
-            : formatUnit(0, "occurrence")
+            : "±0"
         : delta > 0
           ? `↑${delta}`
           : delta < 0
