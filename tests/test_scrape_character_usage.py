@@ -252,24 +252,30 @@ def test_period_rank_changes_use_verified_day_week_and_month_snapshots():
             {
                 "unit_code": "u-alpha",
                 "rank": 1,
-                "occurrence_count": 2,
+                "occurrence_count": 5,
                 "player_count": 2,
                 "adoption_rate": 100.0,
             }
         ],
     }
 
-    def snapshot(updated_at: str, rank: int) -> dict:
+    def snapshot(updated_at: str, rank: int, occurrence_count: int) -> dict:
         return {
             "updated_at": updated_at,
-            "characters": [{"unit_code": "u-alpha", "rank": rank}],
+            "characters": [
+                {
+                    "unit_code": "u-alpha",
+                    "rank": rank,
+                    "occurrence_count": occurrence_count,
+                }
+            ],
         }
 
     history = {
         "snapshots": [
-            snapshot("2026-07-28T02:00:00+00:00", 4),
-            snapshot("2026-08-21T02:00:00+00:00", 3),
-            snapshot("2026-08-27T02:00:00+00:00", 2),
+            snapshot("2026-07-28T02:00:00+00:00", 4, 2),
+            snapshot("2026-08-21T02:00:00+00:00", 3, 2),
+            snapshot("2026-08-27T02:00:00+00:00", 2, 2),
         ]
     }
 
@@ -280,6 +286,9 @@ def test_period_rank_changes_use_verified_day_week_and_month_snapshots():
     assert periods["day"]["rank"] == 1
     assert periods["week"]["rank"] == 2
     assert periods["month"]["rank"] == 3
+    assert periods["day"]["occurrence_count"] == 3
+    assert periods["week"]["occurrence_count"] == 3
+    assert periods["month"]["occurrence_count"] == 3
     assert current["comparison"]["periods"]["month"]["comparable"] is True
 
 
@@ -368,6 +377,7 @@ def test_equipment_period_rank_changes_use_previous_jst_calendar_date():
     assert item["change"]["periods"]["day"] == {
         "comparable": True,
         "rank": 2,
+        "occurrence_count": None,
         "from_updated_at": "2026-08-27T13:00:00+00:00",
         "interval_minutes": 690.0,
     }
@@ -417,6 +427,38 @@ def test_equipment_without_prior_item_keeps_truthful_zero_fallback_metadata():
     assert item["change"]["new"] is True
     assert item["change"]["rank"] == 0
     assert item["change"]["periods"]["day"]["comparable"] is False
+
+
+def test_history_snapshot_keeps_equipment_counts_for_period_deltas():
+    data = {
+        "updated_at": "2026-08-28T02:00:00+00:00",
+        "sampled_players": 1,
+        "character_slots": 1,
+        "unique_characters": 1,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": 1,
+                "player_count": 1,
+                "adoption_rate": 100.0,
+                "equipment_rankings": {
+                    "WEAPON": {
+                        "items": [
+                            {"item_code": "w1", "rank": 1, "occurrence_count": 4}
+                        ]
+                    },
+                    "ARMOR": {"items": []},
+                    "ACC": {"items": []},
+                },
+            }
+        ],
+    }
+
+    snapshot = scraper.history_snapshot(data)
+    item = snapshot["characters"][0]["equipment_rankings"]["WEAPON"]["items"][0]
+
+    assert item == {"item_code": "w1", "rank": 1, "occurrence_count": 4}
 
 
 def test_history_is_compact_deduplicated_and_bounded():

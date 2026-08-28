@@ -755,6 +755,7 @@ def _period_change(
     result = {
         "comparable": False,
         "rank": None,
+        "occurrence_count": None,
         "from_updated_at": None,
         "interval_minutes": None,
     }
@@ -776,6 +777,9 @@ def _period_change(
             "comparable": True,
             # Positive means the character moved up the ranking.
             "rank": int(old.get("rank", 0)) - int(current_row.get("rank", 0)),
+            # Positive means this character is used in more defence-team slots.
+            "occurrence_count": int(current_row.get("occurrence_count", 0))
+            - int(old.get("occurrence_count", 0)),
             "from_updated_at": reference.get("updated_at"),
             "interval_minutes": round(
                 (current_time - reference_time).total_seconds() / 60,
@@ -802,6 +806,7 @@ def _equipment_period_change(
     result = {
         "comparable": False,
         "rank": None,
+        "occurrence_count": None,
         "from_updated_at": None,
         "interval_minutes": None,
     }
@@ -825,6 +830,13 @@ def _equipment_period_change(
         {
             "comparable": True,
             "rank": int(old_item.get("rank", 0)) - int(current_item.get("rank", 0)),
+            "occurrence_count": (
+                int(current_item.get("occurrence_count", 0))
+                - int(old_item.get("occurrence_count", 0))
+                if isinstance(old_item.get("occurrence_count"), int)
+                and isinstance(current_item.get("occurrence_count"), int)
+                else None
+            ),
             "from_updated_at": reference.get("updated_at"),
             "interval_minutes": round(
                 (current_time - reference_time).total_seconds() / 60,
@@ -867,6 +879,12 @@ def _attach_equipment_comparison(
                 "new": old_item is None,
                 "rank": (
                     int(old_item.get("rank", 0)) - int(item.get("rank", 0))
+                    if old_item is not None
+                    else 0
+                ),
+                "occurrence_count": (
+                    int(item.get("occurrence_count", 0))
+                    - int(old_item.get("occurrence_count", 0))
                     if old_item is not None
                     else 0
                 ),
@@ -1033,6 +1051,7 @@ def history_snapshot(data: dict) -> dict:
                     {
                         "item_code": item["item_code"],
                         "rank": item["rank"],
+                        "occurrence_count": item["occurrence_count"],
                     }
                     for item in items
                     if isinstance(item, dict)

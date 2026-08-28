@@ -1076,8 +1076,7 @@ function renderSummary() {
 function renderRankPeriodChanges(container, change, options = {}) {
   const alwaysShowZero = options.alwaysShowZero === true;
   const selectedPeriod = String(options.period || "");
-  const currentRank = Number(options.currentRank);
-  const compactTransition = options.compactTransition === true;
+  const metric = options.metric || "rank";
   const includePeriodLabel = options.includePeriodLabel !== false;
   const periods = change?.periods;
   if (!alwaysShowZero && (!periods || typeof periods !== "object")) return;
@@ -1096,9 +1095,11 @@ function renderRankPeriodChanges(container, change, options = {}) {
 
   const list = document.createElement("span");
   list.className = "rank-period-changes";
-  list.setAttribute("aria-label", "rank period changes");
+  list.setAttribute("aria-label", "period changes");
   comparablePeriods.forEach(({ key, label, value }) => {
-    const parsedDelta = Number(value?.rank);
+    const parsedDelta = Number(
+      metric === "occurrence" ? value?.occurrence_count : value?.rank
+    );
     const delta = Number.isInteger(parsedDelta) && Number.isFinite(parsedDelta)
       ? parsedDelta
       : 0;
@@ -1109,20 +1110,20 @@ function renderRankPeriodChanges(container, change, options = {}) {
         : delta < 0
           ? "rank-period-change rank-period-down"
           : "rank-period-change rank-period-neutral";
-    const symbol = delta > 0 ? `↑${delta}` : delta < 0 ? `↓${Math.abs(delta)}` : "0";
-    const previousRank =
-      Number.isInteger(currentRank) && Number.isFinite(currentRank)
-        ? currentRank + delta
-        : null;
     const movement =
-      delta !== 0 && compactTransition && previousRank !== null
-        ? `${previousRank}→${currentRank}`
-        : symbol;
+      metric === "occurrence"
+        ? delta > 0
+          ? `+${formatUnit(delta, "occurrence")}`
+          : delta < 0
+            ? `-${formatUnit(Math.abs(delta), "occurrence")}`
+            : formatUnit(0, "occurrence")
+        : delta > 0
+          ? `↑${delta}`
+          : delta < 0
+            ? `↓${Math.abs(delta)}`
+            : "0";
     const visibleLabel = includePeriodLabel ? `${label} ${movement}` : movement;
-    const detail =
-      delta !== 0 && previousRank !== null
-        ? `${label}: ${previousRank} → ${currentRank} (${symbol})`
-        : `${label}: ${movement}`;
+    const detail = `${label}: ${movement}`;
     badge.textContent = visibleLabel;
     badge.title = detail;
     badge.setAttribute("aria-label", detail);
@@ -1199,8 +1200,7 @@ function renderTable() {
     renderRankPeriodChanges(tdRank, change, {
       alwaysShowZero: true,
       period: state.selectedRankPeriod,
-      currentRank: rank,
-      compactTransition: true,
+      metric: "occurrence",
       includePeriodLabel: false,
     });
     tr.appendChild(tdRank);
@@ -1863,8 +1863,7 @@ function renderEquipment(character) {
       renderRankPeriodChanges(rank, item.change, {
         alwaysShowZero: true,
         period: state.selectedRankPeriod,
-        currentRank: item.rank,
-        compactTransition: true,
+        metric: "occurrence",
       });
 
       const itemCell = document.createElement("td");

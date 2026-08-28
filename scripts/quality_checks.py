@@ -98,14 +98,24 @@ def _validate_period_change(value: object, errors: list[str]) -> None:
         errors.append("invalid period comparability")
         return
     rank = value.get("rank")
+    occurrence_count = value.get("occurrence_count")
     source_time = value.get("from_updated_at")
     interval = value.get("interval_minutes")
     if not comparable:
-        if rank is not None or source_time is not None or interval is not None:
+        if (
+            rank is not None
+            or occurrence_count is not None
+            or source_time is not None
+            or interval is not None
+        ):
             errors.append("non-comparable period contains values")
         return
     if not isinstance(rank, int) or isinstance(rank, bool):
         errors.append("invalid period rank")
+    if occurrence_count is not None and (
+        not isinstance(occurrence_count, int) or isinstance(occurrence_count, bool)
+    ):
+        errors.append("invalid period occurrence count")
     if _parse_time(source_time) is None:
         errors.append("invalid period source timestamp")
     try:
