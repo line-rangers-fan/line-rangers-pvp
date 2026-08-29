@@ -1089,7 +1089,7 @@ function renderRankPeriodChanges(container, change, options = {}) {
   const selectedPeriod = String(options.period || "");
   const metric = options.metric || "rank";
   const includePeriodLabel = options.includePeriodLabel !== false;
-  const formatOccurrence = options.formatOccurrence || ((value) => formatUnit(value, "occurrence"));
+  const formatOccurrence = options.formatOccurrence || formatCharacterCountChange;
   const periods = change?.periods;
   if (!alwaysShow && (!periods || typeof periods !== "object")) return;
 
@@ -1878,8 +1878,20 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
+function formatCharacterCountChange(value) {
+  const count = formatInteger(value);
+  if (state.language === "en") {
+    return `${count} ${Number(value) === 1 ? "unit" : "units"}`;
+  }
+  return formatUnit(value, "occurrence");
+}
+
 function formatEquipmentCount(value) {
-  return formatInteger(value) + et("equipmentUnit");
+  const count = formatInteger(value);
+  if (state.language === "en") {
+    return `${count} ${Number(value) === 1 ? "item" : "items"}`;
+  }
+  return count + et("equipmentUnit");
 }
 
 function createEquipmentTab(type, label, isSelected, character) {
