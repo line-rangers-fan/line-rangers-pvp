@@ -394,7 +394,7 @@ const translations = {
     notCollected: "未集計",
     unknown: "不明",
     units: {
-      occurrence: "個",
+      occurrence: "体",
       players: "人",
       characters: "種類",
     },
