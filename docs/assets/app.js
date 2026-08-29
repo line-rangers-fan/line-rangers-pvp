@@ -1089,6 +1089,7 @@ function renderRankPeriodChanges(container, change, options = {}) {
   const selectedPeriod = String(options.period || "");
   const metric = options.metric || "rank";
   const includePeriodLabel = options.includePeriodLabel !== false;
+  const formatOccurrence = options.formatOccurrence || ((value) => formatUnit(value, "occurrence"));
   const periods = change?.periods;
   if (!alwaysShow && (!periods || typeof periods !== "object")) return;
 
@@ -1129,9 +1130,9 @@ function renderRankPeriodChanges(container, change, options = {}) {
       ? st("rankHistoryPending")
       : metric === "occurrence"
         ? delta > 0
-          ? `+${formatUnit(delta, "occurrence")}`
+          ? `+${formatOccurrence(delta)}`
           : delta < 0
-            ? `-${formatUnit(Math.abs(delta), "occurrence")}`
+            ? `-${formatOccurrence(Math.abs(delta))}`
             : "±0"
         : delta > 0
           ? `↑${delta}`
@@ -2002,6 +2003,7 @@ function renderEquipment(character) {
         alwaysShow: true,
         period: state.selectedRankPeriod,
         metric: "occurrence",
+        formatOccurrence: formatEquipmentCount,
       });
 
       const itemCell = document.createElement("td");
