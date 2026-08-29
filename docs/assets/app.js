@@ -75,7 +75,7 @@ const equipmentTranslations = {
     equipmentPlayers: "使用人数",
     rate: "使用率",
     noEquipment: "このカテゴリの装備データはありません。",
-    equipmentUnit: "件",
+    equipmentUnit: "個",
     close: "閉じる",
   },
   en: {
