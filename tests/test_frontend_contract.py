@@ -33,6 +33,8 @@ def test_frontend_assets_keep_strict_csp_and_required_controls():
         "ranking-section",
         "ranking-body",
         "rank-period-selector",
+        "rank-period-trigger",
+        "rank-period-options",
         "equipment-dialog",
         "sunday-notice",
     ):
@@ -52,6 +54,9 @@ def test_history_and_equipment_change_contract_is_present():
     assert "alwaysShow: true" in app
     assert "selectedRankPeriod" in app
     assert "setupRankPeriodSelector" in app
+    assert "rankHour" in app
+    assert "rankComparison" in app
+    assert 'data-rank-period="hour"' in (ROOT / "docs/index.html").read_text(encoding="utf-8")
     assert 'metric: "occurrence"' in app
     assert 'rankHistoryPending' in app
     assert '"±0"' in app
@@ -63,6 +68,8 @@ def test_history_and_equipment_change_contract_is_present():
     assert "renderRankPeriodChanges(rank, item.change" in app
     assert ".rank-period-changes" in style
     assert ".rank-period-selector" in style
+    assert ".rank-period-trigger" in style
+    assert ".rank-period-options" in style
     assert ".ranking-section {\n  overflow: visible;" in style
     assert ".equipment-rank-cell .rank-period-changes" in style
     assert ".rank-period-pending" in style
