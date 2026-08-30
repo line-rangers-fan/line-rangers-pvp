@@ -1153,10 +1153,8 @@ function renderRankPeriodChanges(container, change, options = {}) {
   list.setAttribute("aria-label", "period changes");
   comparablePeriods.forEach(({ key, label, value }) => {
     const isComparable = value?.comparable === true;
-    const parsedDelta = Number(
-      metric === "occurrence" ? value?.occurrence_count : value?.rank
-    );
-    const hasDelta = isComparable && Number.isInteger(parsedDelta) && Number.isFinite(parsedDelta);
+    const parsedDelta = metric === "occurrence" ? value?.occurrence_count : value?.rank;
+    const hasDelta = isComparable && typeof parsedDelta === "number" && Number.isSafeInteger(parsedDelta);
     const delta = hasDelta
       ? parsedDelta
       : 0;
@@ -1751,7 +1749,10 @@ function validateHistory(history) {
         rate < 0 ||
         rate > 100 ||
         !Number.isInteger(rank) ||
-        rank < 1
+        rank < 1 ||
+        !isSafeInteger(character?.occurrence_count, 1, snapshot.sampled_players * 10) ||
+        !isSafeInteger(character?.player_count, 1, snapshot.sampled_players) ||
+        character.player_count > character.occurrence_count
       ) {
         throw new Error("Invalid character history.");
       }
@@ -1776,7 +1777,8 @@ function validateHistory(history) {
               !itemCode ||
               itemCodes.has(itemCode) ||
               !Number.isInteger(rank) ||
-              rank < 1
+              rank < 1 ||
+              !isSafeInteger(item?.occurrence_count, 1, character.occurrence_count)
             ) {
               throw new Error("Invalid equipment history.");
             }

@@ -73,7 +73,7 @@ def valid_data(sampled_players=2, character_slots=None):
         previous_count = occurrence_count
         previous_rank = rank
 
-    return {
+    data = {
         "schema_version": SCHEMA_VERSION,
         "updated_at": "2026-08-27T03:00:00+00:00",
         "target_players": sampled_players,
@@ -106,6 +106,8 @@ def valid_data(sampled_players=2, character_slots=None):
             "team_size_distribution": {"1": sampled_players},
         },
     }
+    from scripts.scrape_character_usage import add_previous_comparison
+    return add_previous_comparison(data, None, {"snapshots": []})
 
 
 def test_duplicate_and_drop_rejected():

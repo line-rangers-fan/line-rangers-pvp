@@ -525,7 +525,7 @@ def test_equipment_period_rank_changes_use_verified_time_window():
                 "player_count": 2,
                 "adoption_rate": 100.0,
                 "equipment_rankings": {
-                    "WEAPON": {"items": [{"item_code": "w1", "rank": 1}]},
+                    "WEAPON": {"items": [{"item_code": "w1", "rank": 1, "occurrence_count": 2}]},
                     "ARMOR": {"items": []},
                     "ACC": {"items": []},
                 },
@@ -541,7 +541,7 @@ def test_equipment_period_rank_changes_use_verified_time_window():
                         "unit_code": "u-alpha",
                         "rank": 1,
                         "equipment_rankings": {
-                            "WEAPON": {"items": [{"item_code": "w1", "rank": 3}]},
+                            "WEAPON": {"items": [{"item_code": "w1", "rank": 3, "occurrence_count": 1}]},
                             "ARMOR": {"items": []},
                             "ACC": {"items": []},
                         },
@@ -558,7 +558,7 @@ def test_equipment_period_rank_changes_use_verified_time_window():
     assert item["change"]["periods"]["day"] == {
         "comparable": True,
         "rank": 2,
-        "occurrence_count": None,
+        "occurrence_count": 1,
         "from_updated_at": "2026-08-27T14:00:00+00:00",
         "interval_minutes": 630.0,
     }
