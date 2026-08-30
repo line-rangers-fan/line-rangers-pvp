@@ -15,7 +15,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
 from time import monotonic
@@ -69,6 +69,7 @@ HISTORY_PATH = Path("docs/data/character_usage_history.json")
 HISTORY_LIMIT = 24 * 31
 HISTORY_TIME_ZONE = ZoneInfo("Asia/Tokyo")
 RANK_COMPARISON_PERIODS = {
+    "hour": 60 * 60,
     "day": 24 * 60 * 60,
     "week": 7 * 24 * 60 * 60,
     "month": 31 * 24 * 60 * 60,
@@ -706,8 +707,8 @@ def _period_reference(
 ) -> dict | None:
     """Return a sufficiently close, earlier verified snapshot for a period.
 
-    A missing hourly run must not turn into a misleading month comparison. We
-    therefore select the newest snapshot at or before the target point and
+    A missed collection run must not turn into a misleading comparison. We
+    therefore select the newest snapshot at or before the requested point and
     accept it only when its actual age is between 75% and 150% of the target.
     """
     if current_time is None or not isinstance(history, dict):
@@ -717,26 +718,12 @@ def _period_reference(
         return None
 
     target_time = current_time.timestamp() - period_seconds
-    previous_calendar_date: date | None = None
-    if period_name == "day":
-        previous_calendar_date = (
-            current_time.astimezone(HISTORY_TIME_ZONE).date() - timedelta(days=1)
-        )
     candidates: list[tuple[float, dict]] = []
     for snapshot in snapshots:
         if not isinstance(snapshot, dict) or not isinstance(snapshot.get("characters"), list):
             continue
         timestamp = _parse_history_time(snapshot.get("updated_at"))
         if timestamp is None:
-            continue
-        if (
-            previous_calendar_date is not None
-            and timestamp.astimezone(HISTORY_TIME_ZONE).date() == previous_calendar_date
-        ):
-            # A daily comparison is a calendar-day comparison in JST.  The
-            # latest verified snapshot from the preceding JST date is the
-            # least surprising baseline after midnight or a delayed run.
-            candidates.append((timestamp.timestamp(), snapshot))
             continue
         age = current_time.timestamp() - timestamp.timestamp()
         if (
