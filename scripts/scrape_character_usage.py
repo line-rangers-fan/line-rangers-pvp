@@ -75,8 +75,11 @@ TARGET_PLAYER_COUNT = read_bounded_env_int("TARGET_PLAYER_COUNT", 200, 1, 500)
 PLAYER_FETCH_WORKERS = read_bounded_env_int("PLAYER_FETCH_WORKERS", 3, 1, 4)
 MIN_CHARACTERS_PER_PLAYER = 1
 MAX_CHARACTERS_PER_PLAYER = 10
+# Normal responses arrive in seconds.  A 15-second request bound still gives
+# five attempts and structural rechecks time to recover, without letting one
+# stalled connection block an entire update window.
 REQUEST_TIMEOUT_SECONDS = read_bounded_env_int(
-    "REQUEST_TIMEOUT_SECONDS", 45, 5, 90
+    "REQUEST_TIMEOUT_SECONDS", 15, 5, 30
 )
 # The public APIs are expected to return compact JSON.  A firm cap prevents a
 # malformed upstream response from exhausting the runner while still allowing
@@ -296,7 +299,10 @@ def extract_ranked_mids(payload: dict, target_players: int) -> tuple[list[str], 
     return mids, diagnostics
 
 
-def fetch_ranked_player_details(mids: list[str]) -> tuple[dict[str, dict], list[dict]]:
+def fetch_ranked_player_details(
+    mids: list[str],
+    collection_started_clock: float | None = None,
+) -> tuple[dict[str, dict], list[dict]]:
     """Fetch every ranked player and retry only the transient failures.
 
     A failure for one player must not stop collection of the other ranked
@@ -313,8 +319,12 @@ def fetch_ranked_player_details(mids: list[str]) -> tuple[dict[str, dict], list[
     for round_number in range(1, DETAIL_FETCH_ROUNDS + 1):
         if not pending:
             break
+        if collection_started_clock is not None:
+            ensure_collection_within_budget(collection_started_clock)
         next_pending: list[str] = []
         for start in range(0, len(pending), batch_size):
+            if collection_started_clock is not None:
+                ensure_collection_within_budget(collection_started_clock)
             batch = pending[start : start + batch_size]
             with ThreadPoolExecutor(max_workers=PLAYER_FETCH_WORKERS) as executor:
                 future_by_mid = {
@@ -331,6 +341,8 @@ def fetch_ranked_player_details(mids: list[str]) -> tuple[dict[str, dict], list[
                     except Exception as error:
                         next_pending.append(mid)
                         failure_types[mid] = type(error).__name__
+            if collection_started_clock is not None:
+                ensure_collection_within_budget(collection_started_clock)
         failed_mids = set(next_pending)
         pending = [mid for mid in pending if mid in failed_mids]
         if pending and round_number < DETAIL_FETCH_ROUNDS:
@@ -707,7 +719,9 @@ def scrape() -> dict:
         )
 
     detail_started_clock = monotonic()
-    details, detail_failures = fetch_ranked_player_details(mids)
+    details, detail_failures = fetch_ranked_player_details(
+        mids, collection_started_clock=collection_started_clock
+    )
     ensure_collection_within_budget(collection_started_clock)
     if detail_failures:
         dump_detail_failure_summary(len(mids), len(details), detail_failures)
@@ -734,7 +748,7 @@ def scrape() -> dict:
         content_rechecks += 1
         sleep(1.5 * content_rechecks)
         confirmed_details, recheck_failures = fetch_ranked_player_details(
-            pending_content_recheck
+            pending_content_recheck, collection_started_clock=collection_started_clock
         )
         details.update(confirmed_details)
         ensure_collection_within_budget(collection_started_clock)

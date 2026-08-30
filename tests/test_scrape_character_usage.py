@@ -178,6 +178,26 @@ def test_detail_failure_retries_only_the_failed_player_and_checks_all_players(mo
     assert set(details) == {"player-2", "player-3", "player-4"}
 
 
+def test_detail_collection_checks_budget_between_batches(monkeypatch):
+    checked = []
+
+    monkeypatch.setattr(scraper, "PLAYER_FETCH_WORKERS", 1)
+    monkeypatch.setattr(scraper, "DETAIL_FETCH_ROUNDS", 1)
+    monkeypatch.setattr(scraper, "fetch_player_detail", lambda mid: {"mid": mid})
+    monkeypatch.setattr(
+        scraper, "ensure_collection_within_budget", lambda started: checked.append(started)
+    )
+
+    details, failures = scraper.fetch_ranked_player_details(
+        ["player-1", "player-2", "player-3", "player-4", "player-5"],
+        collection_started_clock=123.0,
+    )
+
+    assert failures == []
+    assert len(details) == 5
+    assert checked == [123.0] * 5
+
+
 def test_invalid_environment_number_uses_safe_bounded_value(monkeypatch):
     monkeypatch.setenv("SAFE_TEST_VALUE", "invalid")
     assert scraper.read_bounded_env_int("SAFE_TEST_VALUE", 3, 1, 4) == 3

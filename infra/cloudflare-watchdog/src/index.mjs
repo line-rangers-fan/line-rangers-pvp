@@ -4,7 +4,8 @@ const MAX_AGE_MS = 60 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000;
 const EXTERNAL_REQUEST_TIMEOUT_MS = 12_000;
 const MAX_DATA_RESPONSE_BYTES = 4 * 1024 * 1024;
-const MAX_COLLECTION_DURATION_SECONDS = 35 * 60;
+// Match the collector's deadline so a slow run is repaired promptly.
+const MAX_COLLECTION_DURATION_SECONDS = 15 * 60;
 const MIN_SCHEMA_VERSION = 10;
 const REQUIRED_PERIODS = ["hour", "day", "week", "month"];
 const PUBLISHED_DATA_HOST = "line-rangers-fan.github.io";
