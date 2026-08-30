@@ -449,6 +449,29 @@ def test_period_rank_changes_are_unavailable_when_history_gap_is_too_large():
     assert periods["day"]["rank"] is None
 
 
+def test_hour_reference_uses_the_verified_snapshot_closest_to_one_hour():
+    current_time = datetime(2026, 8, 28, 2, 0, tzinfo=timezone.utc)
+    history = {
+        "snapshots": [
+            {
+                # 50 minutes ago: this is closer to one hour than the older
+                # sample and remains inside the explicit 30–90 minute window.
+                "updated_at": "2026-08-28T01:10:00+00:00",
+                "characters": [{"unit_code": "u-alpha", "rank": 1}],
+            },
+            {
+                "updated_at": "2026-08-28T00:40:00+00:00",
+                "characters": [{"unit_code": "u-alpha", "rank": 2}],
+            },
+        ]
+    }
+
+    reference = scraper._period_reference(history, current_time, 60 * 60, "hour")
+
+    assert reference is not None
+    assert reference["updated_at"] == "2026-08-28T01:10:00+00:00"
+
+
 def test_period_count_change_treats_missing_character_as_zero_in_valid_snapshot():
     current = {
         "updated_at": "2026-08-28T02:00:00+00:00",
