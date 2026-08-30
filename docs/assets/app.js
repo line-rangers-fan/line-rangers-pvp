@@ -6,7 +6,10 @@ const HISTORY_PATH = "./data/character_usage_history.json";
 const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
 const REQUEST_TIMEOUT_MS = 12_000;
 const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
-const MAX_COLLECTION_DURATION_SECONDS = 35 * 60;
+// Match the collector, freshness gate, and watchdog. A result that exceeded
+// this bound was never a valid complete snapshot, so the browser must reject
+// it too instead of showing it as current.
+const MAX_COLLECTION_DURATION_SECONDS = 15 * 60;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 // Collection normally completes about hourly. GitHub Actions can queue a run
 // and the source can briefly throttle detail requests, so a healthy previous
