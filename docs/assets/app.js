@@ -11,6 +11,7 @@ const DELAYED_AFTER_MS = 90 * 60 * 1000;
 const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 const HISTORY_MAX_SNAPSHOTS = 24 * 31;
 const RANK_CHANGE_PERIODS = [
+  ["hour", "rankHour"],
   ["day", "rankDay"],
   ["week", "rankWeek"],
   ["month", "rankMonth"],
@@ -216,9 +217,11 @@ const STATUS_TEXT = {
     duration: "集計",
     seconds: "秒",
     rankNew: "新",
-    rankDay: "1日",
-    rankWeek: "1週",
-    rankMonth: "1月",
+    rankHour: "1時間前",
+    rankDay: "1日前",
+    rankWeek: "1週間前",
+    rankMonth: "1か月前",
+    rankComparison: "とのキャラ数比較",
     rankHistoryPending: "履歴待ち",
   },
   en: {
@@ -236,9 +239,11 @@ const STATUS_TEXT = {
     duration: "collected in ",
     seconds: "s",
     rankNew: "NEW",
-    rankDay: "1d",
-    rankWeek: "7d",
-    rankMonth: "30d",
+    rankHour: "1 hour ago",
+    rankDay: "1 day ago",
+    rankWeek: "1 week ago",
+    rankMonth: "1 month ago",
+    rankComparison: "character count comparison",
     rankHistoryPending: "History pending",
   },
   zh: {
@@ -255,9 +260,11 @@ const STATUS_TEXT = {
     duration: "收集",
     seconds: "秒",
     rankNew: "新",
-    rankDay: "1日",
-    rankWeek: "1週",
-    rankMonth: "1月",
+    rankHour: "1小時前",
+    rankDay: "1天前",
+    rankWeek: "1週前",
+    rankMonth: "1個月前",
+    rankComparison: "的角色數量比較",
     rankHistoryPending: "等待歷史資料",
   },
   th: {
@@ -274,9 +281,11 @@ const STATUS_TEXT = {
     duration: "รวบรวม ",
     seconds: " วินาที",
     rankNew: "ใหม่",
-    rankDay: "1 วัน",
-    rankWeek: "1 สัปดาห์",
-    rankMonth: "1 เดือน",
+    rankHour: "1 ชั่วโมงก่อน",
+    rankDay: "1 วันก่อน",
+    rankWeek: "1 สัปดาห์ก่อน",
+    rankMonth: "1 เดือนก่อน",
+    rankComparison: "เปรียบเทียบจำนวนตัวละคร",
     rankHistoryPending: "รอประวัติข้อมูล",
   },
   id: {
@@ -294,9 +303,11 @@ const STATUS_TEXT = {
     duration: "dikumpulkan ",
     seconds: " dtk",
     rankNew: "BARU",
-    rankDay: "1h",
-    rankWeek: "7h",
-    rankMonth: "30h",
+    rankHour: "1 jam lalu",
+    rankDay: "1 hari lalu",
+    rankWeek: "1 minggu lalu",
+    rankMonth: "1 bulan lalu",
+    rankComparison: "perbandingan jumlah karakter",
     rankHistoryPending: "Menunggu riwayat",
   },
   vi: {
@@ -314,9 +325,11 @@ const STATUS_TEXT = {
     duration: "thu thập ",
     seconds: " giây",
     rankNew: "MỚI",
-    rankDay: "1 ngày",
-    rankWeek: "1 tuần",
-    rankMonth: "1 tháng",
+    rankHour: "1 giờ trước",
+    rankDay: "1 ngày trước",
+    rankWeek: "1 tuần trước",
+    rankMonth: "1 tháng trước",
+    rankComparison: "so sánh số nhân vật",
     rankHistoryPending: "Đang chờ lịch sử",
   },
   ko: {
@@ -334,9 +347,11 @@ const STATUS_TEXT = {
     duration: "집계 ",
     seconds: "초",
     rankNew: "신규",
-    rankDay: "1일",
-    rankWeek: "1주",
-    rankMonth: "1개월",
+    rankHour: "1시간 전",
+    rankDay: "1일 전",
+    rankWeek: "1주 전",
+    rankMonth: "1개월 전",
+    rankComparison: "캐릭터 수 비교",
     rankHistoryPending: "기록 대기",
   },
 };
@@ -738,7 +753,7 @@ const state = {
   language: "ja",
   selectedCharacter: null,
   selectedEquipmentType: "WEAPON",
-  selectedRankPeriod: "day",
+  selectedRankPeriod: "hour",
   rankingScrollTop: 0,
   suppressCharacterTapUntil: 0,
   isLoading: false,
@@ -1149,7 +1164,39 @@ function renderRankPeriodChanges(container, change, options = {}) {
   container.appendChild(list);
 }
 
+function setRankPeriodMenuOpen(isOpen) {
+  const trigger = document.querySelector("#rank-period-trigger");
+  const options = document.querySelector("#rank-period-options");
+  if (!trigger || !options) return;
+
+  const open = Boolean(isOpen);
+  trigger.setAttribute("aria-expanded", String(open));
+  trigger.classList.toggle("rank-period-open", open);
+  options.hidden = !open;
+}
+
 function renderRankPeriodSelector() {
+  const selectedDefinition = RANK_CHANGE_PERIODS.find(
+    ([key]) => key === state.selectedRankPeriod
+  );
+  const [, selectedLabelKey] = selectedDefinition || RANK_CHANGE_PERIODS[0];
+  const selectedLabel = st(selectedLabelKey);
+
+  const current = document.querySelector("#rank-period-current");
+  if (current) current.textContent = selectedLabel;
+
+  const comparisonLabel = document.querySelector("#rank-period-comparison-label");
+  if (comparisonLabel) comparisonLabel.textContent = st("rankComparison");
+
+  const trigger = document.querySelector("#rank-period-trigger");
+  if (trigger) {
+    trigger.title = selectedLabel;
+    trigger.setAttribute(
+      "aria-label",
+      `${selectedLabel} ${st("rankComparison")}`
+    );
+  }
+
   document.querySelectorAll("[data-rank-period]").forEach((button) => {
     const period = button.dataset.rankPeriod;
     const definition = RANK_CHANGE_PERIODS.find(([key]) => key === period);
@@ -1161,27 +1208,55 @@ function renderRankPeriodSelector() {
     button.textContent = label;
     button.title = label;
     button.setAttribute("aria-label", label);
-    button.setAttribute("aria-pressed", String(active));
+    button.setAttribute("aria-selected", String(active));
     button.classList.toggle("rank-period-selected", active);
   });
 }
 
+function selectRankPeriod(period) {
+  if (!RANK_CHANGE_PERIODS.some(([key]) => key === period)) return;
+
+  state.selectedRankPeriod = period;
+  setRankPeriodMenuOpen(false);
+  renderRankPeriodSelector();
+  renderTable();
+
+  const dialog = document.querySelector("#equipment-dialog");
+  if (dialog?.open && state.selectedCharacter) {
+    renderEquipment(state.selectedCharacter);
+  }
+}
+
 function setupRankPeriodSelector() {
-  document.querySelectorAll("[data-rank-period]").forEach((button) => {
+  const selector = document.querySelector("#rank-period-selector");
+  const trigger = document.querySelector("#rank-period-trigger");
+  if (!selector || !trigger || selector.dataset.ready === "true") return;
+
+  trigger.addEventListener("click", () => {
+    const isOpen = trigger.getAttribute("aria-expanded") === "true";
+    setRankPeriodMenuOpen(!isOpen);
+  });
+
+  selector.querySelectorAll("[data-rank-period]").forEach((button) => {
     button.addEventListener("click", () => {
-      const period = button.dataset.rankPeriod;
-      if (!RANK_CHANGE_PERIODS.some(([key]) => key === period)) return;
-
-      state.selectedRankPeriod = period;
-      renderRankPeriodSelector();
-      renderTable();
-
-      const dialog = document.querySelector("#equipment-dialog");
-      if (dialog?.open && state.selectedCharacter) {
-        renderEquipment(state.selectedCharacter);
-      }
+      selectRankPeriod(button.dataset.rankPeriod);
     });
   });
+
+  document.addEventListener("click", (event) => {
+    if (!selector.contains(event.target)) {
+      setRankPeriodMenuOpen(false);
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setRankPeriodMenuOpen(false);
+      trigger.focus();
+    }
+  });
+
+  selector.dataset.ready = "true";
 }
 
 function renderTable() {
