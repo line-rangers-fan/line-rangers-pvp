@@ -11,7 +11,7 @@ const MIN_SCHEMA_VERSION = 11;
 const CALENDAR_CLOSE_REFERENCE_MODE = "jst_calendar_close_v1";
 const REQUIRED_PERIODS = ["hour", "day", "week", "month"];
 const PUBLISHED_DATA_HOST = "line-rangers-fan.github.io";
-const PUBLISHED_DATA_PATH = "/line-rangers-pvp/data/character_usage.json";
+const PUBLISHED_DATA_PATH = "/line-rangers-pvp/data/character_usage_health.json";
 const SERVICE_NAME = "line-rangers-pvp-watchdog";
 const SCHEDULE = "*/15 * * * *";
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -235,7 +235,8 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
   const equipmentFillRate = Number(quality?.equipment_fill_rate);
   const collectionDuration = Number(quality?.collection_duration_seconds);
   const detailDuration = Number(quality?.detail_fetch_duration_seconds);
-  const schemaVersion = Number(data?.schema_version);
+  const compactHealth = data?.health_schema_version === 1;
+  const schemaVersion = Number(compactHealth ? data?.source_schema_version : data?.schema_version);
   const referenceMode = data?.comparison?.reference_mode;
   const comparisonPeriods = data?.comparison?.periods;
   const metrics = {
@@ -283,8 +284,14 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
     data.target_players === 200 && data.sampled_players === 200 &&
     sampledPlayers === targetPlayers &&
     data?.complete_target === true &&
-    Array.isArray(data?.characters) &&
-    data.characters.length > 0 &&
+    (compactHealth
+      ? data?.validated_full_sample === true &&
+        integerInRange(data?.character_slots, 200, 2000) &&
+        integerInRange(data?.unique_characters, 1, data.character_slots) &&
+        validComparison(data, updatedMs)
+      : Array.isArray(data?.characters) &&
+        data.characters.length > 0 &&
+        validCountStructure(data, updatedMs)) &&
     Number(quality?.sample_coverage) === 100 &&
     detailFailures === 0 &&
     invalidRecords === 0 &&
@@ -302,7 +309,7 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
         comparisonPeriods &&
         typeof comparisonPeriods[period] === "object" &&
         typeof comparisonPeriods[period]?.comparable === "boolean",
-    ) && validCountStructure(data, updatedMs);
+    );
   if (!completeSample) {
     return {
       status: "invalid_data",

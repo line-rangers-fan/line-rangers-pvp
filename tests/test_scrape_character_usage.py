@@ -281,6 +281,40 @@ def test_failed_collection_keeps_previous_published_data(tmp_path, monkeypatch):
     assert scraper.load_json(output_path) == previous
 
 
+def test_health_summary_is_small_and_derived_only_from_complete_data():
+    data = {
+        "schema_version": 11,
+        "updated_at": "2026-08-31T00:00:00+00:00",
+        "target_players": 200,
+        "sampled_players": 200,
+        "character_slots": 800,
+        "unique_characters": 12,
+        "complete_target": True,
+        "collection_quality": {
+            "sample_coverage": 100.0,
+            "equipment_fill_rate": 99.9,
+            "detail_fetch_failures": 0,
+            "invalid_player_records": 0,
+            "collection_duration_seconds": 21.2,
+            "detail_fetch_duration_seconds": 20.1,
+        },
+        "comparison": {
+            "reference_mode": "jst_calendar_close_v1",
+            "calendar_date": "2026-08-31",
+            "periods": {
+                period: {"comparable": False, "updated_at": None, "calendar_date": None}
+                for period in scraper.RANK_COMPARISON_PERIODS
+            },
+        },
+        "characters": [{"player_id": "must-not-appear"}],
+    }
+    summary = scraper.health_summary(data)
+    assert summary["health_schema_version"] == 1
+    assert summary["validated_full_sample"] is True
+    assert "characters" not in summary
+    assert "player_id" not in json.dumps(summary)
+
+
 def test_previous_comparison_uses_positive_values_for_upward_rank_moves():
     previous = {
         "updated_at": "2026-08-27T01:00:00+00:00",

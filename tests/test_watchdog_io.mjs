@@ -3,7 +3,7 @@ import test from "node:test";
 import {setImmediate as turn} from "node:timers/promises";
 import {getHealthSnapshot} from "../infra/cloudflare-watchdog/src/index.mjs";
 
-const ENV = {DATA_URL: "https://line-rangers-fan.github.io/line-rangers-pvp/data/character_usage.json"};
+const ENV = {DATA_URL: "https://line-rangers-fan.github.io/line-rangers-pvp/data/character_usage_health.json"};
 
 test("watchdog deadline covers a response body stalled after headers", async (t) => {
   t.mock.method(console, "warn", () => {});

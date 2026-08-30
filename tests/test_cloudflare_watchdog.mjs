@@ -14,7 +14,7 @@ import {
 const NOW = Date.parse("2026-08-27T04:00:00Z");
 const ENV = {
   GITHUB_REPOSITORY: "line-rangers-fan/line-rangers-pvp",
-  DATA_URL: "https://line-rangers-fan.github.io/line-rangers-pvp/data/character_usage.json",
+  DATA_URL: "https://line-rangers-fan.github.io/line-rangers-pvp/data/character_usage_health.json",
   GITHUB_ACTIONS_TOKEN: "test-token",
 };
 
@@ -59,6 +59,39 @@ function healthyData(updatedAt, overrides = {}) {
     ...overrides,
   };
 }
+
+
+function healthySummary(updatedAt, overrides = {}) {
+  const data = healthyData(updatedAt);
+  return {
+    health_schema_version: 1,
+    source_schema_version: data.schema_version,
+    updated_at: data.updated_at,
+    target_players: data.target_players,
+    sampled_players: data.sampled_players,
+    character_slots: data.character_slots,
+    unique_characters: data.unique_characters,
+    complete_target: data.complete_target,
+    validated_full_sample: true,
+    collection_quality: data.collection_quality,
+    comparison: data.comparison,
+    ...overrides,
+  };
+}
+
+
+test("compact verified health summary preserves strict collection checks", () => {
+  const now = Date.parse("2026-08-27T04:00:00Z");
+  assert.equal(inspectDataHealth(healthySummary("2026-08-27T03:50:00Z"), now).status, "ok");
+  assert.equal(
+    inspectDataHealth(healthySummary("2026-08-27T03:50:00Z", {validated_full_sample: false}), now).status,
+    "invalid_data",
+  );
+  assert.equal(
+    inspectDataHealth(healthySummary("2026-08-27T03:50:00Z", {unique_characters: 0}), now).status,
+    "invalid_data",
+  );
+});
 
 
 test("fresh data does not dispatch GitHub outside the hourly baseline window", async () => {
