@@ -15,11 +15,10 @@ MAX_CHARACTERS_PER_PLAYER = 10
 # partial release.
 SCHEMA_VERSION = 10
 RANK_PERIODS = ("hour", "day", "week", "month")
-# A collection may spend extra time retrying and verifying a suspect player,
-# but must still fit inside the GitHub Actions job with time left to preserve
-# the last known-good result.  Any run that exceeds this budget is rejected
-# instead of publishing a half-verified snapshot.
-MAX_COLLECTION_DURATION_SECONDS = 35 * 60
+# A collection may retry and verify a suspect player, but a slow upstream must
+# never occupy later update windows.  Fifteen minutes leaves several bounded
+# retry passes while making recovery from an outage prompt.
+MAX_COLLECTION_DURATION_SECONDS = 15 * 60
 
 
 def assign_competition_ranks(rows: list[dict]) -> list[dict]:

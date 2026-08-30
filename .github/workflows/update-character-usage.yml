@@ -29,9 +29,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Retries and structural rechecks are intentionally allowed to take time;
-    # a failed verification still leaves the last public JSON untouched.
-    timeout-minutes: 40
+    # Retries and structural rechecks remain available, but an upstream outage
+    # must not block the next update window.
+    timeout-minutes: 20
     outputs:
       should_deploy: ${{ steps.decision.outputs.should_deploy }}
     steps:
@@ -82,7 +82,7 @@ jobs:
           # Prefer a patient, complete collection over the old quick-fail pass.
           PLAYER_FETCH_WORKERS: "3"
           REQUEST_ATTEMPTS: "5"
-          REQUEST_TIMEOUT_SECONDS: "45"
+          REQUEST_TIMEOUT_SECONDS: "15"
           DETAIL_FETCH_ROUNDS: "2"
           DETAIL_CONTENT_RECHECKS: "1"
         run: python scripts/scrape_character_usage.py

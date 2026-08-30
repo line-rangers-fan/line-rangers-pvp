@@ -245,3 +245,15 @@ test("oversized published data is treated as unreadable", async () => {
 
   assert.equal(health.status, "unreadable");
 });
+
+
+test("collection exceeding the deadline requests a repair", () => {
+  const data = healthyData("2026-08-27T03:50:00Z", {
+    collection_quality: {
+      ...healthyData("2026-08-27T03:50:00Z").collection_quality,
+      collection_duration_seconds: 15 * 60 + 1,
+    },
+  });
+
+  assert.equal(inspectDataHealth(data, NOW).status, "invalid_data");
+});
