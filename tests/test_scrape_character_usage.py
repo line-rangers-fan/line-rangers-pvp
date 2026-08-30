@@ -243,7 +243,8 @@ def test_scrape_rechecks_only_player_details_with_incomplete_content(monkeypatch
         lambda: {"top100": [{"mid": "player-1"}, {"mid": "player-2"}]},
     )
 
-    def fetch_details(mids):
+    def fetch_details(mids, collection_started_clock=None):
+        del collection_started_clock
         calls.append(list(mids))
         if len(calls) == 1:
             return {
