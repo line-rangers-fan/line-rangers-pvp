@@ -1,5 +1,6 @@
 // The workflow normally publishes once per hour. The watchdog checks more
-// often, but dispatches a collection only after a full hour has elapsed.
+// often and pins one verified collection to each hour, while still repairing
+// stale or invalid data between those hourly baselines.
 const MAX_AGE_MS = 60 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000;
 const EXTERNAL_REQUEST_TIMEOUT_MS = 12_000;
@@ -90,6 +91,15 @@ export function isCalendarAnchorWindow(nowMs = Date.now()) {
   // The Worker runs every 15 minutes. A short window tolerates a delayed
   // event without forcing normal collections throughout the evening.
   return (hour === 22 || hour === 23) && minute < 15;
+}
+
+
+export function isHourlyBaselineWindow(nowMs = Date.now()) {
+  // The Worker runs every 15 minutes.  The first event in each clock hour is
+  // intentionally forced so the public history always has an hourly sample.
+  // UTC hour boundaries are also JST hour boundaries, so no date conversion
+  // is needed here.
+  return new Date(nowMs).getUTCMinutes() < 15;
 }
 
 
@@ -268,6 +278,7 @@ export async function runWatchdog(
   const repository = requiredRepository(env);
   const dataUrl = requiredPublishedDataUrl(env);
   const calendarAnchor = isCalendarAnchorWindow(nowMs);
+  const hourlyBaseline = isHourlyBaselineWindow(nowMs);
 
   let repairReason = "unreadable";
   try {
@@ -282,7 +293,7 @@ export async function runWatchdog(
     console.warn("Freshness check failed; requesting a guarded repair.", error);
   }
 
-  if (repairReason === "ok" && !calendarAnchor) {
+  if (repairReason === "ok" && !calendarAnchor && !hourlyBaseline) {
     return { dispatched: false, reason: "fresh" };
   }
 
@@ -303,7 +314,9 @@ export async function runWatchdog(
         // A fixed close is deliberately collected even when the last normal
         // sample is fresh. The scraper keeps the current verified data if the
         // source is unavailable, rather than publishing a partial result.
-        inputs: { force_collection: calendarAnchor ? "true" : "false" },
+        inputs: {
+          force_collection: (calendarAnchor || hourlyBaseline) ? "true" : "false",
+        },
       }),
     },
   );
@@ -314,7 +327,13 @@ export async function runWatchdog(
   }
   return {
     dispatched: true,
-    reason: calendarAnchor ? "calendar_anchor" : repairReason,
+    // Preserve a repair diagnosis when health was already bad; the baseline
+    // window only explains a forced collection of otherwise healthy data.
+    reason: repairReason !== "ok"
+      ? repairReason
+      : calendarAnchor
+        ? "calendar_anchor"
+        : "hourly_baseline",
   };
 }
 

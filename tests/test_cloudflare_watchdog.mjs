@@ -5,6 +5,7 @@ import {
   dataNeedsCollection,
   getHealthSnapshot,
   isCalendarAnchorWindow,
+  isHourlyBaselineWindow,
   inspectDataHealth,
   runWatchdog,
 } from "../infra/cloudflare-watchdog/src/index.mjs";
@@ -47,21 +48,49 @@ function healthyData(updatedAt, overrides = {}) {
 }
 
 
-test("fresh data does not dispatch GitHub", async () => {
+test("fresh data does not dispatch GitHub outside the hourly baseline window", async () => {
   const calls = [];
   const fetchImpl = async (url, options = {}) => {
     calls.push({ url, options });
     return new Response(
-      JSON.stringify(healthyData("2026-08-27T03:10:00Z")),
+      JSON.stringify(healthyData("2026-08-27T03:50:00Z")),
       { status: 200 },
     );
   };
 
-  const result = await runWatchdog(ENV, { fetchImpl, nowMs: NOW });
+  const result = await runWatchdog(ENV, {
+    fetchImpl,
+    nowMs: Date.parse("2026-08-27T04:20:00Z"),
+  });
 
   assert.deepEqual(result, { dispatched: false, reason: "fresh" });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].options.redirect, "error");
+});
+
+
+test("hourly baseline forces a collection even when current data is fresh", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, options });
+    if (url.startsWith(ENV.DATA_URL)) {
+      return new Response(
+        JSON.stringify(healthyData("2026-08-27T03:50:00Z")),
+        { status: 200 },
+      );
+    }
+    return new Response(null, { status: 204 });
+  };
+
+  assert.equal(isHourlyBaselineWindow(NOW), true);
+  assert.equal(isHourlyBaselineWindow(Date.parse("2026-08-27T04:20:00Z")), false);
+  const result = await runWatchdog(ENV, { fetchImpl, nowMs: NOW });
+
+  assert.deepEqual(result, { dispatched: true, reason: "hourly_baseline" });
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    ref: "main",
+    inputs: { force_collection: "true" },
+  });
 });
 
 

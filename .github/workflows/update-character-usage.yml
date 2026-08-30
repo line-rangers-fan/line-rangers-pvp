@@ -13,9 +13,10 @@ on:
   repository_dispatch:
     types: [collect-pvp-data]
   schedule:
-    # Two off-peak opportunities make a dropped cron event recoverable. The
-    # freshness gate still limits successful collection to about once an hour.
-    - cron: "17,47 * * * *"
+    # Independent hourly fallback for the Worker baseline.  A single slot and
+    # a 50-minute gate avoid the old 90+ minute cadence caused by checking at
+    # two slots while allowing a full 60-minute freshness window.
+    - cron: "17 * * * *"
 
 permissions:
   contents: write
@@ -62,7 +63,7 @@ jobs:
           FORCE_COLLECTION: ${{ (github.event_name == 'workflow_dispatch' && inputs.force_collection) || contains(github.event.head_commit.message, '[collect-now]') }}
         run: |
           set -euo pipefail
-          args=(--max-age-minutes 60 --github-output "$GITHUB_OUTPUT")
+          args=(--max-age-minutes 50 --github-output "$GITHUB_OUTPUT")
           if [ "$FORCE_COLLECTION" = "true" ]; then
             args+=(--force)
           fi

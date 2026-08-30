@@ -116,7 +116,11 @@ RANK_COMPARISON_PERIODS = {
     "week": 7 * 24 * 60 * 60,
     "month": 31 * 24 * 60 * 60,
 }
-RANK_COMPARISON_MIN_RATIO = 0.75
+# A normal verified run may finish a little before or after the nominal hour.
+# Choose the closest usable sample rather than requiring it to be strictly
+# older than exactly one hour; otherwise a healthy hourly series can show
+# "history pending" for much of every hour.
+RANK_COMPARISON_MIN_RATIO = 0.50
 RANK_COMPARISON_MAX_RATIO = 1.50
 DEBUG_DIR = Path(".artifacts/debug")
 
@@ -914,7 +918,7 @@ def _period_reference(
         return _calendar_close_reference(history, current_time, period_name)
 
     target_time = current_time.timestamp() - period_seconds
-    candidates: list[tuple[float, dict]] = []
+    candidates: list[tuple[float, float, dict]] = []
     for snapshot in snapshots:
         if not isinstance(snapshot, dict) or not isinstance(snapshot.get("characters"), list):
             continue
@@ -923,14 +927,16 @@ def _period_reference(
             continue
         age = current_time.timestamp() - timestamp.timestamp()
         if (
-            timestamp.timestamp() <= target_time
-            and age >= period_seconds * RANK_COMPARISON_MIN_RATIO
+            age >= period_seconds * RANK_COMPARISON_MIN_RATIO
             and age <= period_seconds * RANK_COMPARISON_MAX_RATIO
         ):
-            candidates.append((timestamp.timestamp(), snapshot))
+            # Prefer the verified sample closest to one hour ago.  A sample
+            # that finished a few minutes after the exact target is still a
+            # more truthful comparison than silently dropping all history.
+            candidates.append((abs(timestamp.timestamp() - target_time), -timestamp.timestamp(), snapshot))
     if not candidates:
         return None
-    return max(candidates, key=lambda item: item[0])[1]
+    return min(candidates, key=lambda item: (item[0], item[1]))[2]
 
 
 def _find_history_character(reference: dict | None, unit_code: str) -> dict | None:
