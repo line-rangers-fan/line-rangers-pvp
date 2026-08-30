@@ -58,18 +58,30 @@ function requiredPublishedDataUrl(env) {
 }
 
 
-async function fetchWithTimeout(fetchImpl, url, options = {}) {
+async function fetchWithTimeout(fetchImpl, url, options = {}, consumeResponse = null) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    EXTERNAL_REQUEST_TIMEOUT_MS,
-  );
+  let timeoutId;
+  const deadline = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error("External request exceeded its time limit."));
+    }, EXTERNAL_REQUEST_TIMEOUT_MS);
+  });
   try {
-    return await fetchImpl(url, {
-      ...options,
-      redirect: "error",
-      signal: controller.signal,
-    });
+    return await Promise.race([
+      (async () => {
+        const response = await fetchImpl(url, {
+          ...options,
+          redirect: "error",
+          signal: controller.signal,
+        });
+        return consumeResponse ? await consumeResponse(response, controller.signal) : response;
+      })(),
+      deadline,
+    ]);
+  } catch (error) {
+    controller.abort();
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -308,15 +320,7 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
 }
 
 
-async function fetchPublishedData(dataUrl, fetchImpl, nowMs, queryName) {
-  const url = new URL(dataUrl);
-  url.searchParams.set(queryName, String(nowMs));
-  const response = await fetchWithTimeout(fetchImpl, url.toString(), {
-    headers: {
-      Accept: "application/json",
-      "Cache-Control": "no-cache",
-    },
-  });
+async function readPublishedData(response, signal) {
   if (!response.ok) {
     throw new Error(`Published data request failed: HTTP ${response.status}`);
   }
@@ -324,15 +328,50 @@ async function fetchPublishedData(dataUrl, fetchImpl, nowMs, queryName) {
   if (Number.isFinite(contentLength) && contentLength > MAX_DATA_RESPONSE_BYTES) {
     throw new Error("Published data response exceeds the safety limit.");
   }
-  const body = await response.text();
-  if (new TextEncoder().encode(body).byteLength > MAX_DATA_RESPONSE_BYTES) {
-    throw new Error("Published data response exceeds the safety limit.");
+  // Enforce the existing byte limit while receiving, not after buffering an
+  // arbitrarily large response. The same deadline covers headers and body.
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let body = "";
+  if (reader) {
+    const cancel = () => {reader.cancel().catch(() => {});};
+    signal.addEventListener("abort", cancel, {once: true});
+    try {
+      while (true) {
+        const {done, value} = await reader.read();
+        if (signal.aborted) throw new Error("Published data request timed out.");
+        if (done) break;
+        size += value.byteLength;
+        if (size > MAX_DATA_RESPONSE_BYTES) {
+          cancel();
+          throw new Error("Published data response exceeds the safety limit.");
+        }
+        body += decoder.decode(value, {stream: true});
+      }
+      body += decoder.decode();
+    } finally {
+      signal.removeEventListener("abort", cancel);
+      reader.releaseLock();
+    }
   }
   try {
     return JSON.parse(body);
   } catch {
     throw new Error("Published data response is not valid JSON.");
   }
+}
+
+
+async function fetchPublishedData(dataUrl, fetchImpl, nowMs, queryName) {
+  const url = new URL(dataUrl);
+  url.searchParams.set(queryName, String(nowMs));
+  return fetchWithTimeout(fetchImpl, url.toString(), {
+    headers: {
+      Accept: "application/json",
+      "Cache-Control": "no-cache",
+    },
+  }, readPublishedData);
 }
 
 
