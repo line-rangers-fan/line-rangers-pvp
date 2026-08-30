@@ -1,4 +1,6 @@
-const MAX_AGE_MS = 55 * 60 * 1000;
+// The workflow normally publishes once per hour. The watchdog checks more
+// often, but dispatches a collection only after a full hour has elapsed.
+const MAX_AGE_MS = 60 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000;
 const EXTERNAL_REQUEST_TIMEOUT_MS = 12_000;
 const MAX_DATA_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -8,7 +10,7 @@ const REQUIRED_PERIODS = ["hour", "day", "week", "month"];
 const PUBLISHED_DATA_HOST = "line-rangers-fan.github.io";
 const PUBLISHED_DATA_PATH = "/line-rangers-pvp/data/character_usage.json";
 const SERVICE_NAME = "line-rangers-pvp-watchdog";
-const SCHEDULE = "27 * * * *";
+const SCHEDULE = "*/15 * * * *";
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
 

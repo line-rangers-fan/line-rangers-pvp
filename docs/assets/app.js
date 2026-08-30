@@ -8,8 +8,12 @@ const REQUEST_TIMEOUT_MS = 12_000;
 const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
 const MAX_COLLECTION_DURATION_SECONDS = 35 * 60;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
-const DELAYED_AFTER_MS = 90 * 60 * 1000;
-const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
+// Collection normally completes about hourly. GitHub Actions can queue a run
+// and the source can briefly throttle detail requests, so a healthy previous
+// full sample is kept quiet for two hours. Recovery still starts much earlier
+// in the watchdog; these limits only control what visitors are shown.
+const DELAYED_AFTER_MS = 2 * 60 * 60 * 1000;
+const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
 const HISTORY_MAX_SNAPSHOTS = 24 * 31;
 const RANK_CHANGE_PERIODS = [
   ["hour", "rankHour"],

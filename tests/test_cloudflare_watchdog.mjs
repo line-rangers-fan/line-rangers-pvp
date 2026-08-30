@@ -69,7 +69,7 @@ test("stale data dispatches the guarded collection workflow", async () => {
     calls.push({ url, options });
     if (url.startsWith(ENV.DATA_URL)) {
       return new Response(
-        JSON.stringify(healthyData("2026-08-27T03:05:00Z")),
+        JSON.stringify(healthyData("2026-08-27T02:54:00Z")),
         { status: 200 },
       );
     }
@@ -112,7 +112,7 @@ test("health snapshot reports freshness and age", async () => {
   assert.deepEqual(health, {
     status: "ok",
     service: "line-rangers-pvp-watchdog",
-    schedule: "27 * * * *",
+    schedule: "*/15 * * * *",
     updated_at: "2026-08-27T03:10:00Z",
     age_minutes: 50,
     sampled_players: 200,
@@ -122,7 +122,7 @@ test("health snapshot reports freshness and age", async () => {
     invalid_player_records: 0,
     collection_duration_seconds: 42.5,
     detail_fetch_duration_seconds: 40,
-    stale_after_minutes: 55,
+    stale_after_minutes: 60,
     checked_at: "2026-08-27T04:00:00.000Z",
   });
 });
