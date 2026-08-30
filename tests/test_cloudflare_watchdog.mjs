@@ -131,7 +131,7 @@ test("health snapshot reports freshness and age", async () => {
 test("health inspection distinguishes stale and invalid data", () => {
   assert.equal(
     inspectDataHealth(
-      healthyData("2026-08-27T03:05:00Z"),
+      healthyData("2026-08-27T02:54:00Z"),
       NOW,
     ).status,
     "stale",
