@@ -11,12 +11,14 @@ from pathlib import Path
 
 try:
     from quality_checks import (
+        CALENDAR_CLOSE_REFERENCE_MODE,
         MAX_COLLECTION_DURATION_SECONDS,
         RANK_PERIODS,
         SCHEMA_VERSION,
     )
 except ImportError:  # Allows importing this module from the test suite.
     from scripts.quality_checks import (
+        CALENDAR_CLOSE_REFERENCE_MODE,
         MAX_COLLECTION_DURATION_SECONDS,
         RANK_PERIODS,
         SCHEMA_VERSION,
@@ -57,6 +59,8 @@ def has_complete_sample(data: dict) -> bool:
             comparison.get("periods") if isinstance(comparison, dict) else None
         )
         if not isinstance(comparison_periods, dict):
+            return False
+        if comparison.get("reference_mode") != CALENDAR_CLOSE_REFERENCE_MODE:
             return False
         if any(
             not isinstance(comparison_periods.get(period), dict)

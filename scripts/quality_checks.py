@@ -9,12 +9,12 @@ from datetime import datetime
 
 EQUIPMENT_TYPES = ("WEAPON", "ARMOR", "ACC")
 MAX_CHARACTERS_PER_PLAYER = 10
-# Schema 10 requires a complete set of count-comparison periods, including
-# the hourly baseline shown by the public selector.  Keeping this contract in
-# one place prevents a collector, freshness guard, or viewer from accepting a
-# partial release.
-SCHEMA_VERSION = 10
+# Schema 11 requires an explicit comparison-baseline mode.  This prevents a
+# rolling "one day ago" value from being shown under the fixed daily/weekly/
+# monthly close labels used by the public selector.
+SCHEMA_VERSION = 11
 RANK_PERIODS = ("hour", "day", "week", "month")
+CALENDAR_CLOSE_REFERENCE_MODE = "jst_calendar_close_v1"
 # A collection may retry and verify a suspect player, but a slow upstream must
 # never occupy later update windows.  Fifteen minutes leaves several bounded
 # retry passes while making recovery from an outage prompt.
@@ -151,6 +151,9 @@ def _validate_comparison(data: dict, previous: dict, errors: list[str]) -> None:
     if not isinstance(comparison, dict):
         errors.append("missing previous comparison")
         return
+
+    if comparison.get("reference_mode") != CALENDAR_CLOSE_REFERENCE_MODE:
+        errors.append("invalid comparison reference mode")
 
     if comparison.get("previous_updated_at") != previous.get("updated_at"):
         errors.append("previous timestamp mismatch")

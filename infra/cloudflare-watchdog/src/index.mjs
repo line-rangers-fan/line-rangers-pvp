@@ -6,7 +6,8 @@ const EXTERNAL_REQUEST_TIMEOUT_MS = 12_000;
 const MAX_DATA_RESPONSE_BYTES = 4 * 1024 * 1024;
 // Match the collector's deadline so a slow run is repaired promptly.
 const MAX_COLLECTION_DURATION_SECONDS = 15 * 60;
-const MIN_SCHEMA_VERSION = 10;
+const MIN_SCHEMA_VERSION = 11;
+const CALENDAR_CLOSE_REFERENCE_MODE = "jst_calendar_close_v1";
 const REQUIRED_PERIODS = ["hour", "day", "week", "month"];
 const PUBLISHED_DATA_HOST = "line-rangers-fan.github.io";
 const PUBLISHED_DATA_PATH = "/line-rangers-pvp/data/character_usage.json";
@@ -79,6 +80,19 @@ export function dataNeedsCollection(data, nowMs = Date.now()) {
 }
 
 
+export function isCalendarAnchorWindow(nowMs = Date.now()) {
+  // Japan Standard Time is permanently UTC+09:00, with no daylight-saving
+  // transition. Use UTC accessors after the fixed offset so the schedule is
+  // independent of the Worker runtime's locale and time zone.
+  const tokyoTime = new Date(nowMs + 9 * 60 * 60 * 1000);
+  const hour = tokyoTime.getUTCHours();
+  const minute = tokyoTime.getUTCMinutes();
+  // The Worker runs every 15 minutes. A short window tolerates a delayed
+  // event without forcing normal collections throughout the evening.
+  return (hour === 22 || hour === 23) && minute < 15;
+}
+
+
 export function inspectDataHealth(data, nowMs = Date.now()) {
   const updatedAt = String(data?.updated_at || "");
   const updatedMs = Date.parse(updatedAt);
@@ -91,6 +105,7 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
   const collectionDuration = Number(quality?.collection_duration_seconds);
   const detailDuration = Number(quality?.detail_fetch_duration_seconds);
   const schemaVersion = Number(data?.schema_version);
+  const referenceMode = data?.comparison?.reference_mode;
   const comparisonPeriods = data?.comparison?.periods;
   const metrics = {
     sampled_players: Number.isFinite(sampledPlayers) ? sampledPlayers : null,
@@ -133,6 +148,7 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
   const completeSample =
     Number.isInteger(schemaVersion) &&
     schemaVersion >= MIN_SCHEMA_VERSION &&
+    referenceMode === CALENDAR_CLOSE_REFERENCE_MODE &&
     targetPlayers > 0 &&
     sampledPlayers === targetPlayers &&
     data?.complete_target === true &&
@@ -251,6 +267,7 @@ export async function runWatchdog(
 ) {
   const repository = requiredRepository(env);
   const dataUrl = requiredPublishedDataUrl(env);
+  const calendarAnchor = isCalendarAnchorWindow(nowMs);
 
   let repairReason = "unreadable";
   try {
@@ -265,7 +282,7 @@ export async function runWatchdog(
     console.warn("Freshness check failed; requesting a guarded repair.", error);
   }
 
-  if (repairReason === "ok") {
+  if (repairReason === "ok" && !calendarAnchor) {
     return { dispatched: false, reason: "fresh" };
   }
 
@@ -283,7 +300,10 @@ export async function runWatchdog(
       },
       body: JSON.stringify({
         ref: "main",
-        inputs: { force_collection: "false" },
+        // A fixed close is deliberately collected even when the last normal
+        // sample is fresh. The scraper keeps the current verified data if the
+        // source is unavailable, rather than publishing a partial result.
+        inputs: { force_collection: calendarAnchor ? "true" : "false" },
       }),
     },
   );
@@ -292,7 +312,10 @@ export async function runWatchdog(
       `GitHub workflow dispatch failed: HTTP ${dispatchResponse.status}`,
     );
   }
-  return { dispatched: true, reason: repairReason };
+  return {
+    dispatched: true,
+    reason: calendarAnchor ? "calendar_anchor" : repairReason,
+  };
 }
 
 

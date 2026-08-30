@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -374,10 +375,19 @@ def test_period_count_changes_use_verified_hour_day_week_and_month_snapshots():
 
     history = {
         "snapshots": [
-            snapshot("2026-07-28T02:00:00+00:00", 4, 2),
-            snapshot("2026-08-21T02:00:00+00:00", 3, 2),
-            snapshot("2026-08-27T02:00:00+00:00", 2, 2),
+            # Monthly close: 2026-07-31 23:30 JST.
+            snapshot("2026-07-31T14:30:00+00:00", 4, 2),
+            # Weekly close: Sunday, 2026-08-23 23:30 JST.
+            snapshot("2026-08-23T14:30:00+00:00", 3, 2),
+            # Daily close: 2026-08-27 23:30 JST.
+            snapshot("2026-08-27T14:30:00+00:00", 2, 2),
+            # A verified 22:xx close remains available as the fallback if the
+            # preferred 23:xx collection cannot be obtained.
+            snapshot("2026-08-27T13:15:00+00:00", 9, 1),
             snapshot("2026-08-28T01:00:00+00:00", 1, 4),
+            # A near-24-hour non-close snapshot must never replace the fixed
+            # daily close merely because the page is read at a later hour.
+            snapshot("2026-08-27T02:00:00+00:00", 99, 99),
         ]
     }
 
@@ -388,6 +398,7 @@ def test_period_count_changes_use_verified_hour_day_week_and_month_snapshots():
     assert periods["hour"]["rank"] == 0
     assert periods["day"]["comparable"] is True
     assert periods["day"]["rank"] == 1
+    assert periods["day"]["from_updated_at"] == "2026-08-27T14:30:00+00:00"
     assert periods["week"]["rank"] == 2
     assert periods["month"]["rank"] == 3
     assert periods["hour"]["occurrence_count"] == 1
@@ -395,6 +406,25 @@ def test_period_count_changes_use_verified_hour_day_week_and_month_snapshots():
     assert periods["week"]["occurrence_count"] == 3
     assert periods["month"]["occurrence_count"] == 3
     assert current["comparison"]["periods"]["month"]["comparable"] is True
+    assert current["comparison"]["reference_mode"] == "jst_calendar_close_v1"
+
+
+def test_calendar_close_uses_22xx_when_23xx_collection_is_missing():
+    current_time = datetime(2026, 8, 28, 2, 0, tzinfo=timezone.utc)
+    history = {
+        "snapshots": [
+            {
+                # 2026-08-27 22:15 JST
+                "updated_at": "2026-08-27T13:15:00+00:00",
+                "characters": [{"unit_code": "u-alpha", "rank": 1}],
+            }
+        ]
+    }
+
+    reference = scraper._period_reference(history, current_time, 0, "day")
+
+    assert reference is not None
+    assert reference["updated_at"] == "2026-08-27T13:15:00+00:00"
 
 
 def test_period_rank_changes_are_unavailable_when_history_gap_is_too_large():
@@ -428,7 +458,7 @@ def test_period_count_change_treats_missing_character_as_zero_in_valid_snapshot(
     history = {
         "snapshots": [
             {
-                "updated_at": "2026-08-27T02:00:00+00:00",
+                "updated_at": "2026-08-27T14:00:00+00:00",
                 "characters": [{"unit_code": "u-existing", "rank": 1, "occurrence_count": 10}],
             }
         ]
@@ -482,7 +512,7 @@ def test_equipment_period_rank_changes_use_verified_time_window():
     history = {
         "snapshots": [
             {
-                "updated_at": "2026-08-27T00:00:00+00:00",
+                "updated_at": "2026-08-27T14:00:00+00:00",
                 "characters": [
                     {
                         "unit_code": "u-alpha",
@@ -506,8 +536,8 @@ def test_equipment_period_rank_changes_use_verified_time_window():
         "comparable": True,
         "rank": 2,
         "occurrence_count": None,
-        "from_updated_at": "2026-08-27T00:00:00+00:00",
-        "interval_minutes": 1470.0,
+        "from_updated_at": "2026-08-27T14:00:00+00:00",
+        "interval_minutes": 630.0,
     }
 
 
@@ -533,7 +563,7 @@ def test_equipment_without_prior_item_uses_zero_count_from_valid_snapshot():
     history = {
         "snapshots": [
             {
-                "updated_at": "2026-08-27T00:00:00+00:00",
+                "updated_at": "2026-08-27T14:00:00+00:00",
                 "characters": [
                     {
                         "unit_code": "u-alpha",
@@ -665,8 +695,8 @@ def test_history_is_compact_deduplicated_and_bounded():
     }
     history = {
         "snapshots": [
-            {"updated_at": "old-1"},
-            {"updated_at": "old-2"},
+            {"updated_at": "2026-08-26T23:00:00+00:00"},
+            {"updated_at": "2026-08-27T00:00:00+00:00"},
             {"updated_at": data["updated_at"]},
         ]
     }
@@ -674,7 +704,7 @@ def test_history_is_compact_deduplicated_and_bounded():
     result = scraper.update_history(data, history, limit=2)
 
     assert [row["updated_at"] for row in result["snapshots"]] == [
-        "old-2",
+        "2026-08-27T00:00:00+00:00",
         data["updated_at"],
     ]
     character = result["snapshots"][-1]["characters"][0]

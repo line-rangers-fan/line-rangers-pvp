@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   dataNeedsCollection,
   getHealthSnapshot,
+  isCalendarAnchorWindow,
   inspectDataHealth,
   runWatchdog,
 } from "../infra/cloudflare-watchdog/src/index.mjs";
@@ -18,7 +19,7 @@ const ENV = {
 
 function healthyData(updatedAt, overrides = {}) {
   return {
-    schema_version: 10,
+    schema_version: 11,
     updated_at: updatedAt,
     target_players: 200,
     sampled_players: 200,
@@ -33,6 +34,7 @@ function healthyData(updatedAt, overrides = {}) {
       detail_fetch_duration_seconds: 40,
     },
     comparison: {
+      reference_mode: "jst_calendar_close_v1",
       periods: {
         hour: { comparable: false },
         day: { comparable: false },
@@ -60,6 +62,36 @@ test("fresh data does not dispatch GitHub", async () => {
   assert.deepEqual(result, { dispatched: false, reason: "fresh" });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].options.redirect, "error");
+});
+
+
+test("JST calendar close forces a verified baseline collection", async () => {
+  const calls = [];
+  const closeWindow = Date.parse("2026-08-30T13:05:00Z"); // 22:05 JST
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, options });
+    if (url.startsWith(ENV.DATA_URL)) {
+      return new Response(
+        JSON.stringify(healthyData("2026-08-30T12:50:00Z")),
+        { status: 200 },
+      );
+    }
+    return new Response(null, { status: 204 });
+  };
+
+  assert.equal(isCalendarAnchorWindow(closeWindow), true);
+  assert.equal(
+    isCalendarAnchorWindow(Date.parse("2026-08-30T12:05:00Z")),
+    false,
+  );
+  const result = await runWatchdog(ENV, { fetchImpl, nowMs: closeWindow });
+
+  assert.deepEqual(result, { dispatched: true, reason: "calendar_anchor" });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    ref: "main",
+    inputs: { force_collection: "true" },
+  });
 });
 
 

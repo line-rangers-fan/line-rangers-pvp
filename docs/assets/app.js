@@ -17,13 +17,17 @@ const AUTO_REFRESH_MS = 10 * 60 * 1000;
 // in the watchdog; these limits only control what visitors are shown.
 const DELAYED_AFTER_MS = 2 * 60 * 60 * 1000;
 const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
-const HISTORY_MAX_SNAPSHOTS = 24 * 31;
+// The collector retains recent hourly references plus one verified JST close
+// per day. Keep the browser-side validation aligned with that bounded format.
+const HISTORY_MAX_SNAPSHOTS = 96;
 const RANK_CHANGE_PERIODS = [
   ["hour", "rankHour"],
   ["day", "rankDay"],
   ["week", "rankWeek"],
   ["month", "rankMonth"],
 ];
+const CALENDAR_CLOSE_REFERENCE_MODE = "jst_calendar_close_v1";
+const CALENDAR_CLOSE_PERIODS = new Set(["day", "week", "month"]);
 const TRUSTED_ASSET_ORIGIN = "https://rangers.lerico.net";
 const SAFE_ASSET_CODE = /^[A-Za-z0-9_-]+$/;
 
@@ -226,10 +230,11 @@ const STATUS_TEXT = {
     seconds: "秒",
     rankNew: "新",
     rankHour: "1時間前",
-    rankDay: "1日前",
-    rankWeek: "1週間前",
-    rankMonth: "1か月前",
-    rankComparison: "とのキャラ数比較",
+    rankDay: "前日締め",
+    rankWeek: "先週締め",
+    rankMonth: "先月締め",
+    rankComparison:
+      "選択した基準時点からのキャラ数の増減です。締めは日本時間22〜23時の正常集計を基準にします。",
     rankHistoryPending: "履歴待ち",
   },
   en: {
@@ -248,10 +253,11 @@ const STATUS_TEXT = {
     seconds: "s",
     rankNew: "NEW",
     rankHour: "1 hour ago",
-    rankDay: "1 day ago",
-    rankWeek: "1 week ago",
-    rankMonth: "1 month ago",
-    rankComparison: "character count comparison",
+    rankDay: "Previous-day close",
+    rankWeek: "Previous-week close",
+    rankMonth: "Previous-month close",
+    rankComparison:
+      "Character-count change from the selected reference point. Closes use a verified 22:00–23:59 JST collection.",
     rankHistoryPending: "History pending",
   },
   zh: {
@@ -269,10 +275,10 @@ const STATUS_TEXT = {
     seconds: "秒",
     rankNew: "新",
     rankHour: "1小時前",
-    rankDay: "1天前",
-    rankWeek: "1週前",
-    rankMonth: "1個月前",
-    rankComparison: "的角色數量比較",
+    rankDay: "前日結算",
+    rankWeek: "上週結算",
+    rankMonth: "上月結算",
+    rankComparison: "顯示相對所選基準時點的角色數量增減；結算以日本時間22〜23時的正常集計為準。",
     rankHistoryPending: "等待歷史資料",
   },
   th: {
@@ -290,10 +296,10 @@ const STATUS_TEXT = {
     seconds: " วินาที",
     rankNew: "ใหม่",
     rankHour: "1 ชั่วโมงก่อน",
-    rankDay: "1 วันก่อน",
-    rankWeek: "1 สัปดาห์ก่อน",
-    rankMonth: "1 เดือนก่อน",
-    rankComparison: "เปรียบเทียบจำนวนตัวละคร",
+    rankDay: "ปิดยอดวันก่อน",
+    rankWeek: "ปิดยอดสัปดาห์ก่อน",
+    rankMonth: "ปิดยอดเดือนก่อน",
+    rankComparison: "แสดงการเปลี่ยนแปลงจำนวนตัวละครจากจุดอ้างอิงที่เลือก โดยใช้ผลเก็บข้อมูลปกติช่วง 22:00–23:59 JST สำหรับยอดปิด",
     rankHistoryPending: "รอประวัติข้อมูล",
   },
   id: {
@@ -312,10 +318,10 @@ const STATUS_TEXT = {
     seconds: " dtk",
     rankNew: "BARU",
     rankHour: "1 jam lalu",
-    rankDay: "1 hari lalu",
-    rankWeek: "1 minggu lalu",
-    rankMonth: "1 bulan lalu",
-    rankComparison: "perbandingan jumlah karakter",
+    rankDay: "Penutupan hari sebelumnya",
+    rankWeek: "Penutupan minggu sebelumnya",
+    rankMonth: "Penutupan bulan sebelumnya",
+    rankComparison: "Perubahan jumlah karakter dari titik acuan yang dipilih. Penutupan memakai pengumpulan tervalidasi pukul 22.00–23.59 JST.",
     rankHistoryPending: "Menunggu riwayat",
   },
   vi: {
@@ -334,10 +340,10 @@ const STATUS_TEXT = {
     seconds: " giây",
     rankNew: "MỚI",
     rankHour: "1 giờ trước",
-    rankDay: "1 ngày trước",
-    rankWeek: "1 tuần trước",
-    rankMonth: "1 tháng trước",
-    rankComparison: "so sánh số nhân vật",
+    rankDay: "Chốt ngày trước",
+    rankWeek: "Chốt tuần trước",
+    rankMonth: "Chốt tháng trước",
+    rankComparison: "Thay đổi số nhân vật so với mốc đã chọn. Mốc chốt dùng dữ liệu xác minh từ 22:00–23:59 JST.",
     rankHistoryPending: "Đang chờ lịch sử",
   },
   ko: {
@@ -356,10 +362,10 @@ const STATUS_TEXT = {
     seconds: "초",
     rankNew: "신규",
     rankHour: "1시간 전",
-    rankDay: "1일 전",
-    rankWeek: "1주 전",
-    rankMonth: "1개월 전",
-    rankComparison: "캐릭터 수 비교",
+    rankDay: "전일 마감",
+    rankWeek: "전주 마감",
+    rankMonth: "전월 마감",
+    rankComparison: "선택한 기준 시점 대비 캐릭터 수 증감입니다. 마감 기준은 JST 22:00~23:59의 정상 집계입니다.",
     rankHistoryPending: "기록 대기",
   },
 };
@@ -1123,7 +1129,14 @@ function renderRankPeriodChanges(container, change, options = {}) {
     .map(([key, labelKey]) => ({
       key,
       label: st(labelKey),
-      value: periods?.[key],
+      // Do not relabel pre-schema-11 rolling day/week/month values as a
+      // calendar close. Until a fixed baseline has been published, show the
+      // honest pending state instead of a plausible but incorrect delta.
+      value:
+        CALENDAR_CLOSE_PERIODS.has(key) &&
+        state.data?.comparison?.reference_mode !== CALENDAR_CLOSE_REFERENCE_MODE
+          ? null
+          : periods?.[key],
     }))
     .filter(({ value }) => alwaysShow || value?.comparable === true);
   if (!alwaysShow && comparablePeriods.length === 0) return;

@@ -15,7 +15,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
 from time import monotonic, sleep
@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 
 try:
     from quality_checks import (
+        CALENDAR_CLOSE_REFERENCE_MODE,
         EQUIPMENT_TYPES,
         MAX_COLLECTION_DURATION_SECONDS,
         SCHEMA_VERSION,
@@ -35,6 +36,7 @@ try:
     )
 except ImportError:  # Allows importing this module from the test suite.
     from scripts.quality_checks import (
+        CALENDAR_CLOSE_REFERENCE_MODE,
         EQUIPMENT_TYPES,
         MAX_COLLECTION_DURATION_SECONDS,
         SCHEMA_VERSION,
@@ -95,11 +97,19 @@ DETAIL_CONTENT_RECHECKS = read_bounded_env_int(
 )
 OUTPUT_PATH = Path("docs/data/character_usage.json")
 HISTORY_PATH = Path("docs/data/character_usage_history.json")
-# Keep enough hourly snapshots for the longest public comparison period.  The
-# history file contains only compact aggregate rows (never player IDs), so it
-# remains small while allowing a true calendar-month comparison.
-HISTORY_LIMIT = 24 * 31
+# Retain only the short rolling window needed for the one-hour comparison, plus
+# one verified close per JST date. Keeping every half-hour snapshot for a
+# month would eventually discard the month-end baseline (or bloat the public
+# history file); these values make the monthly close durable and bounded.
+HISTORY_RECENT_HOURS = 6
+HISTORY_CLOSE_RETENTION_DAYS = 40
+HISTORY_LIMIT = 96
 HISTORY_TIME_ZONE = ZoneInfo("Asia/Tokyo")
+# Daily, weekly, and monthly comparisons all use a verified Japanese evening
+# closing snapshot. We prefer the latest 23:xx result, while 22:xx safely
+# covers a missed 23:00 collection.
+CALENDAR_CLOSE_START_HOUR = 22
+CALENDAR_CLOSE_END_HOUR = 23
 RANK_COMPARISON_PERIODS = {
     "hour": 60 * 60,
     "day": 24 * 60 * 60,
@@ -650,8 +660,8 @@ def build_statistics(
     )
     equipment_slots_expected = total_slots * len(EQUIPMENT_TYPES)
     return {
-        # Version 10 requires the hour/day/week/month comparison contract and
-        # the longer verified collection window used by the reliability guards.
+        # Version 11 identifies the fixed Japanese calendar-close baselines,
+        # in addition to the complete hour/day/week/month comparison contract.
         "schema_version": SCHEMA_VERSION,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "source": {"name": SOURCE_NAME, "url": TARGET_URL},
@@ -826,23 +836,82 @@ def _history_date_key(value: datetime | None) -> str | None:
     return value.astimezone(HISTORY_TIME_ZONE).date().isoformat()
 
 
+def _as_japan_time(value: datetime) -> datetime:
+    """Normalize an aware or legacy-naive timestamp to Japan Standard Time."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(HISTORY_TIME_ZONE)
+
+
+def _calendar_close_date(current_time: datetime, period_name: str):
+    """Return the completed JST date used by a fixed period close.
+
+    Daily changes always compare against yesterday's close. Weekly changes use
+    the preceding Sunday close (Monday-based weeks), and monthly changes use
+    the final close of the preceding calendar month. These dates deliberately
+    do not move with the time at which a visitor opens the page.
+    """
+    local_date = _as_japan_time(current_time).date()
+    if period_name == "day":
+        return local_date - timedelta(days=1)
+    if period_name == "week":
+        return local_date - timedelta(days=local_date.weekday() + 1)
+    if period_name == "month":
+        return local_date.replace(day=1) - timedelta(days=1)
+    raise ValueError(f"Unsupported calendar close period: {period_name}")
+
+
+def _calendar_close_reference(
+    history: dict,
+    current_time: datetime,
+    period_name: str,
+) -> dict | None:
+    """Return the latest verified 22:xx/23:xx JST snapshot for a fixed close."""
+    snapshots = history.get("snapshots")
+    if not isinstance(snapshots, list):
+        return None
+
+    close_date = _calendar_close_date(current_time, period_name)
+    candidates: list[tuple[float, dict]] = []
+    for snapshot in snapshots:
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("characters"), list):
+            continue
+        timestamp = _parse_history_time(snapshot.get("updated_at"))
+        if timestamp is None:
+            continue
+        local_time = _as_japan_time(timestamp)
+        if (
+            local_time.date() == close_date
+            and CALENDAR_CLOSE_START_HOUR <= local_time.hour <= CALENDAR_CLOSE_END_HOUR
+        ):
+            candidates.append((timestamp.timestamp(), snapshot))
+    if not candidates:
+        return None
+    # The 23:xx snapshot wins when available; otherwise a valid 22:xx result
+    # remains a trustworthy close baseline instead of delaying the comparison.
+    return max(candidates, key=lambda item: item[0])[1]
+
+
 def _period_reference(
     history: dict | None,
     current_time: datetime | None,
     period_seconds: int,
     period_name: str | None = None,
 ) -> dict | None:
-    """Return a sufficiently close, earlier verified snapshot for a period.
+    """Return the earlier verified snapshot required for a public period.
 
-    A missed collection run must not turn into a misleading comparison. We
-    therefore select the newest snapshot at or before the requested point and
-    accept it only when its actual age is between 75% and 150% of the target.
+    Hourly comparisons use the nearest verified snapshot around one hour ago.
+    Day/week/month comparisons instead use fixed JST closing snapshots, so the
+    baseline never changes merely because the page was read an hour later.
     """
     if current_time is None or not isinstance(history, dict):
         return None
     snapshots = history.get("snapshots")
     if not isinstance(snapshots, list):
         return None
+
+    if period_name in {"day", "week", "month"}:
+        return _calendar_close_reference(history, current_time, period_name)
 
     target_time = current_time.timestamp() - period_seconds
     candidates: list[tuple[float, dict]] = []
@@ -1094,6 +1163,7 @@ def add_previous_comparison(
     }
     if not previous or not isinstance(previous.get("characters"), list):
         data["comparison"] = {
+            "reference_mode": CALENDAR_CLOSE_REFERENCE_MODE,
             "previous_updated_at": None,
             "calendar_date": _history_date_key(current_time),
             "interval_minutes": None,
@@ -1189,6 +1259,7 @@ def add_previous_comparison(
         interval_minutes = None
 
     data["comparison"] = {
+        "reference_mode": CALENDAR_CLOSE_REFERENCE_MODE,
         "previous_updated_at": previous.get("updated_at"),
         "calendar_date": _history_date_key(current_time),
         "interval_minutes": interval_minutes,
@@ -1266,11 +1337,60 @@ def update_history(
         if isinstance(item, dict) and item.get("updated_at") != data["updated_at"]
     ]
     snapshots.append(history_snapshot(data))
+
+    current_time = _parse_history_time(data["updated_at"])
+    if current_time is None:
+        raise ValueError("history data must have a valid updated_at timestamp")
+    current_local = _as_japan_time(current_time)
+    recent_after = current_time - timedelta(hours=HISTORY_RECENT_HOURS)
+    close_after = current_local.date() - timedelta(days=HISTORY_CLOSE_RETENTION_DAYS)
+
+    # Deduplicate by timestamp before retention.  A later value with the same
+    # timestamp is equivalent for comparisons, so retaining one avoids a
+    # corrupt history growing without bound after a retry.
+    parsed_snapshots: dict[str, tuple[datetime, dict]] = {}
+    for item in snapshots:
+        timestamp = _parse_history_time(item.get("updated_at"))
+        if timestamp is not None:
+            parsed_snapshots[str(item["updated_at"])] = (timestamp, item)
+
+    close_by_date: dict[object, tuple[datetime, dict]] = {}
+    recent: list[tuple[datetime, dict]] = []
+    for timestamp, item in parsed_snapshots.values():
+        local_time = _as_japan_time(timestamp)
+        if timestamp >= recent_after:
+            recent.append((timestamp, item))
+        if (
+            local_time.date() >= close_after
+            and CALENDAR_CLOSE_START_HOUR <= local_time.hour <= CALENDAR_CLOSE_END_HOUR
+        ):
+            existing = close_by_date.get(local_time.date())
+            if existing is None or timestamp > existing[0]:
+                close_by_date[local_time.date()] = (timestamp, item)
+
+    retained_by_timestamp = {
+        str(item["updated_at"]): (timestamp, item)
+        for timestamp, item in close_by_date.values()
+    }
+    # The close set is the durable part. Fill the remaining bounded capacity
+    # with newest short-term snapshots, which is more than enough to retain a
+    # valid 45–90 minute reference even when several normal runs are delayed.
+    for timestamp, item in sorted(recent, key=lambda value: value[0], reverse=True):
+        key = str(item["updated_at"])
+        if key in retained_by_timestamp:
+            continue
+        if len(retained_by_timestamp) >= limit:
+            break
+        retained_by_timestamp[key] = (timestamp, item)
+
+    retained = sorted(retained_by_timestamp.values(), key=lambda value: value[0])
     return {
         "schema_version": 2,
         "generated_at": data["updated_at"],
-        "retention_hours": limit,
-        "snapshots": snapshots[-limit:],
+        "retention_hours": HISTORY_RECENT_HOURS,
+        "calendar_close_retention_days": HISTORY_CLOSE_RETENTION_DAYS,
+        "snapshot_limit": limit,
+        "snapshots": [item for _, item in retained],
     }
 
 
