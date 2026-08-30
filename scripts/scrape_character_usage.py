@@ -10,6 +10,7 @@ defence formation.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import sys
@@ -180,6 +181,10 @@ def load_json(path: Path) -> dict | None:
     return value if isinstance(value, dict) else None
 
 
+class MalformedJsonResponse(RuntimeError):
+    """A bounded response that can be retried without trusting its contents."""
+
+
 def _read_json_response(response: object, label: str) -> object:
     """Read a bounded JSON response and make size failures explicit."""
     headers = getattr(response, "headers", None)
@@ -199,7 +204,7 @@ def _read_json_response(response: object, label: str) -> object:
     try:
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise RuntimeError(f"{label} did not return valid UTF-8 JSON.") from error
+        raise MalformedJsonResponse(f"{label} did not return valid UTF-8 JSON.") from error
 
 
 def fetch_json(url: str, label: str) -> object:
@@ -221,6 +226,10 @@ def fetch_json(url: str, label: str) -> object:
                 if status >= 400:
                     raise RuntimeError(f"{label} returned HTTP {status}.")
                 return _read_json_response(response, label)
+        except MalformedJsonResponse as error:
+            # A brief proxy/upstream failure may return truncated JSON with
+            # HTTP 200. Retry within the same existing attempt/time bounds.
+            last_error = error
         except HTTPError as error:
             last_error = RuntimeError(f"{label} returned HTTP {error.code}.")
             if error.code < 500 and error.code != 429:
@@ -1337,6 +1346,116 @@ def history_snapshot(data: dict) -> dict:
     }
 
 
+def _usable_history_snapshot(snapshot: object, current_time: datetime, sampled: int) -> bool:
+    """Check compact evidence without requiring fields absent in old snapshots."""
+    if not isinstance(snapshot, dict):
+        return False
+    timestamp = _parse_history_time(snapshot.get("updated_at"))
+    rows = snapshot.get("characters")
+    if timestamp is None or timestamp.tzinfo is None or timestamp > current_time:
+        return False
+    if snapshot.get("sampled_players") != sampled or not isinstance(rows, list) or not rows:
+        return False
+    slots = _exact_int(snapshot.get("character_slots"))
+    if slots is None or not sampled <= slots <= sampled * MAX_CHARACTERS_PER_PLAYER:
+        return False
+    if snapshot.get("unique_characters") != len(rows):
+        return False
+    if "calendar_date" in snapshot and snapshot["calendar_date"] != _history_date_key(timestamp):
+        return False
+    duration = snapshot.get("collection_duration_seconds")
+    if duration is not None and (
+        isinstance(duration, bool) or not isinstance(duration, (int, float))
+        or not math.isfinite(duration) or not 0 <= duration <= MAX_COLLECTION_DURATION_SECONDS
+    ):
+        return False
+    codes = set()
+    total = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            return False
+        code = row.get("unit_code")
+        count = _exact_int(row.get("occurrence_count"))
+        players = _exact_int(row.get("player_count"))
+        rank = _exact_int(row.get("rank"))
+        rate = row.get("adoption_rate")
+        if (
+            not isinstance(code, str) or not UNIT_CODE_PATTERN.fullmatch(code) or code in codes
+            or count is None or not 1 <= count <= slots
+            or players is None or not 1 <= players <= min(sampled, count)
+            or rank is None or not 1 <= rank <= len(rows)
+            or isinstance(rate, bool) or not isinstance(rate, (int, float))
+            or not math.isfinite(rate) or abs(rate - round(players / sampled * 100, 1)) > 0.001
+        ):
+            return False
+        codes.add(code)
+        total += count
+        # Character-only legacy history is still valid character evidence.
+        if "equipment_rankings" not in row:
+            continue
+        rankings = row["equipment_rankings"]
+        if not isinstance(rankings, dict):
+            return False
+        for kind in EQUIPMENT_TYPES:
+            category = rankings.get(kind)
+            if not isinstance(category, dict) or not isinstance(category.get("items"), list):
+                return False
+            item_codes = set()
+            item_total = 0
+            for item in category["items"]:
+                if not isinstance(item, dict):
+                    return False
+                item_code = item.get("item_code")
+                item_count = _exact_int(item.get("occurrence_count"))
+                item_rank = _exact_int(item.get("rank"))
+                if (
+                    not isinstance(item_code, str) or not UNIT_CODE_PATTERN.fullmatch(item_code)
+                    or item_code in item_codes or item_count is None or not 1 <= item_count <= count
+                    or item_rank is None or not 1 <= item_rank <= len(category["items"])
+                ):
+                    return False
+                item_codes.add(item_code)
+                item_total += item_count
+            if item_total > count:
+                return False
+    return total == slots
+
+
+def prepare_comparison_context(data: dict, previous: dict | None, history: dict | None):
+    """Quarantine bad past context; never relax validation of the new sample.
+
+    Otherwise the watchdog can repeatedly fetch 200 valid players but fail on
+    the same corrupt previous count, future timestamp, or malformed history.
+    A verified previous publication is also a real missing history baseline.
+    """
+    current_time = _parse_history_time(data.get("updated_at"))
+    if current_time is None or current_time.tzinfo is None:
+        raise ValueError("invalid current collection timestamp")
+    try:
+        validate_data(previous)
+        previous_time = _parse_history_time(previous.get("updated_at"))
+        if (
+            previous_time is None or previous_time.tzinfo is None or previous_time >= current_time
+            or previous.get("target_players") != data.get("target_players")
+        ):
+            previous = None
+    except (ValueError, TypeError, AttributeError):
+        previous = None
+
+    candidates = history.get("snapshots") if isinstance(history, dict) else None
+    candidates = list(candidates) if isinstance(candidates, list) else []
+    if previous is not None:
+        candidates.append(history_snapshot(previous))
+    verified = {}
+    for snapshot in candidates:
+        if not _usable_history_snapshot(snapshot, current_time, data["sampled_players"]):
+            continue
+        timestamp = _parse_history_time(snapshot["updated_at"])
+        # Datetime keys collapse Z/+00:00/other offset spellings of one instant.
+        verified[timestamp] = snapshot
+    return previous, {"snapshots": [verified[key] for key in sorted(verified)]}
+
+
 def update_history(
     data: dict,
     history: dict | None,
@@ -1475,7 +1594,8 @@ def main() -> None:
     previous_history = load_json(HISTORY_PATH)
     try:
         data = scrape()
-        add_previous_comparison(data, previous, previous_history or {"snapshots": []})
+        previous, previous_history = prepare_comparison_context(data, previous, previous_history)
+        add_previous_comparison(data, previous, previous_history)
         validate_data(data, previous)
         history = update_history(data, previous_history)
         write_outputs(data, history)
