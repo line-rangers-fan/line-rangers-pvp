@@ -12,12 +12,13 @@ import {
 const NOW = Date.parse("2026-08-27T04:00:00Z");
 const ENV = {
   GITHUB_REPOSITORY: "line-rangers-fan/line-rangers-pvp",
-  DATA_URL: "https://example.test/character_usage.json",
+  DATA_URL: "https://line-rangers-fan.github.io/line-rangers-pvp/data/character_usage.json",
   GITHUB_ACTIONS_TOKEN: "test-token",
 };
 
 function healthyData(updatedAt, overrides = {}) {
   return {
+    schema_version: 10,
     updated_at: updatedAt,
     target_players: 200,
     sampled_players: 200,
@@ -31,6 +32,14 @@ function healthyData(updatedAt, overrides = {}) {
       collection_duration_seconds: 42.5,
       detail_fetch_duration_seconds: 40,
     },
+    comparison: {
+      periods: {
+        hour: { comparable: false },
+        day: { comparable: false },
+        week: { comparable: false },
+        month: { comparable: false },
+      },
+    },
     ...overrides,
   };
 }
@@ -38,8 +47,8 @@ function healthyData(updatedAt, overrides = {}) {
 
 test("fresh data does not dispatch GitHub", async () => {
   const calls = [];
-  const fetchImpl = async (url) => {
-    calls.push(url);
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, options });
     return new Response(
       JSON.stringify(healthyData("2026-08-27T03:10:00Z")),
       { status: 200 },
@@ -50,6 +59,7 @@ test("fresh data does not dispatch GitHub", async () => {
 
   assert.deepEqual(result, { dispatched: false, reason: "fresh" });
   assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.redirect, "error");
 });
 
 
@@ -126,6 +136,28 @@ test("health inspection distinguishes stale and invalid data", () => {
     ).status,
     "stale",
   );
+  assert.equal(
+    inspectDataHealth(
+      healthyData("2026-08-27T03:10:00Z", { schema_version: 9 }),
+      NOW,
+    ).status,
+    "invalid_data",
+  );
+  assert.equal(
+    inspectDataHealth(
+      healthyData("2026-08-27T03:10:00Z", {
+        comparison: {
+          periods: {
+            day: { comparable: false },
+            week: { comparable: false },
+            month: { comparable: false },
+          },
+        },
+      }),
+      NOW,
+    ).status,
+    "invalid_data",
+  );
   assert.equal(inspectDataHealth({}, NOW).status, "unreadable");
   assert.equal(
     inspectDataHealth(
@@ -186,6 +218,30 @@ test("watchdog rejects unsafe repository and data URL configuration", async () =
   );
   await assert.rejects(
     getHealthSnapshot({ ...ENV, DATA_URL: "http://example.test/data.json" }),
-    /credential-free HTTPS URL/,
+    /published ranking JSON URL/,
   );
+  await assert.rejects(
+    getHealthSnapshot({ ...ENV, DATA_URL: "https://example.test/data.json" }),
+    /published ranking JSON URL/,
+  );
+});
+
+
+test("oversized published data is treated as unreadable", async () => {
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  let health;
+  try {
+    health = await getHealthSnapshot(ENV, {
+      fetchImpl: async () => new Response(
+        "x".repeat(4 * 1024 * 1024 + 1),
+        { status: 200 },
+      ),
+      nowMs: NOW,
+    });
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.equal(health.status, "unreadable");
 });

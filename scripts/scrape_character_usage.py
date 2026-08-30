@@ -18,15 +18,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import median
-from time import monotonic
+from time import monotonic, sleep
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
+from urllib.parse import quote, urlencode, urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
 try:
     from quality_checks import (
         EQUIPMENT_TYPES,
+        MAX_COLLECTION_DURATION_SECONDS,
+        SCHEMA_VERSION,
         assign_competition_ranks,
         equipment_rankings,
         validate_data,
@@ -34,6 +36,8 @@ try:
 except ImportError:  # Allows importing this module from the test suite.
     from scripts.quality_checks import (
         EQUIPMENT_TYPES,
+        MAX_COLLECTION_DURATION_SECONDS,
+        SCHEMA_VERSION,
         assign_competition_ranks,
         equipment_rankings,
         validate_data,
@@ -47,20 +51,45 @@ API_URL_TEMPLATE = "https://rangers.lerico.net/api/v2/pvp/league/rank/{league}"
 PLAYER_API_URL_TEMPLATE = "https://rangers.lerico.net/api/getPlayer/{mid}"
 TRANSLATE_API_URL = "https://rangers.lerico.net/api/v2/translate"
 UNIT_TRANSLATE_KEY = "ja:UNIT"
-TARGET_PLAYER_COUNT = int(os.environ.get("TARGET_PLAYER_COUNT", "200"))
-PLAYER_FETCH_WORKERS = min(
-    12, max(1, int(os.environ.get("PLAYER_FETCH_WORKERS", "6")))
-)
+SOURCE_HOST = "rangers.lerico.net"
+
+
+def read_bounded_env_int(
+    name: str,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int:
+    """Read a numeric setting without letting a bad environment stop the run."""
+    raw_value = os.environ.get(name, "")
+    try:
+        value = int(str(raw_value).strip()) if str(raw_value).strip() else default
+    except (TypeError, ValueError):
+        return default
+    return min(maximum, max(minimum, value))
+
+
+TARGET_PLAYER_COUNT = read_bounded_env_int("TARGET_PLAYER_COUNT", 200, 1, 500)
+# Deliberately modest concurrency gives the source time to answer and leaves
+# room for a full retry/verification pass when one detail response is bad.
+PLAYER_FETCH_WORKERS = read_bounded_env_int("PLAYER_FETCH_WORKERS", 3, 1, 4)
 MIN_CHARACTERS_PER_PLAYER = 1
 MAX_CHARACTERS_PER_PLAYER = 10
-REQUEST_TIMEOUT_SECONDS = 30
+REQUEST_TIMEOUT_SECONDS = read_bounded_env_int(
+    "REQUEST_TIMEOUT_SECONDS", 45, 5, 90
+)
 # The public APIs are expected to return compact JSON.  A firm cap prevents a
 # malformed upstream response from exhausting the runner while still allowing
 # the translation catalogue to grow substantially.
 MAX_JSON_RESPONSE_BYTES = 4 * 1024 * 1024
-# Three total attempts balance temporary network failures with respectful
-# source access. A failed incomplete run is never published.
-REQUEST_ATTEMPTS = 3
+# Five total attempts and one verification pass favour a complete, consistent
+# snapshot over the previous quick-fail behaviour.  The collection deadline
+# below keeps an upstream outage bounded.
+REQUEST_ATTEMPTS = read_bounded_env_int("REQUEST_ATTEMPTS", 5, 1, 6)
+DETAIL_FETCH_ROUNDS = read_bounded_env_int("DETAIL_FETCH_ROUNDS", 2, 1, 3)
+DETAIL_CONTENT_RECHECKS = read_bounded_env_int(
+    "DETAIL_CONTENT_RECHECKS", 1, 0, 2
+)
 OUTPUT_PATH = Path("docs/data/character_usage.json")
 HISTORY_PATH = Path("docs/data/character_usage_history.json")
 # Keep enough hourly snapshots for the longest public comparison period.  The
@@ -82,6 +111,33 @@ DEBUG_DIR = Path(".artifacts/debug")
 # made-up path if the upstream response is malformed.
 UNIT_CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 PLAYER_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def is_trusted_source_url(url: str) -> bool:
+    """Allow only the handbook API host, including after any redirect."""
+    try:
+        parsed = urlparse(url)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname == SOURCE_HOST
+            and parsed.port in (None, 443)
+            and not parsed.username
+            and not parsed.password
+        )
+    except ValueError:
+        return False
+
+
+class SourceOnlyRedirectHandler(HTTPRedirectHandler):
+    """Refuse an API redirect to a different host before making the request."""
+
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        if not is_trusted_source_url(newurl):
+            raise RuntimeError("Source API redirected outside the trusted host.")
+        return super().redirect_request(request, fp, code, msg, headers, newurl)
+
+
+SOURCE_OPENER = build_opener(SourceOnlyRedirectHandler())
 
 
 def save_json(path: Path, value: object) -> None:
@@ -130,7 +186,9 @@ def _read_json_response(response: object, label: str) -> object:
 
 
 def fetch_json(url: str, label: str) -> object:
-    """Fetch and decode a public JSON response with small, bounded retries."""
+    """Fetch a bounded, trusted JSON response with patient retry handling."""
+    if not is_trusted_source_url(url):
+        raise ValueError("Refusing to request an untrusted source URL.")
     request = Request(
         url,
         headers={
@@ -141,7 +199,7 @@ def fetch_json(url: str, label: str) -> object:
     last_error: Exception | None = None
     for attempt in range(1, REQUEST_ATTEMPTS + 1):
         try:
-            with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            with SOURCE_OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
                 status = getattr(response, "status", 200)
                 if status >= 400:
                     raise RuntimeError(f"{label} returned HTTP {status}.")
@@ -150,12 +208,16 @@ def fetch_json(url: str, label: str) -> object:
             last_error = RuntimeError(f"{label} returned HTTP {error.code}.")
             if error.code < 500 and error.code != 429:
                 break
-        except URLError as error:
-            last_error = RuntimeError(f"{label} request failed: {error.reason}")
+        except (URLError, TimeoutError, OSError) as error:
+            # Do not expose raw URL, response, or player information in CI
+            # logs.  The error class is sufficient to diagnose retry policy.
+            last_error = RuntimeError(
+                f"{label} request failed ({type(error).__name__})."
+            )
         if attempt < REQUEST_ATTEMPTS:
-            import time
-
-            time.sleep(0.35 * attempt)
+            # Bounded exponential backoff gives a rate-limited source time to
+            # recover while still fitting within the collection time budget.
+            sleep(min(5.0, 0.75 * (2 ** (attempt - 1))))
 
     raise last_error or RuntimeError(f"{label} request failed.")
 
@@ -172,12 +234,12 @@ def fetch_player_detail(mid: str) -> dict:
     if not PLAYER_ID_PATTERN.fullmatch(mid):
         raise ValueError(f"Invalid player id: {mid!r}")
     url = PLAYER_API_URL_TEMPLATE.format(mid=quote(mid, safe=""))
-    payload = fetch_json(url, f"Player detail API for {mid}")
+    payload = fetch_json(url, "Player detail API")
     if not isinstance(payload, dict):
-        raise RuntimeError(f"Player detail API for {mid} has an invalid structure.")
+        raise RuntimeError("Player detail API has an invalid structure.")
     returned_mid = str(payload.get("mid") or "").strip()
     if returned_mid and returned_mid != mid:
-        raise RuntimeError(f"Player detail API returned a mismatched player id for {mid}.")
+        raise RuntimeError("Player detail API returned a mismatched player id.")
     return payload
 
 
@@ -235,34 +297,51 @@ def extract_ranked_mids(payload: dict, target_players: int) -> tuple[list[str], 
 
 
 def fetch_ranked_player_details(mids: list[str]) -> tuple[dict[str, dict], list[dict]]:
-    """Fetch details in bounded batches and stop after the first failed batch.
+    """Fetch every ranked player and retry only the transient failures.
 
-    One missing player already makes a 200-player publication impossible.
-    Continuing through all remaining IDs during an upstream outage would only
-    extend the run and add avoidable load to the public source.
+    A failure for one player must not stop collection of the other ranked
+    players.  After each full pass, only failures are retried, giving the API
+    time to recover without duplicating successful work or publishing a
+    partial sample.
     """
+    unique_mids = list(dict.fromkeys(mids))
     details: dict[str, dict] = {}
-    failures: list[dict] = []
-    batch_size = PLAYER_FETCH_WORKERS * 2
+    failure_types: dict[str, str] = {}
+    pending = unique_mids
+    batch_size = PLAYER_FETCH_WORKERS * 4
 
-    for start in range(0, len(mids), batch_size):
-        batch = mids[start : start + batch_size]
-        batch_failures: list[dict] = []
-        with ThreadPoolExecutor(max_workers=PLAYER_FETCH_WORKERS) as executor:
-            future_by_mid = {
-                executor.submit(fetch_player_detail, mid): mid for mid in batch
-            }
-            for future in as_completed(future_by_mid):
-                mid = future_by_mid[future]
-                try:
-                    details[mid] = future.result()
-                except Exception as error:
-                    batch_failures.append({"mid": mid, "error": str(error)})
-        if batch_failures:
-            failures.extend(batch_failures)
+    for round_number in range(1, DETAIL_FETCH_ROUNDS + 1):
+        if not pending:
             break
+        next_pending: list[str] = []
+        for start in range(0, len(pending), batch_size):
+            batch = pending[start : start + batch_size]
+            with ThreadPoolExecutor(max_workers=PLAYER_FETCH_WORKERS) as executor:
+                future_by_mid = {
+                    executor.submit(fetch_player_detail, mid): mid for mid in batch
+                }
+                for future in as_completed(future_by_mid):
+                    mid = future_by_mid[future]
+                    try:
+                        detail = future.result()
+                        if not isinstance(detail, dict):
+                            raise TypeError("detail response is not an object")
+                        details[mid] = detail
+                        failure_types.pop(mid, None)
+                    except Exception as error:
+                        next_pending.append(mid)
+                        failure_types[mid] = type(error).__name__
+        failed_mids = set(next_pending)
+        pending = [mid for mid in pending if mid in failed_mids]
+        if pending and round_number < DETAIL_FETCH_ROUNDS:
+            sleep(1.5 * round_number)
 
-    return details, sorted(failures, key=lambda item: item["mid"])
+    failures = [
+        {"mid": mid, "error_type": failure_types.get(mid, "UnknownError")}
+        for mid in unique_mids
+        if mid in pending
+    ]
+    return details, failures
 
 
 def extract_unit_equipment(unit: dict, mid: str, diagnostics: dict) -> dict[str, str]:
@@ -559,9 +638,9 @@ def build_statistics(
     )
     equipment_slots_expected = total_slots * len(EQUIPMENT_TYPES)
     return {
-        # Version 9 adds compact equipment-rank history/change metadata while
-        # preserving the existing character and equipment count semantics.
-        "schema_version": 9,
+        # Version 10 requires the hour/day/week/month comparison contract and
+        # the longer verified collection window used by the reliability guards.
+        "schema_version": SCHEMA_VERSION,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "source": {"name": SOURCE_NAME, "url": TARGET_URL},
         "league": "レジェンド",
@@ -603,6 +682,15 @@ def build_statistics(
     }
 
 
+def ensure_collection_within_budget(collection_started_clock: float) -> None:
+    """Stop cleanly before an unusually slow source can publish stale work."""
+    if monotonic() - collection_started_clock > MAX_COLLECTION_DURATION_SECONDS:
+        raise RuntimeError(
+            "Collection exceeded the verification time budget; "
+            "retained the last known-good data."
+        )
+
+
 def scrape() -> dict:
     if TARGET_PLAYER_COUNT < 1:
         raise RuntimeError("TARGET_PLAYER_COUNT must be at least 1.")
@@ -620,17 +708,9 @@ def scrape() -> dict:
 
     detail_started_clock = monotonic()
     details, detail_failures = fetch_ranked_player_details(mids)
-    detail_duration_seconds = monotonic() - detail_started_clock
+    ensure_collection_within_budget(collection_started_clock)
     if detail_failures:
-        if os.environ.get("DEBUG", "0") == "1":
-            save_json(
-                DEBUG_DIR / "detail_fetch_failures.json",
-                {
-                    "requested": len(mids),
-                    "completed_before_abort": len(details),
-                    "failures": detail_failures,
-                },
-            )
+        dump_detail_failure_summary(len(mids), len(details), detail_failures)
         raise RuntimeError(
             "Player detail collection failed after bounded retries; "
             f"aborted without publishing ({len(detail_failures)} failures)."
@@ -642,7 +722,39 @@ def scrape() -> dict:
     diagnostics["detail_fetches_requested"] = len(mids)
     diagnostics["detail_fetch_failures"] = detail_failures
 
+    # A valid JSON response can still contain an incomplete defence team.
+    # Re-fetch only the players rejected by structural validation, then repeat
+    # the extraction.  This is deliberately separate from network retries so
+    # a transient partial payload cannot become a misleading published count.
+    content_rechecks = 0
+    content_recheck_failures: list[dict] = []
+    valid_mids = {str(player.get("mid")) for player in players}
+    pending_content_recheck = [mid for mid in mids if mid not in valid_mids]
+    while pending_content_recheck and content_rechecks < DETAIL_CONTENT_RECHECKS:
+        content_rechecks += 1
+        sleep(1.5 * content_rechecks)
+        confirmed_details, recheck_failures = fetch_ranked_player_details(
+            pending_content_recheck
+        )
+        details.update(confirmed_details)
+        ensure_collection_within_budget(collection_started_clock)
+        content_recheck_failures.extend(recheck_failures)
+        players, diagnostics = extract_ranked_players(
+            payload, TARGET_PLAYER_COUNT, player_details=details
+        )
+        diagnostics.update(ranking_diagnostics)
+        diagnostics["detail_fetches_requested"] = len(mids)
+        diagnostics["detail_fetch_failures"] = []
+        valid_mids = {str(player.get("mid")) for player in players}
+        pending_content_recheck = [mid for mid in mids if mid not in valid_mids]
+    diagnostics["detail_content_rechecks"] = content_rechecks
+
     if len(players) != TARGET_PLAYER_COUNT:
+        dump_detail_failure_summary(
+            len(mids),
+            len(players),
+            content_recheck_failures + [{"error_type": "InvalidDetailContent"}],
+        )
         raise RuntimeError(
             "Some requested ranked players had incomplete team or equipment data; "
             f"refusing to publish a partial sample ({len(players)} != {TARGET_PLAYER_COUNT})."
@@ -654,6 +766,7 @@ def scrape() -> dict:
         for record in player["unit_records"]
     }
     character_names = fetch_character_names(unit_codes)
+    ensure_collection_within_budget(collection_started_clock)
     data = build_statistics(
         players,
         diagnostics,
@@ -668,7 +781,7 @@ def scrape() -> dict:
                 2,
             ),
             "detail_fetch_duration_seconds": round(
-                detail_duration_seconds,
+                monotonic() - detail_started_clock,
                 2,
             ),
         }
@@ -1154,6 +1267,30 @@ def write_outputs(data: dict, history: dict) -> None:
     save_json(temporary_history, history)
     temporary_history.replace(HISTORY_PATH)
     temporary_output.replace(OUTPUT_PATH)
+
+
+def dump_detail_failure_summary(
+    requested: int,
+    completed: int,
+    failures: list[dict],
+) -> None:
+    """Write safe aggregate failure diagnostics without player identifiers."""
+    if os.environ.get("DEBUG", "0") != "1":
+        return
+    failure_types = Counter(
+        str(item.get("error_type") or "UnknownError")
+        for item in failures
+        if isinstance(item, dict)
+    )
+    save_json(
+        DEBUG_DIR / "detail_fetch_failures.json",
+        {
+            "requested": requested,
+            "completed": completed,
+            "failure_count": len(failures),
+            "failure_types": dict(sorted(failure_types.items())),
+        },
+    )
 
 
 def dump_debug(data: dict) -> None:

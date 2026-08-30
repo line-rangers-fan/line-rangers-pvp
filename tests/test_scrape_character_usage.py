@@ -48,7 +48,7 @@ def test_all_pvp_groups_and_duplicate_units_are_preserved():
     beta = by_image[scraper.character_image_url("u-beta")]
 
     assert data["character_slots"] == 4
-    assert data["schema_version"] == 9
+    assert data["schema_version"] == scraper.SCHEMA_VERSION
     assert data["collection_quality"]["sample_coverage"] == 100.0
     assert alpha["occurrence_count"] == 2
     assert alpha["player_count"] == 1
@@ -131,6 +131,17 @@ def test_malformed_unit_code_is_rejected():
         scraper.character_image_url("../../not-a-unit")
 
 
+def test_source_requests_are_limited_to_the_known_handbook_host():
+    assert scraper.is_trusted_source_url(
+        "https://rangers.lerico.net/api/v2/translate"
+    )
+    assert not scraper.is_trusted_source_url("http://rangers.lerico.net/api")
+    assert not scraper.is_trusted_source_url("https://example.test/api")
+    assert not scraper.is_trusted_source_url(
+        "https://rangers.lerico.net@example.test/api"
+    )
+
+
 def test_insufficient_ranked_players_refuses_publish(monkeypatch):
     monkeypatch.setattr(scraper, "TARGET_PLAYER_COUNT", 2)
     monkeypatch.setattr(
@@ -143,7 +154,7 @@ def test_insufficient_ranked_players_refuses_publish(monkeypatch):
         scraper.scrape()
 
 
-def test_detail_failure_stops_before_later_batches(monkeypatch):
+def test_detail_failure_retries_only_the_failed_player_and_checks_all_players(monkeypatch):
     requested = []
 
     def fetch(mid):
@@ -153,15 +164,82 @@ def test_detail_failure_stops_before_later_batches(monkeypatch):
         return {"mid": mid}
 
     monkeypatch.setattr(scraper, "PLAYER_FETCH_WORKERS", 1)
+    monkeypatch.setattr(scraper, "DETAIL_FETCH_ROUNDS", 2)
     monkeypatch.setattr(scraper, "fetch_player_detail", fetch)
+    monkeypatch.setattr(scraper, "sleep", lambda _seconds: None)
 
     details, failures = scraper.fetch_ranked_player_details(
         ["player-1", "player-2", "player-3", "player-4"]
     )
 
-    assert failures == [{"mid": "player-1", "error": "temporary outage"}]
-    assert set(requested) == {"player-1", "player-2"}
-    assert "player-3" not in details
+    assert failures == [{"mid": "player-1", "error_type": "RuntimeError"}]
+    assert set(requested) == {"player-1", "player-2", "player-3", "player-4"}
+    assert requested.count("player-1") == 2
+    assert set(details) == {"player-2", "player-3", "player-4"}
+
+
+def test_invalid_environment_number_uses_safe_bounded_value(monkeypatch):
+    monkeypatch.setenv("SAFE_TEST_VALUE", "invalid")
+    assert scraper.read_bounded_env_int("SAFE_TEST_VALUE", 3, 1, 4) == 3
+
+    monkeypatch.setenv("SAFE_TEST_VALUE", "99")
+    assert scraper.read_bounded_env_int("SAFE_TEST_VALUE", 3, 1, 4) == 4
+
+    monkeypatch.setenv("SAFE_TEST_VALUE", "-5")
+    assert scraper.read_bounded_env_int("SAFE_TEST_VALUE", 3, 1, 4) == 1
+
+
+def test_scrape_rechecks_only_player_details_with_incomplete_content(monkeypatch):
+    def detail(mid, unit_code, *, complete=True):
+        return {
+            "mid": mid,
+            "playerUnitTeamGroupMap": (
+                {
+                    "pvpteam": {
+                        "1": [
+                            {
+                                "unitCode": unit_code,
+                                "equipMap": {
+                                    "WEAPON": {"itemCode": "weapon"},
+                                    "ARMOR": {"itemCode": "armor"},
+                                    "ACC": {"itemCode": "accessory"},
+                                },
+                            }
+                        ]
+                    }
+                }
+                if complete
+                else {}
+            ),
+        }
+
+    calls = []
+    monkeypatch.setattr(scraper, "TARGET_PLAYER_COUNT", 2)
+    monkeypatch.setattr(scraper, "DETAIL_CONTENT_RECHECKS", 1)
+    monkeypatch.setattr(scraper, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        scraper,
+        "fetch_rank_data",
+        lambda: {"top100": [{"mid": "player-1"}, {"mid": "player-2"}]},
+    )
+
+    def fetch_details(mids):
+        calls.append(list(mids))
+        if len(calls) == 1:
+            return {
+                "player-1": detail("player-1", "u-alpha"),
+                "player-2": detail("player-2", "u-beta", complete=False),
+            }, []
+        return {"player-2": detail("player-2", "u-beta")}, []
+
+    monkeypatch.setattr(scraper, "fetch_ranked_player_details", fetch_details)
+    monkeypatch.setattr(scraper, "fetch_character_names", lambda _codes: {})
+
+    data = scraper.scrape()
+
+    assert calls == [["player-1", "player-2"], ["player-2"]]
+    assert data["diagnostics"]["detail_content_rechecks"] == 1
+    assert data["sampled_players"] == 2
 
 
 def test_failed_collection_keeps_previous_published_data(tmp_path, monkeypatch):
@@ -521,6 +599,28 @@ def test_debug_artifact_redacts_player_identifiers(tmp_path, monkeypatch):
 
     assert artifact["valid_players"] == 200
     assert artifact["diagnostic_error_counts"]["detail_fetch_failures"] == 1
+    assert "private-player" not in json.dumps(artifact)
+
+
+def test_detail_failure_summary_redacts_player_identifiers(tmp_path, monkeypatch):
+    monkeypatch.setenv("DEBUG", "1")
+    monkeypatch.setattr(scraper, "DEBUG_DIR", tmp_path)
+
+    scraper.dump_detail_failure_summary(
+        2,
+        1,
+        [{"mid": "private-player", "error_type": "TimeoutError"}],
+    )
+    artifact = json.loads(
+        (tmp_path / "detail_fetch_failures.json").read_text(encoding="utf-8")
+    )
+
+    assert artifact == {
+        "requested": 2,
+        "completed": 1,
+        "failure_count": 1,
+        "failure_types": {"TimeoutError": 1},
+    }
     assert "private-player" not in json.dumps(artifact)
 
 

@@ -29,7 +29,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Retries and structural rechecks are intentionally allowed to take time;
+    # a failed verification still leaves the last public JSON untouched.
+    timeout-minutes: 40
     outputs:
       should_deploy: ${{ steps.decision.outputs.should_deploy }}
     steps:
@@ -77,6 +79,12 @@ jobs:
         if: steps.decision.outputs.due == 'true'
         env:
           DEBUG: "1"
+          # Prefer a patient, complete collection over the old quick-fail pass.
+          PLAYER_FETCH_WORKERS: "3"
+          REQUEST_ATTEMPTS: "5"
+          REQUEST_TIMEOUT_SECONDS: "45"
+          DETAIL_FETCH_ROUNDS: "2"
+          DETAIL_CONTENT_RECHECKS: "1"
         run: python scripts/scrape_character_usage.py
 
       - name: Save collected data
