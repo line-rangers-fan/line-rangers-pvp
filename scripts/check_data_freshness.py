@@ -15,6 +15,7 @@ try:
         MAX_COLLECTION_DURATION_SECONDS,
         RANK_PERIODS,
         SCHEMA_VERSION,
+        validate_data,
     )
 except ImportError:  # Allows importing this module from the test suite.
     from scripts.quality_checks import (
@@ -22,6 +23,7 @@ except ImportError:  # Allows importing this module from the test suite.
         MAX_COLLECTION_DURATION_SECONDS,
         RANK_PERIODS,
         SCHEMA_VERSION,
+        validate_data,
     )
 
 
@@ -45,7 +47,7 @@ def parse_timestamp(value: object) -> datetime:
 
 
 def has_complete_sample(data: dict) -> bool:
-    """Check the publication guard fields without re-running full statistics."""
+    """Verify the public contract locally without fetching player details."""
     try:
         schema_version = int(data.get("schema_version", 0))
         target = int(data.get("target_players", 0))
@@ -55,6 +57,11 @@ def has_complete_sample(data: dict) -> bool:
         comparison = data.get("comparison")
         if not isinstance(quality, dict):
             return False
+        # The guard must inspect the actual counts and comparison metadata,
+        # not trust healthy-looking summary flags around a corrupt payload.
+        if target != 200 or sampled != 200:
+            return False
+        validate_data(data)
         comparison_periods = (
             comparison.get("periods") if isinstance(comparison, dict) else None
         )

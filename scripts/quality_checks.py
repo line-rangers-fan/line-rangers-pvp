@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 
 EQUIPMENT_TYPES = ("WEAPON", "ARMOR", "ACC")
@@ -121,9 +121,7 @@ def _validate_period_change(value: object, errors: list[str]) -> None:
         return
     if rank is not None and (not isinstance(rank, int) or isinstance(rank, bool)):
         errors.append("invalid period rank")
-    if occurrence_count is not None and (
-        not isinstance(occurrence_count, int) or isinstance(occurrence_count, bool)
-    ):
+    if not isinstance(occurrence_count, int) or isinstance(occurrence_count, bool):
         errors.append("invalid period occurrence count")
     if _parse_time(source_time) is None:
         errors.append("invalid period source timestamp")
@@ -144,6 +142,86 @@ def _validate_periods(value: object, errors: list[str]) -> None:
             errors.append(f"missing {period} rank change")
         else:
             _validate_period_change(value[period], errors)
+
+
+def _validate_public_comparison(data: dict, errors: list[str]) -> None:
+    """Validate the four public baselines even without a previous JSON file."""
+    comparison = data.get("comparison")
+    if not isinstance(comparison, dict):
+        errors.append("missing previous comparison")
+        return
+    if comparison.get("reference_mode") != CALENDAR_CLOSE_REFERENCE_MODE:
+        errors.append("invalid comparison reference mode")
+    current_time = _parse_time(data.get("updated_at"))
+    if current_time is None:
+        return
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+    jst = timezone(timedelta(hours=9))
+    local_date = current_time.astimezone(jst).date()
+    if comparison.get("calendar_date") != local_date.isoformat():
+        errors.append("comparison calendar date mismatch")
+    close_dates = {
+        "day": local_date - timedelta(days=1),
+        "week": local_date - timedelta(days=local_date.weekday() + 1),
+        "month": local_date.replace(day=1) - timedelta(days=1),
+    }
+    summaries = comparison.get("periods")
+    if not isinstance(summaries, dict):
+        errors.append("missing comparison periods")
+        summaries = {}
+    for period in RANK_PERIODS:
+        summary = summaries.get(period)
+        if not isinstance(summary, dict) or not isinstance(summary.get("comparable"), bool):
+            errors.append(f"invalid {period} comparison summary")
+            continue
+        if not summary["comparable"]:
+            if summary.get("updated_at") is not None or summary.get("calendar_date") is not None:
+                errors.append("non-comparable comparison contains a baseline")
+            continue
+        reference = _parse_time(summary.get("updated_at"))
+        if reference is None or reference.tzinfo is None:
+            errors.append("invalid comparison period timestamp")
+            continue
+        local_reference = reference.astimezone(jst)
+        age = (current_time - reference).total_seconds()
+        if summary.get("calendar_date") != local_reference.date().isoformat():
+            errors.append("comparison period calendar date mismatch")
+        if period == "hour":
+            if not 30 * 60 <= age <= 90 * 60:
+                errors.append("hour comparison outside verified window")
+        elif local_reference.date() != close_dates[period] or local_reference.hour not in (22, 23):
+            errors.append("comparison does not use the fixed JST close")
+
+    def validate_row(row: dict) -> None:
+        change = row.get("change")
+        periods = change.get("periods") if isinstance(change, dict) else None
+        _validate_periods(periods, errors)
+        if not isinstance(periods, dict):
+            return
+        for period in RANK_PERIODS:
+            value = periods.get(period)
+            if not isinstance(value, dict) or value.get("comparable") is not True:
+                continue
+            summary = summaries.get(period)
+            if (
+                not isinstance(summary, dict)
+                or summary.get("comparable") is not True
+                or value.get("from_updated_at") != summary.get("updated_at")
+            ):
+                errors.append("row comparison baseline mismatch")
+                continue
+            reference = _parse_time(value.get("from_updated_at"))
+            if reference is not None and reference.tzinfo is not None:
+                interval = round((current_time - reference).total_seconds() / 60, 1)
+                if not _number_matches(value.get("interval_minutes"), interval):
+                    errors.append("row comparison interval mismatch")
+
+    for row in data.get("characters", []):
+        validate_row(row)
+        for category in row.get("equipment_rankings", {}).values():
+            for item in category.get("items", []):
+                validate_row(item)
 
 
 def _validate_comparison(data: dict, previous: dict, errors: list[str]) -> None:
@@ -505,6 +583,8 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
                 sizes_valid = False
             if not sizes_valid or team_total != players or slot_total != slots:
                 errors.append("team size distribution mismatch")
+
+    _validate_public_comparison(data, errors)
 
     if previous:
         previous_target = int(previous.get("target_players", target_players))

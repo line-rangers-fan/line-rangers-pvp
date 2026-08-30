@@ -979,12 +979,10 @@ def _occurrence_delta(current_value: object, previous_value: object | None) -> i
     does not quietly turn uncertain data into a false zero.
     """
     current_count = _exact_int(current_value)
-    if current_count is None:
+    if current_count is None or current_count < 0:
         return None
-    if previous_value is None:
-        return current_count
     previous_count = _exact_int(previous_value)
-    if previous_count is None:
+    if previous_count is None or previous_count < 0:
         return None
     return current_count - previous_count
 
@@ -1017,7 +1015,12 @@ def _period_change(
 
     old_rank = _exact_int(old.get("rank")) if isinstance(old, dict) else None
     current_rank = _exact_int(current_row.get("rank"))
-    old_count = old.get("occurrence_count") if isinstance(old, dict) else None
+    # Only an absent character in an existing snapshot means zero. A present
+    # row with a missing/null count is unknown, never a fabricated increase.
+    old_count = old.get("occurrence_count") if isinstance(old, dict) else 0
+    delta = _occurrence_delta(current_row.get("occurrence_count"), old_count)
+    if delta is None:
+        return result
 
     result.update(
         {
@@ -1025,9 +1028,7 @@ def _period_change(
             # Ranks cannot be inferred for a character absent from a snapshot.
             "rank": old_rank - current_rank if old_rank is not None and current_rank is not None else None,
             # Positive means this character is used in more defence-team slots.
-            "occurrence_count": _occurrence_delta(
-                current_row.get("occurrence_count"), old_count
-            ),
+            "occurrence_count": delta,
             "from_updated_at": reference.get("updated_at"),
             "interval_minutes": round(
                 (current_time - reference_time).total_seconds() / 60,
@@ -1064,6 +1065,12 @@ def _equipment_period_change(
     if reference_character is None or reference_time is None or current_time is None:
         return result
 
+    rankings = reference_character.get("equipment_rankings")
+    category = rankings.get(equipment_type) if isinstance(rankings, dict) else None
+    if not isinstance(category, dict) or not isinstance(category.get("items"), list):
+        # Older character-only snapshots contain no equipment evidence.
+        return result
+
     old_item = _find_history_equipment(
         reference_character,
         equipment_type,
@@ -1071,15 +1078,16 @@ def _equipment_period_change(
     )
     old_rank = _exact_int(old_item.get("rank")) if isinstance(old_item, dict) else None
     current_rank = _exact_int(current_item.get("rank"))
-    old_count = old_item.get("occurrence_count") if isinstance(old_item, dict) else None
+    old_count = old_item.get("occurrence_count") if isinstance(old_item, dict) else 0
+    delta = _occurrence_delta(current_item.get("occurrence_count"), old_count)
+    if delta is None:
+        return result
 
     result.update(
         {
             "comparable": True,
             "rank": old_rank - current_rank if old_rank is not None and current_rank is not None else None,
-            "occurrence_count": _occurrence_delta(
-                current_item.get("occurrence_count"), old_count
-            ),
+            "occurrence_count": delta,
             "from_updated_at": reference.get("updated_at"),
             "interval_minutes": round(
                 (current_time - reference_time).total_seconds() / 60,
@@ -1467,7 +1475,7 @@ def main() -> None:
     previous_history = load_json(HISTORY_PATH)
     try:
         data = scrape()
-        add_previous_comparison(data, previous, previous_history)
+        add_previous_comparison(data, previous, previous_history or {"snapshots": []})
         validate_data(data, previous)
         history = update_history(data, previous_history)
         write_outputs(data, history)

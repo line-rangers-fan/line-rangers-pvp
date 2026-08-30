@@ -3,35 +3,19 @@ from datetime import datetime, timedelta, timezone
 
 from scripts.check_data_freshness import check_freshness
 from scripts.quality_checks import CALENDAR_CLOSE_REFERENCE_MODE, SCHEMA_VERSION
+from scripts.scrape_character_usage import add_previous_comparison
+from test_quality_checks import valid_data
 
 
 def write_timestamp(path, timestamp):
+    data = valid_data(sampled_players=200)
+    data["updated_at"] = timestamp.isoformat()
+    data["collection_quality"]["collection_started_at"] = (timestamp - timedelta(seconds=12)).isoformat()
+    data["collection_quality"]["collection_duration_seconds"] = 12.0
+    data["collection_quality"]["detail_fetch_duration_seconds"] = 10.0
+    add_previous_comparison(data, None, {"snapshots": []})
     path.write_text(
-        json.dumps(
-            {
-                "schema_version": SCHEMA_VERSION,
-                "updated_at": timestamp.isoformat(),
-                "target_players": 200,
-                "sampled_players": 200,
-                "complete_target": True,
-                "characters": [{"unit_code": "u-a"}],
-                "collection_quality": {
-                    "sample_coverage": 100.0,
-                    "equipment_fill_rate": 99.9,
-                    "collection_duration_seconds": 12.0,
-                    "detail_fetch_duration_seconds": 10.0,
-                    "detail_fetch_failures": 0,
-                    "invalid_player_records": 0,
-                },
-                "comparison": {
-                    "reference_mode": CALENDAR_CLOSE_REFERENCE_MODE,
-                    "periods": {
-                        period: {"comparable": False}
-                        for period in ("hour", "day", "week", "month")
-                    }
-                },
-            }
-        ),
+        json.dumps(data),
         encoding="utf-8",
     )
 

@@ -103,6 +103,115 @@ export function isHourlyBaselineWindow(nowMs = Date.now()) {
 }
 
 
+function integerInRange(value, minimum, maximum) {
+  return Number.isSafeInteger(value) && value >= minimum && value <= maximum;
+}
+
+
+function jstDate(timestamp) {
+  return new Date(timestamp + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+
+function validComparison(data, updatedMs) {
+  const comparison = data.comparison;
+  if (comparison?.calendar_date !== jstDate(updatedMs)) return false;
+  const midnight = Date.parse(`${jstDate(updatedMs)}T00:00:00Z`);
+  const currentDate = new Date(midnight);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const closeDates = {
+    day: new Date(midnight - dayMs).toISOString().slice(0, 10),
+    week: new Date(midnight - (currentDate.getUTCDay() || 7) * dayMs).toISOString().slice(0, 10),
+    month: new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), 0)).toISOString().slice(0, 10),
+  };
+  return REQUIRED_PERIODS.every((period) => {
+    const summary = comparison?.periods?.[period];
+    if (typeof summary?.comparable !== "boolean") return false;
+    if (!summary.comparable) return summary.updated_at == null && summary.calendar_date == null;
+    const reference = typeof summary.updated_at === "string" ? Date.parse(summary.updated_at) : NaN;
+    if (!Number.isFinite(reference) || summary.calendar_date !== jstDate(reference)) return false;
+    const age = updatedMs - reference;
+    if (period === "hour") return age >= 30 * 60_000 && age <= 90 * 60_000;
+    const hour = new Date(reference + 9 * 60 * 60 * 1000).getUTCHours();
+    return summary.calendar_date === closeDates[period] && (hour === 22 || hour === 23);
+  });
+}
+
+
+function validRowPeriods(row, data, updatedMs) {
+  return REQUIRED_PERIODS.every((period) => {
+    const value = row?.change?.periods?.[period];
+    if (typeof value?.comparable !== "boolean") return false;
+    if (!value.comparable) {
+      return ["rank", "occurrence_count", "from_updated_at", "interval_minutes"]
+        .every((key) => value[key] == null);
+    }
+    const summary = data.comparison.periods[period];
+    if (!summary.comparable || value.from_updated_at !== summary.updated_at) return false;
+    const interval = (updatedMs - Date.parse(summary.updated_at)) / 60_000;
+    return Number.isSafeInteger(value.occurrence_count) &&
+      (value.rank === null || Number.isSafeInteger(value.rank)) &&
+      typeof value.interval_minutes === "number" &&
+      // Python rounds to one decimal and preserves microseconds; Date.parse
+      // preserves milliseconds. Accept that rounding, not a changed baseline.
+      Math.abs(value.interval_minutes - interval) <= 0.051;
+  });
+}
+
+
+function validCountStructure(data, updatedMs) {
+  const slots = data.character_slots;
+  if (!integerInRange(slots, 200, 2000) || data.unique_characters !== data.characters.length) return false;
+  if (!validComparison(data, updatedMs)) return false;
+  const codes = new Set();
+  let total = 0;
+  let previousCount = Infinity;
+  let previousRank = 0;
+  return data.characters.every((row, index) => {
+    const count = row?.occurrence_count;
+    const players = row?.player_count;
+    const rank = count === previousCount ? previousRank : index + 1;
+    if (
+      typeof row?.unit_code !== "string" || !row.unit_code || codes.has(row.unit_code) ||
+      !integerInRange(count, 1, slots) || count > previousCount ||
+      !integerInRange(players, 1, Math.min(count, 200)) || row.rank !== rank ||
+      typeof row.adoption_rate !== "number" || !Number.isFinite(row.adoption_rate) ||
+      Math.abs(row.adoption_rate - Math.round(players / 200 * 1000) / 10) > 0.001 ||
+      !validRowPeriods(row, data, updatedMs)
+    ) return false;
+    codes.add(row.unit_code);
+    previousCount = count;
+    previousRank = rank;
+    total += count;
+    return ["WEAPON", "ARMOR", "ACC"].every((kind) => {
+      const category = row.equipment_rankings?.[kind];
+      if (!category || !Array.isArray(category.items) ||
+          !integerInRange(category.equipped_occurrence_count, 0, count) ||
+          !integerInRange(category.equipped_player_count, 0, Math.min(players, category.equipped_occurrence_count))) return false;
+      let itemTotal = 0;
+      let previousItemCount = Infinity;
+      let previousItemRank = 0;
+      const itemCodes = new Set();
+      return category.items.every((item, itemIndex) => {
+        const itemRank = item?.occurrence_count === previousItemCount ? previousItemRank : itemIndex + 1;
+        if (
+          typeof item?.item_code !== "string" || !item.item_code || itemCodes.has(item.item_code) ||
+          !integerInRange(item.occurrence_count, 1, category.equipped_occurrence_count) ||
+          item.occurrence_count > previousItemCount ||
+          !integerInRange(item.player_count, 1, Math.min(item.occurrence_count, category.equipped_player_count)) ||
+          item.rank !== itemRank || !validRowPeriods(item, data, updatedMs)
+        ) return false;
+        itemCodes.add(item.item_code);
+        itemTotal += item.occurrence_count;
+        previousItemCount = item.occurrence_count;
+        previousItemRank = itemRank;
+        return true;
+      }) && itemTotal === category.equipped_occurrence_count;
+    });
+  }) && total === slots;
+}
+
+
 export function inspectDataHealth(data, nowMs = Date.now()) {
   const updatedAt = String(data?.updated_at || "");
   const updatedMs = Date.parse(updatedAt);
@@ -159,7 +268,7 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
     Number.isInteger(schemaVersion) &&
     schemaVersion >= MIN_SCHEMA_VERSION &&
     referenceMode === CALENDAR_CLOSE_REFERENCE_MODE &&
-    targetPlayers > 0 &&
+    data.target_players === 200 && data.sampled_players === 200 &&
     sampledPlayers === targetPlayers &&
     data?.complete_target === true &&
     Array.isArray(data?.characters) &&
@@ -181,7 +290,7 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
         comparisonPeriods &&
         typeof comparisonPeriods[period] === "object" &&
         typeof comparisonPeriods[period]?.comparable === "boolean",
-    );
+    ) && validCountStructure(data, updatedMs);
   if (!completeSample) {
     return {
       status: "invalid_data",
@@ -315,7 +424,7 @@ export async function runWatchdog(
         // sample is fresh. The scraper keeps the current verified data if the
         // source is unavailable, rather than publishing a partial result.
         inputs: {
-          force_collection: (calendarAnchor || hourlyBaseline) ? "true" : "false",
+          force_collection: (calendarAnchor || hourlyBaseline || repairReason !== "ok") ? "true" : "false",
         },
       }),
     },

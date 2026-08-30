@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
           PYTHONPATH=. pytest -q
           node --check docs/assets/app.js
-          node --test tests/test_cloudflare_watchdog.mjs
+          node --test tests/*.mjs
 
       - name: Decide whether collection is due
         id: decision
