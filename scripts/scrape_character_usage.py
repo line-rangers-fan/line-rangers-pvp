@@ -98,6 +98,11 @@ DETAIL_CONTENT_RECHECKS = read_bounded_env_int(
 )
 OUTPUT_PATH = Path("docs/data/character_usage.json")
 HISTORY_PATH = Path("docs/data/character_usage_history.json")
+# The watchdog must not repeatedly download the full ranking (which includes
+# every character and equipment row) just to decide whether a collection is
+# healthy. This small sidecar is written only after the full public payload
+# has passed validate_data().
+HEALTH_PATH = Path("docs/data/character_usage_health.json")
 # Retain only the short rolling window needed for the one-hour comparison, plus
 # one verified close per JST date. Keeping every half-hour snapshot for a
 # month would eventually discard the month-end baseline (or bloat the public
@@ -1527,13 +1532,57 @@ def update_history(
     }
 
 
+def health_summary(data: dict) -> dict:
+    """Return the minimal, non-player-specific evidence used by the watchdog."""
+    comparison = data["comparison"]
+    quality = data["collection_quality"]
+    return {
+        "health_schema_version": 1,
+        "source_schema_version": data["schema_version"],
+        "updated_at": data["updated_at"],
+        "target_players": data["target_players"],
+        "sampled_players": data["sampled_players"],
+        "character_slots": data["character_slots"],
+        "unique_characters": data["unique_characters"],
+        "complete_target": data["complete_target"],
+        # This assertion is made only after the complete public payload has
+        # passed the same strict validator used before publication.
+        "validated_full_sample": True,
+        "collection_quality": {
+            key: quality[key]
+            for key in (
+                "sample_coverage",
+                "equipment_fill_rate",
+                "detail_fetch_failures",
+                "invalid_player_records",
+                "collection_duration_seconds",
+                "detail_fetch_duration_seconds",
+            )
+        },
+        "comparison": {
+            "reference_mode": comparison["reference_mode"],
+            "calendar_date": comparison["calendar_date"],
+            "periods": {
+                period: {
+                    key: comparison["periods"][period][key]
+                    for key in ("comparable", "updated_at", "calendar_date")
+                }
+                for period in RANK_COMPARISON_PERIODS
+            },
+        },
+    }
+
+
 def write_outputs(data: dict, history: dict) -> None:
     temporary_output = OUTPUT_PATH.with_suffix(".json.tmp")
     temporary_history = HISTORY_PATH.with_suffix(".json.tmp")
+    temporary_health = HEALTH_PATH.with_suffix(".json.tmp")
     save_json(temporary_output, data)
     save_json(temporary_history, history)
+    save_json(temporary_health, health_summary(data))
     temporary_history.replace(HISTORY_PATH)
     temporary_output.replace(OUTPUT_PATH)
+    temporary_health.replace(HEALTH_PATH)
 
 
 def dump_detail_failure_summary(

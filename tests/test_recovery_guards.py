@@ -15,6 +15,7 @@ from test_comparison_guards import complete_data
 def run_collection(tmp_path, monkeypatch, previous, history):
     output = tmp_path / "data.json"
     history_path = tmp_path / "history.json"
+    health_path = tmp_path / "health.json"
     output.write_text(json.dumps(previous))
     history_path.write_text(json.dumps(history))
     current = complete_data()
@@ -22,6 +23,7 @@ def run_collection(tmp_path, monkeypatch, previous, history):
     current["termination_reason"] = "api_target_reached"
     monkeypatch.setattr(scraper, "OUTPUT_PATH", output)
     monkeypatch.setattr(scraper, "HISTORY_PATH", history_path)
+    monkeypatch.setattr(scraper, "HEALTH_PATH", health_path)
     monkeypatch.setattr(scraper, "scrape", lambda: deepcopy(current))
     monkeypatch.setenv("DEBUG", "0")
     scraper.main()
