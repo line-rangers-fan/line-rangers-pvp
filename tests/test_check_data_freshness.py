@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from scripts.check_data_freshness import check_freshness
-from scripts.quality_checks import SCHEMA_VERSION
+from scripts.quality_checks import CALENDAR_CLOSE_REFERENCE_MODE, SCHEMA_VERSION
 
 
 def write_timestamp(path, timestamp):
@@ -24,6 +24,7 @@ def write_timestamp(path, timestamp):
                     "invalid_player_records": 0,
                 },
                 "comparison": {
+                    "reference_mode": CALENDAR_CLOSE_REFERENCE_MODE,
                     "periods": {
                         period: {"comparable": False}
                         for period in ("hour", "day", "week", "month")

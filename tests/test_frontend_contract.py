@@ -56,6 +56,10 @@ def test_history_and_equipment_change_contract_is_present():
     assert "setupRankPeriodSelector" in app
     assert "rankHour" in app
     assert "rankComparison" in app
+    assert 'rankDay: "前日締め"' in app
+    assert 'rankWeek: "先週締め"' in app
+    assert 'rankMonth: "先月締め"' in app
+    assert "CALENDAR_CLOSE_REFERENCE_MODE" in app
     assert 'data-rank-period="hour"' in (ROOT / "docs/index.html").read_text(encoding="utf-8")
     assert 'metric: "occurrence"' in app
     assert 'rankHistoryPending' in app
