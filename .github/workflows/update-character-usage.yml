@@ -62,7 +62,7 @@ jobs:
           FORCE_COLLECTION: ${{ (github.event_name == 'workflow_dispatch' && inputs.force_collection) || contains(github.event.head_commit.message, '[collect-now]') }}
         run: |
           set -euo pipefail
-          args=(--max-age-minutes 50 --github-output "$GITHUB_OUTPUT")
+          args=(--max-age-minutes 60 --github-output "$GITHUB_OUTPUT")
           if [ "$FORCE_COLLECTION" = "true" ]; then
             args+=(--force)
           fi
