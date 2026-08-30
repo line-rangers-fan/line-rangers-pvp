@@ -397,35 +397,95 @@ h1 {
   font-size: 0.85rem;
 }
 
-/* The period selector lets each visitor choose one compact movement label.
-   Keeping it in the sticky heading prevents the ranking column from becoming
-   crowded with three simultaneous date ranges. */
+/* Select one baseline for the character-count change. The fixed caption
+   makes it clear that the badge is a count difference, not a rank movement. */
 .rank-period-selector {
-  display: inline-flex;
+  position: relative;
+  display: grid;
   flex: 0 0 auto;
-  gap: 0.25rem;
-  padding: 0.2rem;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  background: var(--background);
+  justify-items: end;
+  min-width: 8.5rem;
 }
 
-.rank-period-selector button {
-  min-height: 2rem;
-  padding: 0.35rem 0.55rem;
-  border: 1px solid transparent;
-  border-radius: 0.5rem;
-  color: var(--muted);
-  background: transparent;
-  font-size: 0.74rem;
+.rank-period-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  min-height: 2.35rem;
+  min-width: 8.5rem;
+  padding: 0.4rem 0.65rem 0.4rem 0.75rem;
+  border-color: var(--border);
+  border-radius: 0.65rem;
+  color: var(--text);
+  background: var(--background);
+  font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
 }
 
-.rank-period-selector button:hover {
+.rank-period-trigger:hover,
+.rank-period-trigger.rank-period-open {
+  border-color: var(--accent-dark);
   background: var(--surface-light);
 }
 
-.rank-period-selector button.rank-period-selected {
+.rank-period-arrow {
+  color: var(--accent);
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.rank-period-trigger.rank-period-open .rank-period-arrow {
+  transform: rotate(180deg);
+}
+
+.rank-period-comparison-label {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.rank-period-options {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  display: grid;
+  min-width: 10.25rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+  box-shadow: var(--shadow);
+}
+
+.rank-period-options[hidden] {
+  display: none;
+}
+
+.rank-period-options button {
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  color: var(--text);
+  background: transparent;
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.rank-period-options button:hover {
+  background: var(--surface-light);
+}
+
+.rank-period-options button.rank-period-selected {
   border-color: var(--accent-dark);
   color: #062417;
   background: var(--accent);
