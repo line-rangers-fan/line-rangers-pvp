@@ -404,7 +404,7 @@ h1 {
   display: grid;
   flex: 0 0 auto;
   justify-items: end;
-  min-width: 8.5rem;
+  min-width: 10rem;
 }
 
 .rank-period-trigger {
@@ -413,7 +413,7 @@ h1 {
   justify-content: space-between;
   gap: 0.8rem;
   min-height: 2.35rem;
-  min-width: 8.5rem;
+  min-width: 10rem;
   padding: 0.4rem 0.65rem 0.4rem 0.75rem;
   border-color: var(--border);
   border-radius: 0.65rem;
@@ -442,11 +442,12 @@ h1 {
 
 .rank-period-comparison-label {
   display: block;
-  margin-top: 0.2rem;
-  color: var(--muted);
-  font-size: 0.7rem;
-  font-weight: 700;
-  line-height: 1.2;
+  margin-top: 0.28rem;
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
   text-align: right;
 }
 

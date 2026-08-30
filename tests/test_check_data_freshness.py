@@ -2,12 +2,14 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from scripts.check_data_freshness import check_freshness
+from scripts.quality_checks import SCHEMA_VERSION
 
 
 def write_timestamp(path, timestamp):
     path.write_text(
         json.dumps(
             {
+                "schema_version": SCHEMA_VERSION,
                 "updated_at": timestamp.isoformat(),
                 "target_players": 200,
                 "sampled_players": 200,
@@ -20,6 +22,12 @@ def write_timestamp(path, timestamp):
                     "detail_fetch_duration_seconds": 10.0,
                     "detail_fetch_failures": 0,
                     "invalid_player_records": 0,
+                },
+                "comparison": {
+                    "periods": {
+                        period: {"comparable": False}
+                        for period in ("hour", "day", "week", "month")
+                    }
                 },
             }
         ),
@@ -85,3 +93,19 @@ def test_fresh_data_with_impossible_collection_timing_is_due(tmp_path):
 
     assert result.due is True
     assert result.reason == "invalid_quality"
+
+
+def test_legacy_schema_or_missing_hour_comparison_is_due(tmp_path):
+    now = datetime(2026, 8, 27, 3, 0, tzinfo=timezone.utc)
+    path = tmp_path / "ranking.json"
+    write_timestamp(path, now - timedelta(minutes=5))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["schema_version"] = SCHEMA_VERSION - 1
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    assert check_freshness(path, 50, now=now).reason == "invalid_quality"
+
+    data["schema_version"] = SCHEMA_VERSION
+    del data["comparison"]["periods"]["hour"]
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert check_freshness(path, 50, now=now).reason == "invalid_quality"

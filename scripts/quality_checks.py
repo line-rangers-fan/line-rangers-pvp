@@ -9,7 +9,17 @@ from datetime import datetime
 
 EQUIPMENT_TYPES = ("WEAPON", "ARMOR", "ACC")
 MAX_CHARACTERS_PER_PLAYER = 10
-RANK_PERIODS = ("day", "week", "month")
+# Schema 10 requires a complete set of count-comparison periods, including
+# the hourly baseline shown by the public selector.  Keeping this contract in
+# one place prevents a collector, freshness guard, or viewer from accepting a
+# partial release.
+SCHEMA_VERSION = 10
+RANK_PERIODS = ("hour", "day", "week", "month")
+# A collection may spend extra time retrying and verifying a suspect player,
+# but must still fit inside the GitHub Actions job with time left to preserve
+# the last known-good result.  Any run that exceeds this budget is rejected
+# instead of publishing a half-verified snapshot.
+MAX_COLLECTION_DURATION_SECONDS = 35 * 60
 
 
 def assign_competition_ranks(rows: list[dict]) -> list[dict]:
@@ -231,7 +241,7 @@ def _validate_comparison(data: dict, previous: dict, errors: list[str]) -> None:
                     errors.append("non-comparable comparison period timestamp")
 
 
-def validate_data(data: dict, previous: dict | None = None) -> bool:
+def _validate_data(data: dict, previous: dict | None = None) -> bool:
     """Reject incomplete, inconsistent, or statistically impossible output."""
     errors: list[str] = []
     schema_version = int(data.get("schema_version", 0))
@@ -240,7 +250,7 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
     slots = int(data.get("character_slots", 0))
     characters = data.get("characters")
 
-    if schema_version < 9:
+    if schema_version < SCHEMA_VERSION:
         errors.append("unsupported schema")
     if _parse_time(data.get("updated_at")) is None:
         errors.append("invalid updated timestamp")
@@ -427,7 +437,7 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
             or not math.isfinite(collection_duration)
             or not math.isfinite(detail_duration)
             or collection_duration < 0
-            or collection_duration > 15 * 60
+            or collection_duration > MAX_COLLECTION_DURATION_SECONDS
             or detail_duration < 0
             or detail_duration > collection_duration
         ):
@@ -512,3 +522,19 @@ def validate_data(data: dict, previous: dict | None = None) -> bool:
     if errors:
         raise ValueError("; ".join(errors))
     return True
+
+
+def validate_data(data: dict, previous: dict | None = None) -> bool:
+    """Validate published output without leaking parser implementation errors.
+
+    The collector calls this immediately before replacing either public JSON
+    file.  Malformed upstream structures should therefore become an ordinary
+    validation failure, never an uncaught TypeError/KeyError that can obscure
+    why publication was refused.
+    """
+    try:
+        return _validate_data(data, previous)
+    except ValueError:
+        raise
+    except (AttributeError, KeyError, TypeError, OverflowError) as error:
+        raise ValueError("invalid published data structure") from error

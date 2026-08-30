@@ -35,6 +35,10 @@ jobs:
           fi
           response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
           account_id="$(printf '%s' "$response" | jq -er '.result | if length == 1 then .[0].id else error("Token must access exactly one Cloudflare account") end')"
+          if ! [[ "$account_id" =~ ^[A-Fa-f0-9]{32}$ ]]; then
+            echo "Cloudflare returned an invalid account ID."
+            exit 1
+          fi
           echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
 
       - name: Deploy Worker and Cron trigger

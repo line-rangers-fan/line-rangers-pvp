@@ -1,6 +1,12 @@
 const MAX_AGE_MS = 55 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 10 * 60 * 1000;
 const EXTERNAL_REQUEST_TIMEOUT_MS = 12_000;
+const MAX_DATA_RESPONSE_BYTES = 4 * 1024 * 1024;
+const MAX_COLLECTION_DURATION_SECONDS = 35 * 60;
+const MIN_SCHEMA_VERSION = 10;
+const REQUIRED_PERIODS = ["hour", "day", "week", "month"];
+const PUBLISHED_DATA_HOST = "line-rangers-fan.github.io";
+const PUBLISHED_DATA_PATH = "/line-rangers-pvp/data/character_usage.json";
 const SERVICE_NAME = "line-rangers-pvp-watchdog";
 const SCHEDULE = "27 * * * *";
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -24,21 +30,25 @@ function requiredRepository(env) {
 }
 
 
-function requiredHttpsUrl(env, name) {
-  const value = requiredEnvironment(env, name);
+function requiredPublishedDataUrl(env) {
+  const value = requiredEnvironment(env, "DATA_URL");
   try {
     const url = new URL(value);
     if (
       url.protocol !== "https:" ||
-      !url.hostname ||
+      url.hostname !== PUBLISHED_DATA_HOST ||
+      url.pathname !== PUBLISHED_DATA_PATH ||
+      url.port ||
       url.username ||
-      url.password
+      url.password ||
+      url.search ||
+      url.hash
     ) {
       throw new Error("invalid URL");
     }
     return url.toString();
   } catch {
-    throw new Error(`${name} must be a credential-free HTTPS URL.`);
+    throw new Error("DATA_URL must be the published ranking JSON URL.");
   }
 }
 
@@ -50,7 +60,11 @@ async function fetchWithTimeout(fetchImpl, url, options = {}) {
     EXTERNAL_REQUEST_TIMEOUT_MS,
   );
   try {
-    return await fetchImpl(url, { ...options, signal: controller.signal });
+    return await fetchImpl(url, {
+      ...options,
+      redirect: "error",
+      signal: controller.signal,
+    });
   } finally {
     clearTimeout(timeoutId);
   }
@@ -73,6 +87,8 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
   const equipmentFillRate = Number(quality?.equipment_fill_rate);
   const collectionDuration = Number(quality?.collection_duration_seconds);
   const detailDuration = Number(quality?.detail_fetch_duration_seconds);
+  const schemaVersion = Number(data?.schema_version);
+  const comparisonPeriods = data?.comparison?.periods;
   const metrics = {
     sampled_players: Number.isFinite(sampledPlayers) ? sampledPlayers : null,
     target_players: Number.isFinite(targetPlayers) ? targetPlayers : null,
@@ -112,6 +128,8 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
     };
   }
   const completeSample =
+    Number.isInteger(schemaVersion) &&
+    schemaVersion >= MIN_SCHEMA_VERSION &&
     targetPlayers > 0 &&
     sampledPlayers === targetPlayers &&
     data?.complete_target === true &&
@@ -122,13 +140,19 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
     invalidRecords === 0 &&
     Number.isFinite(collectionDuration) &&
     collectionDuration >= 0 &&
-    collectionDuration <= 15 * 60 &&
+    collectionDuration <= MAX_COLLECTION_DURATION_SECONDS &&
     Number.isFinite(detailDuration) &&
     detailDuration >= 0 &&
     detailDuration <= collectionDuration &&
     Number.isFinite(equipmentFillRate) &&
     equipmentFillRate >= 0 &&
-    equipmentFillRate <= 100;
+    equipmentFillRate <= 100 &&
+    REQUIRED_PERIODS.every(
+      (period) =>
+        comparisonPeriods &&
+        typeof comparisonPeriods[period] === "object" &&
+        typeof comparisonPeriods[period]?.comparable === "boolean",
+    );
   if (!completeSample) {
     return {
       status: "invalid_data",
@@ -158,7 +182,19 @@ async function fetchPublishedData(dataUrl, fetchImpl, nowMs, queryName) {
   if (!response.ok) {
     throw new Error(`Published data request failed: HTTP ${response.status}`);
   }
-  return response.json();
+  const contentLength = Number(response.headers?.get("Content-Length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_DATA_RESPONSE_BYTES) {
+    throw new Error("Published data response exceeds the safety limit.");
+  }
+  const body = await response.text();
+  if (new TextEncoder().encode(body).byteLength > MAX_DATA_RESPONSE_BYTES) {
+    throw new Error("Published data response exceeds the safety limit.");
+  }
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new Error("Published data response is not valid JSON.");
+  }
 }
 
 
@@ -166,7 +202,7 @@ export async function getHealthSnapshot(
   env,
   { fetchImpl = fetch, nowMs = Date.now() } = {},
 ) {
-  const dataUrl = requiredHttpsUrl(env, "DATA_URL");
+  const dataUrl = requiredPublishedDataUrl(env);
   let dataHealth;
   try {
     const data = await fetchPublishedData(dataUrl, fetchImpl, nowMs, "health");
@@ -211,7 +247,7 @@ export async function runWatchdog(
   { fetchImpl = fetch, nowMs = Date.now() } = {},
 ) {
   const repository = requiredRepository(env);
-  const dataUrl = requiredHttpsUrl(env, "DATA_URL");
+  const dataUrl = requiredPublishedDataUrl(env);
 
   let repairReason = "unreadable";
   try {

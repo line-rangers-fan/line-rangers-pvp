@@ -9,6 +9,19 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from quality_checks import (
+        MAX_COLLECTION_DURATION_SECONDS,
+        RANK_PERIODS,
+        SCHEMA_VERSION,
+    )
+except ImportError:  # Allows importing this module from the test suite.
+    from scripts.quality_checks import (
+        MAX_COLLECTION_DURATION_SECONDS,
+        RANK_PERIODS,
+        SCHEMA_VERSION,
+    )
+
 
 DEFAULT_DATA_PATH = Path("docs/data/character_usage.json")
 
@@ -32,24 +45,38 @@ def parse_timestamp(value: object) -> datetime:
 def has_complete_sample(data: dict) -> bool:
     """Check the publication guard fields without re-running full statistics."""
     try:
+        schema_version = int(data.get("schema_version", 0))
         target = int(data.get("target_players", 0))
         sampled = int(data.get("sampled_players", 0))
         characters = data.get("characters")
         quality = data.get("collection_quality")
+        comparison = data.get("comparison")
         if not isinstance(quality, dict):
+            return False
+        comparison_periods = (
+            comparison.get("periods") if isinstance(comparison, dict) else None
+        )
+        if not isinstance(comparison_periods, dict):
+            return False
+        if any(
+            not isinstance(comparison_periods.get(period), dict)
+            or not isinstance(comparison_periods[period].get("comparable"), bool)
+            for period in RANK_PERIODS
+        ):
             return False
         collection_duration = float(quality.get("collection_duration_seconds"))
         detail_duration = float(quality.get("detail_fetch_duration_seconds"))
         equipment_fill_rate = float(quality.get("equipment_fill_rate"))
         return (
-            target > 0
+            schema_version >= SCHEMA_VERSION
+            and target > 0
             and sampled == target
             and data.get("complete_target") is True
             and isinstance(characters, list)
             and len(characters) > 0
             and float(quality.get("sample_coverage", 0)) == 100.0
             and math.isfinite(collection_duration)
-            and 0 <= collection_duration <= 15 * 60
+            and 0 <= collection_duration <= MAX_COLLECTION_DURATION_SECONDS
             and math.isfinite(detail_duration)
             and 0 <= detail_duration <= collection_duration
             and math.isfinite(equipment_fill_rate)
@@ -57,7 +84,7 @@ def has_complete_sample(data: dict) -> bool:
             and int(quality.get("detail_fetch_failures", -1)) == 0
             and int(quality.get("invalid_player_records", -1)) == 0
         )
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return False
 
 
@@ -87,7 +114,7 @@ def check_freshness(
         if not has_complete_sample(data):
             return Freshness(True, None, "invalid_quality")
         updated_at = parse_timestamp(data.get("updated_at"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError, OverflowError, json.JSONDecodeError):
         return Freshness(True, None, "missing_or_invalid_data")
 
     age_minutes = (current_time - updated_at).total_seconds() / 60

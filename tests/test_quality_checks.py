@@ -1,6 +1,12 @@
 import pytest
 
-from scripts.quality_checks import equipment_rankings, validate_data
+from scripts.quality_checks import (
+    MAX_COLLECTION_DURATION_SECONDS,
+    RANK_PERIODS,
+    SCHEMA_VERSION,
+    equipment_rankings,
+    validate_data,
+)
 
 
 def test_equipment_counts_and_unique_players():
@@ -68,7 +74,7 @@ def valid_data(sampled_players=2, character_slots=None):
         previous_rank = rank
 
     return {
-        "schema_version": 9,
+        "schema_version": SCHEMA_VERSION,
         "updated_at": "2026-08-27T03:00:00+00:00",
         "target_players": sampled_players,
         "sampled_players": sampled_players,
@@ -118,6 +124,10 @@ def test_valid_data():
     assert validate_data(valid_data())
 
 
+def test_comparison_contract_requires_all_four_periods():
+    assert RANK_PERIODS == ("hour", "day", "week", "month")
+
+
 def test_incomplete_sample_rejected():
     data = valid_data()
     data["complete_target"] = False
@@ -147,5 +157,12 @@ def test_invalid_collection_timing_is_rejected():
     data = valid_data()
     data["collection_quality"]["detail_fetch_duration_seconds"] = 61.0
 
+    with pytest.raises(ValueError, match="collection timing"):
+        validate_data(data)
+
+    data = valid_data()
+    data["collection_quality"]["collection_duration_seconds"] = (
+        MAX_COLLECTION_DURATION_SECONDS + 1
+    )
     with pytest.raises(ValueError, match="collection timing"):
         validate_data(data)

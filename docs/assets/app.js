@@ -6,6 +6,7 @@ const HISTORY_PATH = "./data/character_usage_history.json";
 const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
 const REQUEST_TIMEOUT_MS = 12_000;
 const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
+const MAX_COLLECTION_DURATION_SECONDS = 35 * 60;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const DELAYED_AFTER_MS = 90 * 60 * 1000;
 const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
@@ -1262,7 +1263,9 @@ function setupRankPeriodSelector() {
 function renderTable() {
   if (!elements.body) return;
 
-  elements.body.innerHTML = "";
+  // Rows are built exclusively with textContent below.  Clearing with the DOM
+  // API keeps the rendering path free of HTML parsing for fetched data.
+  elements.body.replaceChildren();
 
   if (!state.characters || state.characters.length === 0) {
     elements.resultCount.textContent = t("noData");
@@ -1528,7 +1531,7 @@ function validateData(data) {
     Number(quality.invalid_player_records) !== 0 ||
     !Number.isFinite(collectionDuration) ||
     collectionDuration < 0 ||
-    collectionDuration > 15 * 60 ||
+    collectionDuration > MAX_COLLECTION_DURATION_SECONDS ||
     !Number.isFinite(detailDuration) ||
     detailDuration < 0 ||
     detailDuration > collectionDuration ||
@@ -1640,7 +1643,10 @@ async function fetchJsonWithLimits(path, failureMessage) {
       throw new Error(failureMessage);
     }
     const text = await response.text();
-    if (text.length > MAX_JSON_TEXT_CHARACTERS) {
+    if (
+      text.length > MAX_JSON_TEXT_CHARACTERS ||
+      new TextEncoder().encode(text).byteLength > MAX_JSON_TEXT_CHARACTERS
+    ) {
       throw new Error(failureMessage);
     }
     return JSON.parse(text);
