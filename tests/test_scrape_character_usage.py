@@ -233,7 +233,7 @@ def test_previous_comparison_uses_positive_values_for_upward_rank_moves():
     assert current["comparison"]["interval_minutes"] == 60.0
 
 
-def test_period_rank_changes_use_verified_day_week_and_month_snapshots():
+def test_period_count_changes_use_verified_hour_day_week_and_month_snapshots():
     previous = {
         "updated_at": "2026-08-28T01:00:00+00:00",
         "sampled_players": 2,
@@ -278,16 +278,20 @@ def test_period_rank_changes_use_verified_day_week_and_month_snapshots():
             snapshot("2026-07-28T02:00:00+00:00", 4, 2),
             snapshot("2026-08-21T02:00:00+00:00", 3, 2),
             snapshot("2026-08-27T02:00:00+00:00", 2, 2),
+            snapshot("2026-08-28T01:00:00+00:00", 1, 4),
         ]
     }
 
     scraper.add_previous_comparison(current, previous, history)
     periods = current["characters"][0]["change"]["periods"]
 
+    assert periods["hour"]["comparable"] is True
+    assert periods["hour"]["rank"] == 0
     assert periods["day"]["comparable"] is True
     assert periods["day"]["rank"] == 1
     assert periods["week"]["rank"] == 2
     assert periods["month"]["rank"] == 3
+    assert periods["hour"]["occurrence_count"] == 1
     assert periods["day"]["occurrence_count"] == 3
     assert periods["week"]["occurrence_count"] == 3
     assert periods["month"]["occurrence_count"] == 3
@@ -339,7 +343,7 @@ def test_period_count_change_treats_missing_character_as_zero_in_valid_snapshot(
     assert day["occurrence_count"] == 3
 
 
-def test_equipment_period_rank_changes_use_previous_jst_calendar_date():
+def test_equipment_period_rank_changes_use_verified_time_window():
     previous = {
         "updated_at": "2026-08-27T00:00:00+00:00",
         "sampled_players": 2,
@@ -359,7 +363,7 @@ def test_equipment_period_rank_changes_use_previous_jst_calendar_date():
         ],
     }
     current = {
-        "updated_at": "2026-08-28T00:30:00+00:00",  # 09:30 JST on Aug 28
+        "updated_at": "2026-08-28T00:30:00+00:00",
         "sampled_players": 2,
         "characters": [
             {
@@ -379,7 +383,7 @@ def test_equipment_period_rank_changes_use_previous_jst_calendar_date():
     history = {
         "snapshots": [
             {
-                "updated_at": "2026-08-27T13:00:00+00:00",  # 22:00 JST, prior date
+                "updated_at": "2026-08-27T00:00:00+00:00",
                 "characters": [
                     {
                         "unit_code": "u-alpha",
@@ -403,8 +407,8 @@ def test_equipment_period_rank_changes_use_previous_jst_calendar_date():
         "comparable": True,
         "rank": 2,
         "occurrence_count": None,
-        "from_updated_at": "2026-08-27T13:00:00+00:00",
-        "interval_minutes": 690.0,
+        "from_updated_at": "2026-08-27T00:00:00+00:00",
+        "interval_minutes": 1470.0,
     }
 
 
@@ -430,7 +434,7 @@ def test_equipment_without_prior_item_uses_zero_count_from_valid_snapshot():
     history = {
         "snapshots": [
             {
-                "updated_at": "2026-08-27T13:00:00+00:00",
+                "updated_at": "2026-08-27T00:00:00+00:00",
                 "characters": [
                     {
                         "unit_code": "u-alpha",
