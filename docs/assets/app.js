@@ -233,8 +233,7 @@ const STATUS_TEXT = {
     rankDay: "前日締め",
     rankWeek: "先週締め",
     rankMonth: "先月締め",
-    rankComparison:
-      "選択した基準時点からのキャラ数の増減です。締めは日本時間22〜23時の正常集計を基準にします。",
+    rankComparison: "とのキャラ数比較",
     rankHistoryPending: "履歴待ち",
   },
   en: {
@@ -256,8 +255,7 @@ const STATUS_TEXT = {
     rankDay: "Previous-day close",
     rankWeek: "Previous-week close",
     rankMonth: "Previous-month close",
-    rankComparison:
-      "Character-count change from the selected reference point. Closes use a verified 22:00–23:59 JST collection.",
+    rankComparison: "character count comparison",
     rankHistoryPending: "History pending",
   },
   zh: {
@@ -278,7 +276,7 @@ const STATUS_TEXT = {
     rankDay: "前日結算",
     rankWeek: "上週結算",
     rankMonth: "上月結算",
-    rankComparison: "顯示相對所選基準時點的角色數量增減；結算以日本時間22〜23時的正常集計為準。",
+    rankComparison: "的角色數量比較",
     rankHistoryPending: "等待歷史資料",
   },
   th: {
@@ -299,7 +297,7 @@ const STATUS_TEXT = {
     rankDay: "ปิดยอดวันก่อน",
     rankWeek: "ปิดยอดสัปดาห์ก่อน",
     rankMonth: "ปิดยอดเดือนก่อน",
-    rankComparison: "แสดงการเปลี่ยนแปลงจำนวนตัวละครจากจุดอ้างอิงที่เลือก โดยใช้ผลเก็บข้อมูลปกติช่วง 22:00–23:59 JST สำหรับยอดปิด",
+    rankComparison: "เปรียบเทียบจำนวนตัวละคร",
     rankHistoryPending: "รอประวัติข้อมูล",
   },
   id: {
@@ -321,7 +319,7 @@ const STATUS_TEXT = {
     rankDay: "Penutupan hari sebelumnya",
     rankWeek: "Penutupan minggu sebelumnya",
     rankMonth: "Penutupan bulan sebelumnya",
-    rankComparison: "Perubahan jumlah karakter dari titik acuan yang dipilih. Penutupan memakai pengumpulan tervalidasi pukul 22.00–23.59 JST.",
+    rankComparison: "perbandingan jumlah karakter",
     rankHistoryPending: "Menunggu riwayat",
   },
   vi: {
@@ -343,7 +341,7 @@ const STATUS_TEXT = {
     rankDay: "Chốt ngày trước",
     rankWeek: "Chốt tuần trước",
     rankMonth: "Chốt tháng trước",
-    rankComparison: "Thay đổi số nhân vật so với mốc đã chọn. Mốc chốt dùng dữ liệu xác minh từ 22:00–23:59 JST.",
+    rankComparison: "so sánh số nhân vật",
     rankHistoryPending: "Đang chờ lịch sử",
   },
   ko: {
@@ -365,7 +363,7 @@ const STATUS_TEXT = {
     rankDay: "전일 마감",
     rankWeek: "전주 마감",
     rankMonth: "전월 마감",
-    rankComparison: "선택한 기준 시점 대비 캐릭터 수 증감입니다. 마감 기준은 JST 22:00~23:59의 정상 집계입니다.",
+    rankComparison: "캐릭터 수 비교",
     rankHistoryPending: "기록 대기",
   },
 };
@@ -403,6 +401,8 @@ const translations = {
       "主集計と独立した監視処理が更新時刻を確認し、遅延時は再集計します。",
     method7:
       "本サイトは非公式サイトであり、ゲーム運営元とは関係ありません。",
+    method8:
+      "変動は「1時間前」は直近1時間の正常集計、「前日締め」は前日22〜23時、「先週締め」は前週日曜日22〜23時、「先月締め」は前月末日22〜23時の正常集計と比較しています。23時台を優先し、取得できない場合は22時台を使用します。",
     source: "データ出典:",
     footer: "非公式・ファン作成の統計ページ",
     noData:
@@ -461,6 +461,8 @@ const translations = {
       "The collector and an independent watchdog verify freshness and retry delayed updates.",
     method7:
       "This is an unofficial fan-made site and is not affiliated with the game operator.",
+    method8:
+      "Changes use a verified snapshot about one hour earlier, the previous-day close (22:00–23:59 JST), the previous Sunday close, or the previous month-end close. A 23:xx result is preferred; 22:xx is used when needed.",
     source: "Data Source:",
     footer: "Unofficial fan-made statistics page",
     noData:
@@ -514,6 +516,7 @@ const translations = {
     method5: "使用率 = 使用人數 ÷ 統計人數。",
     method6: "主收集程序與獨立監控會檢查資料新鮮度，延遲時自動重試。",
     method7: "本網站為非官方粉絲製作，與遊戲營運商沒有關係。",
+    method8: "變動會與約1小時前、前日結算、前週日結算或前月末結算的正常資料比較。結算以日本時間22〜23時為準，優先使用23時台，必要時使用22時台。",
     source: "資料來源：",
     footer: "非官方・粉絲製作的統計頁面",
     noData: "目前還沒有統計資料。請執行 GitHub Actions。",
@@ -568,6 +571,7 @@ const translations = {
     method6: "ตัวรวบรวมหลักและระบบตรวจสอบอิสระจะตรวจเวลาและลองใหม่เมื่ออัปเดตล่าช้า",
     method7:
       "เว็บไซต์นี้เป็นเว็บไซต์แฟนเมดอย่างไม่เป็นทางการและไม่มีความเกี่ยวข้องกับผู้ให้บริการเกม",
+    method8: "ความเปลี่ยนแปลงเปรียบเทียบกับข้อมูลปกติเมื่อราว 1 ชั่วโมงก่อน ยอดปิดวันก่อน ยอดปิดวันอาทิตย์ก่อน หรือยอดปิดสิ้นเดือนก่อน โดยยอดปิดใช้ช่วง 22:00–23:59 JST และเลือกข้อมูลช่วง 23 นาฬิกาก่อน",
     source: "แหล่งข้อมูล:",
     footer: "หน้าสถิติที่สร้างโดยแฟนคลับอย่างไม่เป็นทางการ",
     noData: "ยังไม่มีข้อมูลสถิติ กรุณาเรียกใช้ GitHub Actions",
@@ -624,6 +628,7 @@ const translations = {
       "Pengumpul utama dan pengawas independen memeriksa kesegaran serta mencoba ulang jika terlambat.",
     method7:
       "Situs ini adalah situs penggemar tidak resmi dan tidak berafiliasi dengan pengelola game.",
+    method8: "Perubahan dibandingkan dengan data terverifikasi sekitar satu jam sebelumnya, penutupan hari sebelumnya, Minggu sebelumnya, atau akhir bulan sebelumnya. Penutupan memakai 22.00–23.59 JST dan mengutamakan hasil pukul 23.xx.",
     source: "Sumber Data:",
     footer: "Halaman statistik buatan penggemar tidak resmi",
     noData: "Belum ada data statistik. Silakan jalankan GitHub Actions.",
@@ -681,6 +686,7 @@ const translations = {
     method6: "Bộ thu thập chính và trình giám sát độc lập kiểm tra độ mới và thử lại khi chậm.",
     method7:
       "Đây là trang do người hâm mộ tạo ra, không chính thức và không liên quan đến nhà vận hành trò chơi.",
+    method8: "Biến động được so sánh với dữ liệu đã xác minh khoảng một giờ trước, chốt ngày trước, chốt Chủ nhật trước hoặc chốt cuối tháng trước. Mốc chốt dùng 22:00–23:59 JST và ưu tiên dữ liệu 23:xx.",
     source: "Nguồn dữ liệu:",
     footer: "Trang thống kê không chính thức do người hâm mộ tạo",
     noData: "Chưa có dữ liệu thống kê. Vui lòng chạy GitHub Actions.",
@@ -734,6 +740,7 @@ const translations = {
     method5: "사용률 = 사용 인원 ÷ 집계 인원",
     method6: "주 집계와 독립 감시 작업이 최신 상태를 확인하고 지연 시 다시 집계합니다.",
     method7: "이 사이트는 비공식 팬 제작 사이트이며 게임 운영사와 관련이 없습니다.",
+    method8: "변동은 약 1시간 전, 전일 마감, 전주 일요일 마감 또는 전월 말 마감의 정상 집계와 비교합니다. 마감 기준은 JST 22:00~23:59이며 23시대를 우선하고 필요 시 22시대를 사용합니다.",
     source: "데이터 출처:",
     footer: "비공식 팬 제작 통계 페이지",
     noData: "아직 통계 데이터가 없습니다. GitHub Actions를 실행해 주세요.",
@@ -936,7 +943,7 @@ function applyTranslations() {
 
   setText("#method-title", tr.method);
 
-  for (let i = 1; i <= 7; i += 1) {
+  for (let i = 1; i <= 8; i += 1) {
     setText(`#method-${i}`, tr[`method${i}`]);
   }
 
