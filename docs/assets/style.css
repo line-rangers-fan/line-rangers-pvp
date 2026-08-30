@@ -400,6 +400,7 @@ h1 {
 /* Select one baseline for the character-count change. The fixed caption
    makes it clear that the badge is a count difference, not a rank movement. */
 .rank-period-selector {
+  --rank-period-label-size: 0.98rem;
   position: relative;
   display: grid;
   flex: 0 0 auto;
@@ -419,7 +420,7 @@ h1 {
   border-radius: 0.65rem;
   color: var(--text);
   background: var(--background);
-  font-size: 0.82rem;
+  font-size: var(--rank-period-label-size);
   font-variant-numeric: tabular-nums;
 }
 
@@ -444,7 +445,7 @@ h1 {
   display: block;
   margin-top: 0.28rem;
   color: var(--text);
-  font-size: 0.98rem;
+  font-size: var(--rank-period-label-size);
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: 0.01em;
