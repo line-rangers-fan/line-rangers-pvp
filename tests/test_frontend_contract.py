@@ -62,6 +62,9 @@ def test_history_and_equipment_change_contract_is_present():
     assert '"±0"' in app
     assert "fetchJsonWithLimits" in app
     assert "REQUEST_TIMEOUT_MS" in app
+    # The browser must use the same bounded collection window as the
+    # collector, freshness gate, and watchdog.
+    assert "const MAX_COLLECTION_DURATION_SECONDS = 15 * 60;" in app
     assert "isTrustedCharacterImage" in app
     assert "validateEquipmentRankings" in app
     assert "includePeriodLabel: false" in app
