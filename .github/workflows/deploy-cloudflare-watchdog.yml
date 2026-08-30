@@ -66,7 +66,14 @@ jobs:
       - name: Verify Worker health endpoint
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 --retry-all-errors "https://line-rangers-pvp-watchdog.n-yu1791.workers.dev/" | jq -e '.status == "ok" and .service == "line-rangers-pvp-watchdog"'
+          # A stale dataset deliberately returns HTTP 503 while the watchdog is
+          # healthy and requesting a repair. Verify the worker identity and a
+          # recognised health state instead of treating that safety signal as a
+          # deployment failure.
+          curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 --retry-all-errors "https://line-rangers-pvp-watchdog.n-yu1791.workers.dev/" | jq -e '
+            .service == "line-rangers-pvp-watchdog"
+            and (.status as $status | ["ok", "stale", "invalid_data", "unreadable", "invalid_timestamp"] | index($status) != null)
+          '
 
       - name: Verify guarded GitHub repair dispatch
         env:
