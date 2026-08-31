@@ -95,7 +95,10 @@ async function fetchWithTimeout(fetchImpl, url, options = {}, consumeResponse = 
       (async () => {
         const response = await fetchImpl(url, {
           ...options,
-          redirect: "error",
+          // workerd rejects the Fetch API's "error" mode before any I/O.
+          // Return redirects without following them; both callers below reject
+          // non-2xx responses, including all 3xx, before consuming/using them.
+          redirect: "manual",
           signal: controller.signal,
         });
         return consumeResponse ? await consumeResponse(response, controller.signal) : response;

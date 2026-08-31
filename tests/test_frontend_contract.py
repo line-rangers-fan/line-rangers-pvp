@@ -100,3 +100,12 @@ def test_workflows_pin_external_actions_and_fail_shell_scripts_safely():
     assert "uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd" in cloudflare
     assert "set -euo pipefail" in update
     assert "set -euo pipefail" in cloudflare
+
+
+def test_queued_collection_checks_out_latest_main():
+    update = (ROOT / ".github/workflows/update-character-usage.yml").read_text(encoding="utf-8")
+    checkout = update.split("- name: Check out repository", 1)[1].split("- name: Set up Python", 1)[0]
+    assert "with:" in checkout
+    assert "ref: main" in checkout
+    assert "cancel-in-progress: false" in update
+    assert "git pull --rebase origin main" in update
