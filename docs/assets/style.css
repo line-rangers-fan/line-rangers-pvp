@@ -1148,6 +1148,29 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   object-fit: contain;
 }
 
+.character-image-frame {
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  overflow: hidden;
+}
+
+.character-image-frame > img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.character-image-pending {
+  padding: 0.2rem;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  white-space: pre-line;
+}
+
 .equipment-summary strong {
   display: block;
   overflow-wrap: anywhere;

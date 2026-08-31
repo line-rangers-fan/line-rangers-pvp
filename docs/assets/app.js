@@ -63,6 +63,16 @@ const RANK_IMAGE_LABEL = {
   ko: (rank) => `${rank}위 캐릭터 이미지`,
 };
 
+const CHARACTER_IMAGE_PENDING = {
+  ja: "画像\n準備中",
+  en: "Image\npending",
+  zh: "圖片\n準備中",
+  th: "รอรูปภาพ",
+  id: "Gambar\nbelum ada",
+  vi: "Chờ ảnh",
+  ko: "이미지\n준비 중",
+};
+
 // 件数表示も言語ごとに単位付きの完全な文を関数で組み立てる
 const RESULT_COUNT_LABEL = {
   ja: (n) => `${n}件`,
@@ -1338,15 +1348,11 @@ function renderTable() {
       `${characterLabel(char)}: ${et("dialogTitle")}`
     );
 
-    const img = document.createElement("img");
-    img.src = char.image || "";
-    img.alt = RANK_IMAGE_LABEL[state.language](rank);
-    img.className = "character-image";
-    img.loading = index < 8 ? "eager" : "lazy";
-    img.decoding = "async";
-    img.width = 64;
-    img.height = 64;
-    characterButton.appendChild(img);
+    characterButton.appendChild(createCharacterImage(char, {
+      className: "character-image",
+      alt: RANK_IMAGE_LABEL[state.language](rank),
+      loading: index < 8 ? "eager" : "lazy",
+    }));
     tdChar.appendChild(characterButton);
     tr.appendChild(tdChar);
 
@@ -1432,6 +1438,8 @@ function isTrustedRangersAsset(value, expectedPath) {
     const url = new URL(value);
     return (
       url.origin === TRUSTED_ASSET_ORIGIN &&
+      url.username === "" &&
+      url.password === "" &&
       url.pathname === expectedPath &&
       url.search === "" &&
       url.hash === ""
@@ -1455,6 +1463,53 @@ function isTrustedEquipmentImage(value, itemCode) {
     SAFE_ASSET_CODE.test(itemCode) &&
     isTrustedRangersAsset(value, `/res/gear_icon/${itemCode}_icon.png`)
   );
+}
+
+function createCharacterImage(character, { className, alt, loading = "eager" }) {
+  const frame = document.createElement("span");
+  frame.className = `${className} character-image-frame`;
+  const image = document.createElement("img");
+  image.alt = alt;
+  image.loading = loading;
+  image.decoding = "async";
+  image.width = 64;
+  image.height = 64;
+
+  const pending = document.createElement("span");
+  pending.className = "character-image-pending";
+  pending.textContent = CHARACTER_IMAGE_PENDING[state.language] || CHARACTER_IMAGE_PENDING.en;
+  pending.setAttribute("role", "img");
+  pending.setAttribute("aria-label", `${characterLabel(character)}: ${pending.textContent.replace(/\n/g, " ")}`);
+  pending.hidden = true;
+  frame.append(image, pending);
+
+  // Images are optional presentation assets, never a collection quality gate.
+  // Retry only this validated unit's URL; never guess a different unit/host.
+  const trusted = isTrustedCharacterImage(character.image, character.unit_code);
+  let retried = false;
+  image.addEventListener("error", () => {
+    image.hidden = true;
+    pending.hidden = false;
+    if (!trusted || retried) return;
+    retried = true;
+    // The source caches even 404s for 12 hours. A shared ten-minute key avoids
+    // that stale failure without random cache misses on each table re-render.
+    // loadData already re-renders every ten minutes, even if data is unchanged.
+    image.loading = "eager"; // A hidden lazy image would defer the retry.
+    image.src = `${character.image}?image_retry=${Math.floor(Date.now() / AUTO_REFRESH_MS)}`;
+  });
+  image.addEventListener("load", () => {
+    image.hidden = false;
+    pending.hidden = true;
+  });
+  if (trusted) {
+    image.src = character.image;
+  } else {
+    // Defense in depth for callers outside validateData; do not request bad URLs.
+    image.hidden = true;
+    pending.hidden = false;
+  }
+  return frame;
 }
 
 function validateEquipmentRankings(rankings, character) {
@@ -2041,13 +2096,10 @@ function renderEquipment(character) {
   const summary = document.createElement("div");
   summary.className = "equipment-summary";
 
-  const characterImage = document.createElement("img");
-  characterImage.className = "equipment-character-image";
-  characterImage.src = character.image || "";
-  characterImage.alt = characterLabel(character);
-  characterImage.decoding = "async";
-  characterImage.width = 64;
-  characterImage.height = 64;
+  const characterImage = createCharacterImage(character, {
+    className: "equipment-character-image",
+    alt: characterLabel(character),
+  });
 
   const summaryText = document.createElement("div");
   const description = document.createElement("p");

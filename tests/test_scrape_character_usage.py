@@ -57,6 +57,35 @@ def test_all_pvp_groups_and_duplicate_units_are_preserved():
     assert beta["player_count"] == 2
 
 
+def test_new_character_without_source_image_or_name_does_not_block_collection(monkeypatch):
+    def unexpected_fetch(*_args, **_kwargs):
+        raise AssertionError("Statistics must not depend on image availability")
+
+    monkeypatch.setattr(scraper, "fetch_json", unexpected_fetch)
+    code = "u99999e-future"
+    players = [
+        {"mid": f"test-player-{index}", "unit_records": [
+            {"unit_code": code, "equipment": {
+                "WEAPON": "test-weapon", "ARMOR": "test-armor", "ACC": "test-accessory"
+            }} for _ in range(2)
+        ]} for index in range(200)
+    ]
+    data = scraper.build_statistics(players, {}, character_names={})
+    row = data["characters"][0]
+    assert data["sampled_players"] == 200
+    assert data["complete_target"] is True
+    assert data["collection_quality"]["detail_fetch_failures"] == 0
+    assert row["name"] == code
+    assert row["image"] == scraper.character_image_url(code)
+    assert row["occurrence_count"] == 400
+    assert row["player_count"] == 200
+    assert row["adoption_rate"] == 100
+    for kind in ("WEAPON", "ARMOR", "ACC"):
+        item = row["equipment_rankings"][kind]["items"][0]
+        assert item["occurrence_count"] == 400
+        assert item["player_count"] == 200
+
+
 def test_duplicate_characters_count_each_equipment_but_not_each_player():
     players = [
         {
