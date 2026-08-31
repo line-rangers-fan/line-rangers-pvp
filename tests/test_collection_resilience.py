@@ -16,6 +16,8 @@ class TruncatedResponse(io.BytesIO):
     def read(self, *args):
         raise IncompleteRead(b"untrusted partial response", 100)
 
+    read1 = read
+
 
 @pytest.mark.parametrize("recover", [True, False])
 def test_incomplete_http_read_retries_with_existing_limits(monkeypatch, recover):

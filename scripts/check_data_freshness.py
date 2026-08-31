@@ -125,7 +125,7 @@ def check_freshness(
         if not has_complete_sample(data):
             return Freshness(True, None, "invalid_quality")
         updated_at = parse_timestamp(data.get("updated_at"))
-    except (OSError, TypeError, ValueError, OverflowError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError, OverflowError, RecursionError):
         return Freshness(True, None, "missing_or_invalid_data")
 
     age_minutes = (current_time - updated_at).total_seconds() / 60
