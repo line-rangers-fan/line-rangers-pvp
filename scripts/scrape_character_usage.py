@@ -17,6 +17,7 @@ import sys
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
+from http.client import IncompleteRead
 from pathlib import Path
 from statistics import median
 from time import monotonic, sleep
@@ -239,7 +240,7 @@ def fetch_json(url: str, label: str) -> object:
             last_error = RuntimeError(f"{label} returned HTTP {error.code}.")
             if error.code < 500 and error.code != 429:
                 break
-        except (URLError, TimeoutError, OSError) as error:
+        except (URLError, TimeoutError, OSError, IncompleteRead) as error:
             # Do not expose raw URL, response, or player information in CI
             # logs.  The error class is sufficient to diagnose retry policy.
             last_error = RuntimeError(
@@ -1648,7 +1649,15 @@ def main() -> None:
         validate_data(data, previous)
         history = update_history(data, previous_history)
         write_outputs(data, history)
-        dump_debug(data)
+        try:
+            dump_debug(data)
+        except OSError as error:
+            # Optional diagnostics must not block publication of validated
+            # data. Required output writes above still fail closed.
+            print(
+                f"[WARN] Optional diagnostic write failed ({type(error).__name__}).",
+                file=sys.stderr,
+            )
         print(
             "[DONE] "
             f"players={data['sampled_players']}, "
