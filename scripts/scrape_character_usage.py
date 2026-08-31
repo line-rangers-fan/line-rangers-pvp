@@ -9,6 +9,7 @@ defence formation.
 
 from __future__ import annotations
 
+import io
 import json
 import math
 import os
@@ -17,13 +18,13 @@ import sys
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
-from http.client import IncompleteRead
+from http.client import HTTPException, HTTPResponse, HTTPSConnection
 from pathlib import Path
 from statistics import median
 from time import monotonic, sleep
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 from zoneinfo import ZoneInfo
 
 try:
@@ -161,7 +162,75 @@ class SourceOnlyRedirectHandler(HTTPRedirectHandler):
         return super().redirect_request(request, fp, code, msg, headers, newurl)
 
 
-SOURCE_OPENER = build_opener(SourceOnlyRedirectHandler())
+class _DeadlineSocketReader(io.RawIOBase):
+    """Apply a phase deadline to every socket read, including HTTP framing."""
+
+    def __init__(self, raw, sock, timeout: float):
+        super().__init__()
+        self.raw = raw
+        self.sock = sock
+        self.timeout = timeout
+        self.deadline = monotonic() + timeout
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer):
+        remaining = self.deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Source response read timed out.")
+        # Buffered readline/safe_read may call this repeatedly. Never restart
+        # the full idle timeout when another byte of framing arrives.
+        self.sock.settimeout(min(self.timeout, remaining))
+        count = self.raw.readinto(buffer)
+        if monotonic() >= self.deadline:
+            raise TimeoutError("Source response read timed out.")
+        return count
+
+    def close(self) -> None:
+        if self.closed:
+            return
+        try:
+            # A successful CONNECT tunnel reuses this socket for TLS. Do not
+            # leave the last read's shortened timeout on the following phase.
+            try:
+                self.sock.settimeout(self.timeout)
+            except OSError:
+                pass  # The owning connection may already have closed it.
+        finally:
+            try:
+                self.raw.close()
+            finally:
+                super().close()
+
+
+class SourceHTTPResponse(HTTPResponse):
+    def __init__(self, sock, *args, **kwargs):
+        super().__init__(sock, *args, **kwargs)
+        timeout = sock.gettimeout() or REQUEST_TIMEOUT_SECONDS
+        self._deadline_reader = _DeadlineSocketReader(self.fp.detach(), sock, timeout)
+        self.fp = io.BufferedReader(self._deadline_reader)
+
+    def begin(self) -> None:
+        if self.headers is not None:
+            return
+        super().begin()
+        # Give the body its full existing allowance, independently of time
+        # spent receiving headers. Header and body waits are both bounded.
+        self._deadline_reader.deadline = monotonic() + self._deadline_reader.timeout
+
+
+class SourceHTTPSConnection(HTTPSConnection):
+    response_class = SourceHTTPResponse
+
+
+class SourceHTTPSHandler(HTTPSHandler):
+    def https_open(self, request):
+        # Keep the standard verified TLS context and hostname verification.
+        return self.do_open(SourceHTTPSConnection, request, context=self._context)
+
+
+SOURCE_OPENER = build_opener(SourceOnlyRedirectHandler(), SourceHTTPSHandler())
 
 
 def save_json(path: Path, value: object) -> None:
@@ -263,7 +332,7 @@ def fetch_json(url: str, label: str) -> object:
             last_error = RuntimeError(f"{label} returned HTTP {error.code}.")
             if error.code < 500 and error.code != 429:
                 break
-        except (URLError, TimeoutError, OSError, IncompleteRead) as error:
+        except (URLError, TimeoutError, OSError, HTTPException) as error:
             # Do not expose raw URL, response, or player information in CI
             # logs.  The error class is sufficient to diagnose retry policy.
             last_error = RuntimeError(
