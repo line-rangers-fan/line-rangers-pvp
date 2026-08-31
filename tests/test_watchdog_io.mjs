@@ -5,6 +5,24 @@ import {getHealthSnapshot} from "../infra/cloudflare-watchdog/src/index.mjs";
 
 const ENV = {DATA_URL: "https://line-rangers-fan.github.io/line-rangers-pvp/data/character_usage_health.json"};
 
+test("public read errors identify the stage without exposing exception contents", async (t) => {
+  t.mock.method(console, "warn", () => {});
+  const cases = [
+    [async () => new Response("untrusted upstream body", {status: 503}), {code: "http_error", http_status: 503}],
+    [async () => new Response("not JSON"), {code: "invalid_json", http_status: null}],
+    [async () => {throw new TypeError("Illegal invocation: incorrect this reference");}, {code: "runtime_binding", http_status: null}],
+    [async () => {throw new TypeError("private exception details");}, {code: "fetch_type_error", http_status: null}],
+    [async () => {throw new Error("private exception details");}, {code: "fetch_error", http_status: null}],
+  ];
+  for (const [fetchImpl, expected] of cases) {
+    const health = await getHealthSnapshot(ENV, {fetchImpl});
+    assert.equal(health.status, "unreadable");
+    assert.deepEqual(health.read_error, expected);
+    assert.equal(JSON.stringify(health).includes("private exception"), false);
+    assert.equal(JSON.stringify(health).includes("untrusted upstream"), false);
+  }
+});
+
 test("watchdog deadline covers a response body stalled after headers", async (t) => {
   t.mock.method(console, "warn", () => {});
   t.mock.timers.enable({apis:["setTimeout"]});

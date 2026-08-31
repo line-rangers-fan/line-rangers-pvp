@@ -219,6 +219,7 @@ test("health snapshot reports freshness and age", async () => {
   assert.deepEqual(health, {
     status: "ok",
     service: "line-rangers-pvp-watchdog",
+    read_error: null,
     schedule: "*/15 * * * *",
     updated_at: "2026-08-27T03:10:00Z",
     age_minutes: 50,
