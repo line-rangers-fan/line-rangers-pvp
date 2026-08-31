@@ -179,7 +179,7 @@ def load_json(path: Path) -> dict | None:
     try:
         with path.open("r", encoding="utf-8") as file:
             value = json.load(file)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    except (OSError, ValueError, RecursionError):
         # A previous local file is only comparison context.  Treating a damaged
         # copy as absent lets a fully validated fresh collection repair itself;
         # the new result still must pass every publication quality gate.
@@ -195,21 +195,44 @@ def _read_json_response(response: object, label: str) -> object:
     """Read a bounded JSON response and make size failures explicit."""
     headers = getattr(response, "headers", None)
     content_length = headers.get("Content-Length") if headers else None
+    if getattr(response, "chunked", False):
+        # Follow HTTPResponse framing: chunked transfer overrides this header.
+        content_length = None
+    expected_length = None
     if content_length:
         try:
-            if int(content_length) > MAX_JSON_RESPONSE_BYTES:
+            parsed_length = int(content_length)
+            if parsed_length > MAX_JSON_RESPONSE_BYTES:
                 raise RuntimeError(f"{label} response exceeds the safety limit.")
+            if parsed_length >= 0:
+                expected_length = parsed_length
         except ValueError:
             # A malformed header is not trusted; the bounded body read below is
             # still authoritative.
             pass
 
-    body = response.read(MAX_JSON_RESPONSE_BYTES + 1)
+    # Socket timeouts cover idle reads, not a body that trickles in forever.
+    # read1 yields between transport reads so the existing request timeout
+    # can also bound body consumption without reducing the retry allowance.
+    deadline = monotonic() + REQUEST_TIMEOUT_SECONDS
+    read = getattr(response, "read1", response.read)
+    body = bytearray()
+    while len(body) <= MAX_JSON_RESPONSE_BYTES:
+        if monotonic() >= deadline:
+            raise TimeoutError(f"{label} response body timed out.")
+        chunk = read(min(64 * 1024, MAX_JSON_RESPONSE_BYTES + 1 - len(body)))
+        if monotonic() >= deadline:
+            raise TimeoutError(f"{label} response body timed out.")
+        if not chunk:
+            break
+        body.extend(chunk)
     if len(body) > MAX_JSON_RESPONSE_BYTES:
         raise RuntimeError(f"{label} response exceeds the safety limit.")
+    if expected_length is not None and len(body) != expected_length:
+        raise MalformedJsonResponse(f"{label} response body was incomplete.")
     try:
         return json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    except (ValueError, RecursionError) as error:
         raise MalformedJsonResponse(f"{label} did not return valid UTF-8 JSON.") from error
 
 
@@ -1454,7 +1477,13 @@ def prepare_comparison_context(data: dict, previous: dict | None, history: dict 
         candidates.append(history_snapshot(previous))
     verified = {}
     for snapshot in candidates:
-        if not _usable_history_snapshot(snapshot, current_time, data["sampled_players"]):
+        try:
+            usable = _usable_history_snapshot(snapshot, current_time, data["sampled_players"])
+        except (ValueError, TypeError, OverflowError):
+            # A malformed date or overflowing number in one old snapshot
+            # must not prevent a complete fresh sample repairing the history.
+            usable = False
+        if not usable:
             continue
         timestamp = _parse_history_time(snapshot["updated_at"])
         # Datetime keys collapse Z/+00:00/other offset spellings of one instant.
