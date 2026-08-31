@@ -94,6 +94,36 @@ test("compact verified health summary preserves strict collection checks", () =>
 });
 
 
+test("workerd-compatible redirect mode preserves health and dispatch redirect guards", async (t) => {
+  t.mock.method(console, "warn", () => {});
+  const requests = [];
+  const dataRedirect = await getHealthSnapshot(ENV, {
+    nowMs: NOW,
+    fetchImpl: async (url, options) => {
+      // Mirrors workerd: unlike Node, it throws for redirect: "error".
+      if (!["follow", "manual"].includes(options.redirect)) throw new TypeError("Invalid redirect value");
+      assert.equal(options.redirect, "manual");
+      requests.push(url);
+      return new Response(null, {status: 302, headers: {Location: "https://untrusted.invalid/"}});
+    },
+  });
+  assert.deepEqual(dataRedirect.read_error, {code: "http_error", http_status: 302});
+  assert.equal(requests.length, 1);
+  const calls = [];
+  await assert.rejects(runWatchdog(ENV, {
+    nowMs: NOW,
+    fetchImpl: async (url, options) => {
+      if (!["follow", "manual"].includes(options.redirect)) throw new TypeError("Invalid redirect value");
+      assert.equal(options.redirect, "manual");
+      calls.push(url);
+      if (calls.length === 1) return new Response(JSON.stringify(healthySummary("2026-08-27T03:50:00Z")));
+      return new Response(null, {status: 307, headers: {Location: "https://untrusted.invalid/"}});
+    },
+  }), /GitHub workflow dispatch failed: HTTP 307/);
+  assert.equal(calls.length, 2);
+  assert.equal(calls.some(url => url.includes("untrusted.invalid")), false);
+});
+
 test("fresh data does not dispatch GitHub outside the hourly baseline window", async () => {
   const calls = [];
   const fetchImpl = async (url, options = {}) => {
@@ -111,7 +141,7 @@ test("fresh data does not dispatch GitHub outside the hourly baseline window", a
 
   assert.deepEqual(result, { dispatched: false, reason: "fresh" });
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].options.redirect, "error");
+  assert.equal(calls[0].options.redirect, "manual");
 });
 
 
