@@ -58,13 +58,36 @@ function requiredPublishedDataUrl(env) {
 }
 
 
+class WatchdogReadError extends Error {
+  constructor(code, httpStatus = null) {
+    super(code);
+    this.code = code;
+    this.httpStatus = httpStatus;
+  }
+}
+
+
+function safeReadError(error) {
+  // Never expose upstream bodies, URLs, credentials, or arbitrary exception
+  // messages through this public health endpoint or scheduled-event logs.
+  if (error instanceof WatchdogReadError) {
+    return {code: error.code, http_status: error.httpStatus};
+  }
+  const code = error?.name === "AbortError" ? "timeout"
+    : /illegal invocation|incorrect.*this/i.test(String(error?.message || "")) ? "runtime_binding"
+    : error?.name === "TypeError" ? "fetch_type_error"
+    : "fetch_error";
+  return {code, http_status: null};
+}
+
+
 async function fetchWithTimeout(fetchImpl, url, options = {}, consumeResponse = null) {
   const controller = new AbortController();
   let timeoutId;
   const deadline = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
       controller.abort();
-      reject(new Error("External request exceeded its time limit."));
+      reject(new WatchdogReadError("timeout"));
     }, EXTERNAL_REQUEST_TIMEOUT_MS);
   });
   try {
@@ -329,11 +352,11 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
 
 async function readPublishedData(response, signal) {
   if (!response.ok) {
-    throw new Error(`Published data request failed: HTTP ${response.status}`);
+    throw new WatchdogReadError("http_error", response.status);
   }
   const contentLength = Number(response.headers?.get("Content-Length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_DATA_RESPONSE_BYTES) {
-    throw new Error("Published data response exceeds the safety limit.");
+    throw new WatchdogReadError("response_too_large");
   }
   // Enforce the existing byte limit while receiving, not after buffering an
   // arbitrarily large response. The same deadline covers headers and body.
@@ -347,12 +370,12 @@ async function readPublishedData(response, signal) {
     try {
       while (true) {
         const {done, value} = await reader.read();
-        if (signal.aborted) throw new Error("Published data request timed out.");
+        if (signal.aborted) throw new WatchdogReadError("timeout");
         if (done) break;
         size += value.byteLength;
         if (size > MAX_DATA_RESPONSE_BYTES) {
           cancel();
-          throw new Error("Published data response exceeds the safety limit.");
+          throw new WatchdogReadError("response_too_large");
         }
         body += decoder.decode(value, {stream: true});
       }
@@ -365,7 +388,7 @@ async function readPublishedData(response, signal) {
   try {
     return JSON.parse(body);
   } catch {
-    throw new Error("Published data response is not valid JSON.");
+    throw new WatchdogReadError("invalid_json");
   }
 }
 
@@ -388,11 +411,13 @@ export async function getHealthSnapshot(
 ) {
   const dataUrl = requiredPublishedDataUrl(env);
   let dataHealth;
+  let readError = null;
   try {
     const data = await fetchPublishedData(dataUrl, fetchImpl, nowMs, "health");
     dataHealth = inspectDataHealth(data, nowMs);
   } catch (error) {
-    console.warn("Health check could not read published data.", error);
+    readError = safeReadError(error);
+    console.warn("Health check could not read published data.", readError);
     dataHealth = {
       status: "unreadable",
       updated_at: null,
@@ -410,6 +435,7 @@ export async function getHealthSnapshot(
   return {
     status: dataHealth.status,
     service: SERVICE_NAME,
+    read_error: readError,
     schedule: SCHEDULE,
     updated_at: dataHealth.updated_at,
     age_minutes: dataHealth.age_minutes,
@@ -445,7 +471,7 @@ export async function runWatchdog(
     );
     repairReason = inspectDataHealth(data, nowMs).status;
   } catch (error) {
-    console.warn("Freshness check failed; requesting a guarded repair.", error);
+    console.warn("Freshness check failed; requesting a guarded repair.", safeReadError(error));
   }
 
   if (repairReason === "ok" && !calendarAnchor && !hourlyBaseline) {
