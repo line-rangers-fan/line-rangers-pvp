@@ -84,6 +84,23 @@ def test_history_and_equipment_change_contract_is_present():
     assert ".rank-period-pending" in style
 
 
+def test_character_thumbnail_frames_do_not_use_intrinsic_grid_row_height():
+    style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
+    frame = style.split(".character-image-frame {", 1)[1].split("}", 1)[0]
+    image = style.split(".character-image-frame > img {", 1)[1].split("}", 1)[0]
+    # Auto grid rows enlarged portrait images beyond their fixed thumbnail.
+    # A fixed-height flex frame resolves the child's percentage height to the
+    # frame, in both the character table and the equipment dialog.
+    assert "display: inline-flex;" in frame
+    assert "align-items: center;" in frame
+    assert "justify-content: center;" in frame
+    for declaration in (
+        "min-width: 0;", "min-height: 0;", "width: 100%;", "height: 100%;",
+        "object-fit: contain;",
+    ):
+        assert declaration in image
+
+
 def test_workflows_pin_external_actions_and_fail_shell_scripts_safely():
     workflows = (ROOT / ".github/workflows")
     update = (workflows / "update-character-usage.yml").read_text(encoding="utf-8")
