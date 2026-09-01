@@ -58,7 +58,7 @@ test("existing images retain the canonical URL, lazy loading, size and alt text"
 });
 
 test("404 or image decode errors trigger exactly one same-unit cache-busting retry", () => {
-  for (const code of ["u1630h-sally", "u1631e-sally", "u99999e-future"]) {
+  for (const code of ["u99999e-future", "u99998h-future"]) {
     const character = sample(code);
     const before = JSON.stringify(character);
     const { image, pending } = harness().create(character);
@@ -77,6 +77,32 @@ test("404 or image decode errors trigger exactly one same-unit cache-busting ret
   }
 });
 
+test("new Sally units use the reviewed local fallback only after the canonical retry fails", () => {
+  for (const code of ["u1630h-sally", "u1631e-sally"]) {
+    const character = sample(code);
+    const { image, pending } = harness().create(character);
+    assert.deepEqual(image.requests, [character.image]);
+    image.dispatch("error");
+    assert.equal(image.src, `${character.image}?image_retry=1000`);
+    image.dispatch("error");
+    assert.equal(image.src, "./assets/characters/crab-sally-promo-fallback.png");
+    assert.equal(image.attributes["data-fallback"], "true");
+    image.dispatch("load");
+    assert.equal(image.hidden, false);
+    assert.equal(pending.hidden, true);
+    image.dispatch("error");
+    assert.equal(image.requests.length, 3, "a broken local fallback must not loop");
+  }
+});
+
+test("the reviewed name replaces a raw unit code while source metadata is pending", () => {
+  const app = harness();
+  app.context.character = sample("u1631e-sally");
+  assert.equal(vm.runInContext("characterLabel(character)", app.context), "かに座 サリー");
+  app.context.character = { ...sample("u1631e-sally"), name: "Published source name" };
+  assert.equal(vm.runInContext("characterLabel(character)", app.context), "Published source name");
+});
+
 test("a successful retry replaces the pending label with the actual character image", () => {
   const { image, pending } = harness().create();
   image.dispatch("error");
@@ -88,14 +114,15 @@ test("a successful retry replaces the pending label with the actual character im
 
 test("re-renders share retry cache keys, but later refreshes retry after source publication", () => {
   const app = harness();
-  const first = app.create();
+  const character = sample("u99999e-future");
+  const first = app.create(character);
   first.image.dispatch("error");
   first.image.dispatch("error");
-  const sameWindow = app.create();
+  const sameWindow = app.create(character);
   sameWindow.image.dispatch("error");
   assert.equal(sameWindow.image.src, first.image.src);
   app.advance();
-  const later = app.create();
+  const later = app.create(character);
   later.image.dispatch("error");
   assert.notEqual(later.image.src, first.image.src);
   assert.match(later.image.src, /image_retry=1001$/);
@@ -118,7 +145,7 @@ test("the equipment dialog shares image recovery without changing its sizing cla
 });
 
 test("untrusted URLs, mismatched units and query injection are never requested", () => {
-  const valid = sample();
+  const valid = sample("u99999e-future");
   const invalid = [
     { ...valid, image: "https://example.com/character.png" },
     { ...valid, image: valid.image.replace("https:", "http:") },

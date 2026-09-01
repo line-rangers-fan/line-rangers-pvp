@@ -30,6 +30,23 @@ const CALENDAR_CLOSE_REFERENCE_MODE = "jst_calendar_close_v1";
 const CALENDAR_CLOSE_PERIODS = new Set(["day", "week", "month"]);
 const TRUSTED_ASSET_ORIGIN = "https://rangers.lerico.net";
 const SAFE_ASSET_CODE = /^[A-Za-z0-9_-]+$/;
+const SAFE_LOCAL_CHARACTER_IMAGE = /^\.\/assets\/characters\/[A-Za-z0-9_-]+\.png$/;
+
+// The source normally publishes a predictable thumbnail URL, including for
+// newly added units, so no code change is needed once that asset exists. These
+// reviewed local fallbacks cover the short interval where a unit is already in
+// PvP data but its source metadata/image still returns 404. The canonical image
+// is always attempted first and therefore replaces the fallback automatically.
+const CHARACTER_IMAGE_FALLBACKS = Object.freeze({
+  "u1630h-sally": Object.freeze({
+    name: "かに座 サリー",
+    image: "./assets/characters/crab-sally-promo-fallback.png",
+  }),
+  "u1631e-sally": Object.freeze({
+    name: "かに座 サリー",
+    image: "./assets/characters/crab-sally-promo-fallback.png",
+  }),
+});
 
 const LANGUAGES = [
   "ja",
@@ -913,8 +930,18 @@ function characterLabel(character) {
     return t("unknown");
   }
 
-  if (typeof character.name === "string" && character.name.trim()) {
-    return character.name.trim();
+  const name = typeof character.name === "string" ? character.name.trim() : "";
+  if (name && name !== character.unit_code) {
+    return name;
+  }
+
+  const fallback = characterImageFallback(character);
+  if (fallback) {
+    return fallback.name;
+  }
+
+  if (name) {
+    return name;
   }
 
   return t("unknown");
@@ -1465,6 +1492,23 @@ function isTrustedEquipmentImage(value, itemCode) {
   );
 }
 
+function characterImageFallback(character) {
+  const unitCode = character?.unit_code;
+  if (typeof unitCode !== "string" || !SAFE_ASSET_CODE.test(unitCode)) {
+    return null;
+  }
+  const fallback = CHARACTER_IMAGE_FALLBACKS[unitCode];
+  if (
+    !fallback ||
+    typeof fallback.name !== "string" ||
+    !fallback.name.trim() ||
+    !SAFE_LOCAL_CHARACTER_IMAGE.test(fallback.image)
+  ) {
+    return null;
+  }
+  return fallback;
+}
+
 function createCharacterImage(character, { className, alt, loading = "eager" }) {
   const frame = document.createElement("span");
   frame.className = `${className} character-image-frame`;
@@ -1486,17 +1530,27 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
   // Images are optional presentation assets, never a collection quality gate.
   // Retry only this validated unit's URL; never guess a different unit/host.
   const trusted = isTrustedCharacterImage(character.image, character.unit_code);
+  const fallback = characterImageFallback(character);
   let retried = false;
+  let fallbackTried = false;
   image.addEventListener("error", () => {
     image.hidden = true;
     pending.hidden = false;
-    if (!trusted || retried) return;
-    retried = true;
-    // The source caches even 404s for 12 hours. A shared ten-minute key avoids
-    // that stale failure without random cache misses on each table re-render.
-    // loadData already re-renders every ten minutes, even if data is unchanged.
-    image.loading = "eager"; // A hidden lazy image would defer the retry.
-    image.src = `${character.image}?image_retry=${Math.floor(Date.now() / AUTO_REFRESH_MS)}`;
+    if (trusted && !retried) {
+      retried = true;
+      // The source caches even 404s for 12 hours. A shared ten-minute key avoids
+      // that stale failure without random cache misses on each table re-render.
+      // loadData already re-renders every ten minutes, even if data is unchanged.
+      image.loading = "eager"; // A hidden lazy image would defer the retry.
+      image.src = `${character.image}?image_retry=${Math.floor(Date.now() / AUTO_REFRESH_MS)}`;
+      return;
+    }
+    if (fallback && !fallbackTried) {
+      fallbackTried = true;
+      image.loading = "eager";
+      image.setAttribute("data-fallback", "true");
+      image.src = fallback.image;
+    }
   });
   image.addEventListener("load", () => {
     image.hidden = false;
@@ -1504,6 +1558,10 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
   });
   if (trusted) {
     image.src = character.image;
+  } else if (fallback) {
+    fallbackTried = true;
+    image.setAttribute("data-fallback", "true");
+    image.src = fallback.image;
   } else {
     // Defense in depth for callers outside validateData; do not request bad URLs.
     image.hidden = true;
