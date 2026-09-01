@@ -88,14 +88,18 @@ test("404 or image decode errors trigger exactly one same-unit cache-busting ret
 });
 
 test("new Sally units use the reviewed local fallback only after the canonical retry fails", () => {
-  for (const code of ["u1630h-sally", "u1631e-sally"]) {
+  const fallbackByCode = {
+    "u1630h-sally": "./assets/characters/crab-sally-hyper-fallback.jpg",
+    "u1631e-sally": "./assets/characters/crab-sally-ultimate-fallback.jpg",
+  };
+  for (const [code, fallbackImage] of Object.entries(fallbackByCode)) {
     const character = sample(code);
     const { image, pending } = harness().create(character);
     assert.deepEqual(image.requests, [character.image]);
     image.dispatch("error");
     assert.equal(image.src, `${character.image}?image_retry=1000`);
     image.dispatch("error");
-    assert.equal(image.src, "./assets/characters/crab-sally-promo-fallback.png");
+    assert.equal(image.src, fallbackImage);
     assert.equal(image.attributes["data-fallback"], "true");
     image.dispatch("load");
     assert.equal(image.hidden, false);
@@ -103,6 +107,7 @@ test("new Sally units use the reviewed local fallback only after the canonical r
     image.dispatch("error");
     assert.equal(image.requests.length, 3, "a broken local fallback must not loop");
   }
+  assert.notEqual(fallbackByCode["u1630h-sally"], fallbackByCode["u1631e-sally"]);
 });
 
 test("stalled canonical requests reach the local fallback within two bounded timeouts", () => {
@@ -113,7 +118,7 @@ test("stalled canonical requests reach the local fallback within two bounded tim
   app.expireImageRequest();
   assert.equal(image.src, `${character.image}?image_retry=1000`);
   app.expireImageRequest();
-  assert.equal(image.src, "./assets/characters/crab-sally-promo-fallback.png");
+  assert.equal(image.src, "./assets/characters/crab-sally-ultimate-fallback.jpg");
   assert.equal(image.attributes["data-fallback"], "true");
   image.dispatch("load");
   app.expireImageRequest();
@@ -122,10 +127,12 @@ test("stalled canonical requests reach the local fallback within two bounded tim
   assert.equal(image.requests.length, 3);
 });
 
-test("the reviewed name replaces a raw unit code while source metadata is pending", () => {
+test("the reviewed evolution names replace raw unit codes while source metadata is pending", () => {
   const app = harness();
   app.context.character = sample("u1631e-sally");
-  assert.equal(vm.runInContext("characterLabel(character)", app.context), "かに座 サリー");
+  assert.equal(vm.runInContext("characterLabel(character)", app.context), "かに座 サリー（究極進化）");
+  app.context.character = sample("u1630h-sally");
+  assert.equal(vm.runInContext("characterLabel(character)", app.context), "かに座 サリー（超進化）");
   app.context.character = { ...sample("u1631e-sally"), name: "Published source name" };
   assert.equal(vm.runInContext("characterLabel(character)", app.context), "Published source name");
 });

@@ -14,6 +14,11 @@ but the source image and metadata still return 404. Before adding one:
    fallback automatically when it becomes available.
 4. Never make image availability a collection or publication quality gate.
 
-`crab-sally-promo-fallback.png` identifies `u1630h-sally` and `u1631e-sally`
-from the official 12.5 anniversary promotion. It is a temporary promotional
-fallback, not a replacement for the source thumbnail.
+The two Sally forms must remain distinct:
+
+- `crab-sally-hyper-fallback.jpg` is only for `u1630h-sally` (超進化).
+- `crab-sally-ultimate-fallback.jpg` is only for `u1631e-sally` (究極進化).
+
+They are temporary promotional fallbacks, not replacements for the source
+thumbnails. Each unit's own canonical image still takes priority and replaces
+its fallback automatically when the source recovers.
