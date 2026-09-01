@@ -19,15 +19,25 @@ function element(tag) {
 }
 function harness() {
   let now = 1_000 * 600_000;
+  let nextTimerId = 1;
+  const timers = new Map();
   const context = vm.createContext({
     URL, Intl, console, Date: class extends Date { static now() { return now; } },
     document: { querySelector() { return null; }, addEventListener() {}, createElement: element },
-    window: {},
+    window: {
+      setTimeout(callback) { const id = nextTimerId++; timers.set(id, callback); return id; },
+      clearTimeout(id) { timers.delete(id); },
+    },
   });
   vm.runInContext(source, context);
   return {
     context,
     advance() { now += 600_000; },
+    expireImageRequest() {
+      const pending = [...timers.values()];
+      timers.clear();
+      pending.forEach((callback) => callback());
+    },
     create(character = sample(), options = {}) {
       context.character = character;
       context.options = { className: "character-image", alt: "33位のキャラクター画像", loading: "lazy", ...options };
@@ -93,6 +103,23 @@ test("new Sally units use the reviewed local fallback only after the canonical r
     image.dispatch("error");
     assert.equal(image.requests.length, 3, "a broken local fallback must not loop");
   }
+});
+
+test("stalled canonical requests reach the local fallback within two bounded timeouts", () => {
+  const app = harness();
+  const character = sample("u1631e-sally");
+  const { image, pending } = app.create(character);
+  assert.equal(image.src, character.image);
+  app.expireImageRequest();
+  assert.equal(image.src, `${character.image}?image_retry=1000`);
+  app.expireImageRequest();
+  assert.equal(image.src, "./assets/characters/crab-sally-promo-fallback.png");
+  assert.equal(image.attributes["data-fallback"], "true");
+  image.dispatch("load");
+  app.expireImageRequest();
+  assert.equal(image.hidden, false, "a completed fallback must clear its timeout");
+  assert.equal(pending.hidden, true);
+  assert.equal(image.requests.length, 3);
 });
 
 test("the reviewed name replaces a raw unit code while source metadata is pending", () => {

@@ -5,6 +5,7 @@ const DATA_PATH = "./data/character_usage.json";
 const HISTORY_PATH = "./data/character_usage_history.json";
 const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
 const REQUEST_TIMEOUT_MS = 12_000;
+const CHARACTER_IMAGE_TIMEOUT_MS = 6_000;
 const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
 // Match the collector, freshness gate, and watchdog. A result that exceeded
 // this bound was never a valid complete snapshot, so the browser must reject
@@ -1533,7 +1534,26 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
   const fallback = characterImageFallback(character);
   let retried = false;
   let fallbackTried = false;
-  image.addEventListener("error", () => {
+  let imageTimeoutId = null;
+
+  const requestImage = (source, { isFallback = false } = {}) => {
+    if (imageTimeoutId !== null) {
+      window.clearTimeout(imageTimeoutId);
+    }
+    if (isFallback) {
+      image.setAttribute("data-fallback", "true");
+    }
+    image.src = source;
+    // A source request can remain pending instead of emitting an error. Keep
+    // the recovery chain bounded so one stalled thumbnail cannot stay blank.
+    imageTimeoutId = window.setTimeout(handleImageFailure, CHARACTER_IMAGE_TIMEOUT_MS);
+  };
+
+  function handleImageFailure() {
+    if (imageTimeoutId !== null) {
+      window.clearTimeout(imageTimeoutId);
+      imageTimeoutId = null;
+    }
     image.hidden = true;
     pending.hidden = false;
     if (trusted && !retried) {
@@ -1542,26 +1562,30 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
       // that stale failure without random cache misses on each table re-render.
       // loadData already re-renders every ten minutes, even if data is unchanged.
       image.loading = "eager"; // A hidden lazy image would defer the retry.
-      image.src = `${character.image}?image_retry=${Math.floor(Date.now() / AUTO_REFRESH_MS)}`;
+      requestImage(`${character.image}?image_retry=${Math.floor(Date.now() / AUTO_REFRESH_MS)}`);
       return;
     }
     if (fallback && !fallbackTried) {
       fallbackTried = true;
       image.loading = "eager";
-      image.setAttribute("data-fallback", "true");
-      image.src = fallback.image;
+      requestImage(fallback.image, { isFallback: true });
     }
-  });
+  }
+
+  image.addEventListener("error", handleImageFailure);
   image.addEventListener("load", () => {
+    if (imageTimeoutId !== null) {
+      window.clearTimeout(imageTimeoutId);
+      imageTimeoutId = null;
+    }
     image.hidden = false;
     pending.hidden = true;
   });
   if (trusted) {
-    image.src = character.image;
+    requestImage(character.image);
   } else if (fallback) {
     fallbackTried = true;
-    image.setAttribute("data-fallback", "true");
-    image.src = fallback.image;
+    requestImage(fallback.image, { isFallback: true });
   } else {
     // Defense in depth for callers outside validateData; do not request bad URLs.
     image.hidden = true;
