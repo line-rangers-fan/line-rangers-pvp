@@ -1,6 +1,5 @@
 from html.parser import HTMLParser
 from pathlib import Path
-import struct
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,20 +104,25 @@ def test_character_thumbnail_frames_do_not_use_intrinsic_grid_row_height():
 def test_reviewed_new_character_fallback_is_bounded_and_present():
     app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
     style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
-    image_path = ROOT / "docs/assets/characters/crab-sally-promo-fallback.png"
+    image_paths = (
+        ROOT / "docs/assets/characters/crab-sally-hyper-fallback.jpg",
+        ROOT / "docs/assets/characters/crab-sally-ultimate-fallback.jpg",
+    )
 
     assert '"u1630h-sally"' in app
     assert '"u1631e-sally"' in app
+    assert "かに座 サリー（超進化）" in app
+    assert "かに座 サリー（究極進化）" in app
+    assert "crab-sally-hyper-fallback.jpg" in app
+    assert "crab-sally-ultimate-fallback.jpg" in app
     assert "The canonical image" in app
     assert 'img[data-fallback="true"]' in style
     assert "clip-path: circle(44%);" in style
-    assert image_path.is_file()
-    assert image_path.stat().st_size < 2 * 1024 * 1024
-
-    header = image_path.read_bytes()[:24]
-    assert header[:8] == b"\x89PNG\r\n\x1a\n"
-    width, height = struct.unpack(">II", header[16:24])
-    assert width == height
+    assert not (ROOT / "docs/assets/characters/crab-sally-promo-fallback.png").exists()
+    for image_path in image_paths:
+        assert image_path.is_file()
+        assert image_path.stat().st_size < 2 * 1024 * 1024
+        assert image_path.read_bytes()[:3] == b"\xff\xd8\xff"
 
 
 def test_workflows_pin_external_actions_and_fail_shell_scripts_safely():

@@ -31,7 +31,7 @@ const CALENDAR_CLOSE_REFERENCE_MODE = "jst_calendar_close_v1";
 const CALENDAR_CLOSE_PERIODS = new Set(["day", "week", "month"]);
 const TRUSTED_ASSET_ORIGIN = "https://rangers.lerico.net";
 const SAFE_ASSET_CODE = /^[A-Za-z0-9_-]+$/;
-const SAFE_LOCAL_CHARACTER_IMAGE = /^\.\/assets\/characters\/[A-Za-z0-9_-]+\.png$/;
+const SAFE_LOCAL_CHARACTER_IMAGE = /^\.\/assets\/characters\/[A-Za-z0-9_-]+\.(?:png|jpe?g)$/;
 
 // The source normally publishes a predictable thumbnail URL, including for
 // newly added units, so no code change is needed once that asset exists. These
@@ -40,12 +40,12 @@ const SAFE_LOCAL_CHARACTER_IMAGE = /^\.\/assets\/characters\/[A-Za-z0-9_-]+\.png
 // is always attempted first and therefore replaces the fallback automatically.
 const CHARACTER_IMAGE_FALLBACKS = Object.freeze({
   "u1630h-sally": Object.freeze({
-    name: "かに座 サリー",
-    image: "./assets/characters/crab-sally-promo-fallback.png",
+    name: "かに座 サリー（超進化）",
+    image: "./assets/characters/crab-sally-hyper-fallback.jpg",
   }),
   "u1631e-sally": Object.freeze({
-    name: "かに座 サリー",
-    image: "./assets/characters/crab-sally-promo-fallback.png",
+    name: "かに座 サリー（究極進化）",
+    image: "./assets/characters/crab-sally-ultimate-fallback.jpg",
   }),
 });
 
