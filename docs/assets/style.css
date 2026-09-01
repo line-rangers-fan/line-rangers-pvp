@@ -1166,6 +1166,12 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   object-fit: contain;
 }
 
+/* The reviewed promo fallback is stored as a square source image. Clip its
+   outer preparation canvas while leaving normal Handbook sprites untouched. */
+.character-image-frame > img[data-fallback="true"] {
+  clip-path: circle(44%);
+}
+
 .character-image-pending {
   padding: 0.2rem;
   color: var(--muted);
