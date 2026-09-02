@@ -219,6 +219,34 @@ h1 {
   border-color: rgb(253 176 34 / 50%);
 }
 
+.source-status-notice {
+  max-width: 48rem;
+  margin: 1.35rem 0 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid #6f3544;
+  border-left: 4px solid #a64d5d;
+  border-radius: var(--radius-md);
+  color: #edc2ca;
+  background:
+    linear-gradient(135deg, rgb(66 24 37 / 92%), rgb(39 20 29 / 96%));
+  box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
+}
+
+.source-status-notice h2 {
+  margin: 0;
+  color: #ffd5db;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.source-status-notice p {
+  margin: 0.45rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.72;
+  white-space: pre-line;
+}
+
 /* =========================================
    Summary
    ========================================= */

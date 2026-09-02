@@ -396,6 +396,44 @@ const STATUS_TEXT = {
   },
 };
 
+const SOURCE_STATUS_NOTICE = Object.freeze({
+  ja: Object.freeze({
+    title: "お知らせ",
+    message:
+      "お使いいただきありがとうございます。皆さまのご利用が励みになっております。\n\nただ今、情報源としているPvPトラッカーサイトで表示エラーが発生しております。\n\n当サイトでの編成データの取得・集計は正常ですが、一部の画像は暫定表示です。\n\nデータ元の正規画像が配信され次第、正常な画像へ自動的に切り替わります。引き続きご利用いただけますと幸いです。",
+  }),
+  en: Object.freeze({
+    title: "Notice",
+    message:
+      "Thank you for using the site. Your support motivates us.\n\nThe PvP Tracker used as our data source is currently experiencing a display error.\n\nTeam-composition data is still collected and aggregated normally here, but some images are temporary.\n\nOfficial images will switch automatically once the source begins serving them. Thank you for your understanding.",
+  }),
+  zh: Object.freeze({
+    title: "公告",
+    message:
+      "感謝您使用本站，您的支持是我們持續維護的動力。\n\n目前作為資料來源的 PvP Tracker 發生顯示錯誤。\n\n本站的編成資料取得與統計仍正常運作，但部分圖片為暫時顯示。\n\n資料來源開始提供正式圖片後，本站會自動切換。感謝您的理解與使用。",
+  }),
+  th: Object.freeze({
+    title: "ประกาศ",
+    message:
+      "ขอบคุณที่ใช้เว็บไซต์ การสนับสนุนของคุณเป็นกำลังใจให้เรา\n\nขณะนี้ PvP Tracker ซึ่งเป็นแหล่งข้อมูลเกิดข้อผิดพลาดในการแสดงผล\n\nการรับและรวบรวมข้อมูลทีมของเว็บไซต์นี้ยังทำงานปกติ แต่รูปภาพบางส่วนเป็นภาพชั่วคราว\n\nเมื่อแหล่งข้อมูลเผยแพร่รูปภาพทางการแล้ว เว็บไซต์จะสลับให้อัตโนมัติ ขอบคุณสำหรับความเข้าใจ",
+  }),
+  id: Object.freeze({
+    title: "Pemberitahuan",
+    message:
+      "Terima kasih telah menggunakan situs ini. Dukungan Anda menjadi semangat kami.\n\nPvP Tracker yang digunakan sebagai sumber data sedang mengalami kesalahan tampilan.\n\nPengambilan dan penghitungan data susunan tim di situs ini tetap berjalan normal, tetapi beberapa gambar bersifat sementara.\n\nGambar resmi akan beralih otomatis setelah tersedia dari sumber data. Terima kasih atas pengertiannya.",
+  }),
+  vi: Object.freeze({
+    title: "Thông báo",
+    message:
+      "Cảm ơn bạn đã sử dụng trang web. Sự ủng hộ của bạn là động lực của chúng tôi.\n\nPvP Tracker, nguồn dữ liệu của trang, hiện gặp lỗi hiển thị.\n\nViệc lấy và tổng hợp dữ liệu đội hình trên trang vẫn hoạt động bình thường, nhưng một số hình ảnh chỉ là tạm thời.\n\nHình ảnh chính thức sẽ tự động được chuyển sang khi nguồn dữ liệu cung cấp. Cảm ơn bạn đã thông cảm.",
+  }),
+  ko: Object.freeze({
+    title: "안내",
+    message:
+      "이용해 주셔서 감사합니다. 여러분의 이용이 큰 힘이 됩니다.\n\n현재 데이터 출처인 PvP 트래커에서 표시 오류가 발생하고 있습니다.\n\n이 사이트의 편성 데이터 수집 및 집계는 정상적으로 이루어지고 있으나, 일부 이미지는 임시 표시입니다.\n\n데이터 출처에서 정식 이미지를 제공하면 자동으로 전환됩니다. 계속 이용해 주시면 감사하겠습니다.",
+  }),
+});
+
 const translations = {
   ja: {
     title: "LINEレンジャー レジェンド帯キャラ集\u2060計",
@@ -959,6 +997,10 @@ function applyTranslations() {
   setText("#page-title", tr.title);
   setText("#page-description", tr.description);
   setText("#ranking-tap-hint", TAP_HINT[state.language] || TAP_HINT.en);
+  const sourceStatus =
+    SOURCE_STATUS_NOTICE[state.language] || SOURCE_STATUS_NOTICE.en;
+  setText("#source-status-title", sourceStatus.title);
+  setText("#source-status-message", sourceStatus.message);
   updateWeeklyNotice();
 
   setText("#label-league", tr.league);
