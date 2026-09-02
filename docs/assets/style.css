@@ -1065,9 +1065,12 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 }
 
 /* Keep translated ranking headers within their own columns on phones.
-   Labels may use two lines; data cells remain single-line for fast scanning. */
+   This only applies to translations that need additional header width. */
 @media (max-width: 700px) {
-  .ranking-section thead th {
+  html[lang="en"] .ranking-section thead th,
+  html[lang="th"] .ranking-section thead th,
+  html[lang="id"] .ranking-section thead th,
+  html[lang="vi"] .ranking-section thead th {
     padding-block: 0.65rem;
     overflow-wrap: anywhere;
     line-height: 1.2;
@@ -1078,42 +1081,78 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 }
 
 @media (max-width: 480px) {
-  .ranking-section thead th {
+  html[lang="en"] .ranking-section thead th,
+  html[lang="th"] .ranking-section thead th,
+  html[lang="id"] .ranking-section thead th,
+  html[lang="vi"] .ranking-section thead th {
     font-size: 0.74rem;
     letter-spacing: 0;
   }
 
-  .ranking-section th:nth-child(1),
-  .ranking-section td:nth-child(1) {
+  html[lang="en"] .ranking-section th:nth-child(1),
+  html[lang="en"] .ranking-section td:nth-child(1),
+  html[lang="th"] .ranking-section th:nth-child(1),
+  html[lang="th"] .ranking-section td:nth-child(1),
+  html[lang="id"] .ranking-section th:nth-child(1),
+  html[lang="id"] .ranking-section td:nth-child(1),
+  html[lang="vi"] .ranking-section th:nth-child(1),
+  html[lang="vi"] .ranking-section td:nth-child(1) {
     width: 11.5%;
     min-width: 0;
   }
 
-  .ranking-section th:nth-child(2),
-  .ranking-section td:nth-child(2) {
+  html[lang="en"] .ranking-section th:nth-child(2),
+  html[lang="en"] .ranking-section td:nth-child(2),
+  html[lang="th"] .ranking-section th:nth-child(2),
+  html[lang="th"] .ranking-section td:nth-child(2),
+  html[lang="id"] .ranking-section th:nth-child(2),
+  html[lang="id"] .ranking-section td:nth-child(2),
+  html[lang="vi"] .ranking-section th:nth-child(2),
+  html[lang="vi"] .ranking-section td:nth-child(2) {
     width: 21.5%;
     min-width: 0;
   }
 
-  .ranking-section th:nth-child(3),
-  .ranking-section td:nth-child(3) {
+  html[lang="en"] .ranking-section th:nth-child(3),
+  html[lang="en"] .ranking-section td:nth-child(3),
+  html[lang="th"] .ranking-section th:nth-child(3),
+  html[lang="th"] .ranking-section td:nth-child(3),
+  html[lang="id"] .ranking-section th:nth-child(3),
+  html[lang="id"] .ranking-section td:nth-child(3),
+  html[lang="vi"] .ranking-section th:nth-child(3),
+  html[lang="vi"] .ranking-section td:nth-child(3) {
     width: 21.5%;
     min-width: 0;
   }
 
-  .ranking-section th:nth-child(4),
-  .ranking-section td:nth-child(4) {
+  html[lang="en"] .ranking-section th:nth-child(4),
+  html[lang="en"] .ranking-section td:nth-child(4),
+  html[lang="th"] .ranking-section th:nth-child(4),
+  html[lang="th"] .ranking-section td:nth-child(4),
+  html[lang="id"] .ranking-section th:nth-child(4),
+  html[lang="id"] .ranking-section td:nth-child(4),
+  html[lang="vi"] .ranking-section th:nth-child(4),
+  html[lang="vi"] .ranking-section td:nth-child(4) {
     width: 25.5%;
     min-width: 0;
   }
 
-  .ranking-section th:nth-child(5),
-  .ranking-section td:nth-child(5) {
+  html[lang="en"] .ranking-section th:nth-child(5),
+  html[lang="en"] .ranking-section td:nth-child(5),
+  html[lang="th"] .ranking-section th:nth-child(5),
+  html[lang="th"] .ranking-section td:nth-child(5),
+  html[lang="id"] .ranking-section th:nth-child(5),
+  html[lang="id"] .ranking-section td:nth-child(5),
+  html[lang="vi"] .ranking-section th:nth-child(5),
+  html[lang="vi"] .ranking-section td:nth-child(5) {
     width: 20%;
     min-width: 0;
   }
 
-  .ranking-section .rank-cell {
+  html[lang="en"] .ranking-section .rank-cell,
+  html[lang="th"] .ranking-section .rank-cell,
+  html[lang="id"] .ranking-section .rank-cell,
+  html[lang="vi"] .ranking-section .rank-cell {
     width: auto;
     min-width: 0;
   }
