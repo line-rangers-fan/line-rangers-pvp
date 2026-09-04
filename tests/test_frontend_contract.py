@@ -150,6 +150,8 @@ def test_workflows_pin_external_actions_and_fail_shell_scripts_safely():
     for content in (update, watcher, tests):
         assert "uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in content
     assert "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in update
+    assert "uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9" in update
+    assert "uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128" in update
     assert "uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b" in watcher
     assert "uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd" in cloudflare
     assert "set -euo pipefail" in update
