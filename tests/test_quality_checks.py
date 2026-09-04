@@ -130,6 +130,7 @@ def test_optional_cached_character_images_are_same_unit_and_counted():
     data = valid_data()
     code = data["characters"][0]["unit_code"]
     data["characters"][0]["cached_image"] = f"./assets/characters/{code}.png"
+    data["characters"][0]["cached_image_version"] = "0123456789ab"
     data["character_assets"] = {
         "characters": 2,
         "cached_images": 1,
@@ -140,6 +141,11 @@ def test_optional_cached_character_images_are_same_unit_and_counted():
 
     data["characters"][0]["cached_image"] = "./assets/characters/other.png"
     with pytest.raises(ValueError, match="cached character image|asset summary"):
+        validate_data(data)
+
+    data = valid_data()
+    data["characters"][0]["cached_image_version"] = "../bad"
+    with pytest.raises(ValueError, match="cached character image version"):
         validate_data(data)
 
 
