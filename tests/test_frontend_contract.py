@@ -57,6 +57,7 @@ def test_history_and_equipment_change_contract_is_present():
     assert "function renderRankPeriodChanges(" in app
     assert "alwaysShow: true" in app
     assert "selectedRankPeriod" in app
+    assert 'selectedRankPeriod: "day"' in app
     assert "setupRankPeriodSelector" in app
     assert "rankHour" in app
     assert "rankComparison" in app
