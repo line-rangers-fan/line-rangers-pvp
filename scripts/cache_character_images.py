@@ -9,6 +9,7 @@ an exact same-unit local path to the public JSON.
 
 from __future__ import annotations
 
+import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.client import HTTPException
 from pathlib import Path
@@ -63,6 +64,11 @@ def valid_cached_file(path: Path) -> bool:
         return valid_png(path.read_bytes())
     except OSError:
         return False
+
+
+def cached_image_version(path: Path) -> str:
+    """Return a stable cache key that changes only when image bytes change."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
 
 
 def _read_bounded_image(response: object) -> bytes:
@@ -144,6 +150,7 @@ def cache_character_images(data: dict) -> dict[str, int]:
         if not isinstance(character, dict):
             raise ValueError("Published character row is invalid.")
         character.pop("cached_image", None)
+        character.pop("cached_image_version", None)
         unit_code = str(character.get("unit_code") or "")
         image_url = str(character.get("image") or "")
         path, _ = cached_image_location(unit_code)
@@ -170,6 +177,7 @@ def cache_character_images(data: dict) -> dict[str, int]:
         path, public_path = cached_image_location(unit_code)
         if valid_cached_file(path):
             character["cached_image"] = public_path
+            character["cached_image_version"] = cached_image_version(path)
             cached += 1
 
     return {

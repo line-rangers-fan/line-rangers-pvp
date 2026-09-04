@@ -71,9 +71,10 @@ test("verified same-unit cache is preferred and falls back to the canonical chai
   const character = {
     ...sample("u1556e-af"),
     cached_image: "./assets/characters/u1556e-af.png",
+    cached_image_version: "0123456789ab",
   };
   const { image, pending } = harness().create(character);
-  assert.deepEqual(image.requests, [character.cached_image]);
+  assert.deepEqual(image.requests, [`${character.cached_image}?v=0123456789ab`]);
   image.dispatch("load");
   assert.equal(pending.hidden, true);
 
@@ -93,6 +94,17 @@ test("mismatched or unsafe cached paths are ignored", () => {
   ]) {
     const { image } = harness().create({ ...character, cached_image });
     assert.deepEqual(image.requests, [character.image]);
+  }
+});
+
+test("invalid cache versions cannot alter the local image request", () => {
+  const character = {
+    ...sample("u1556e-af"),
+    cached_image: "./assets/characters/u1556e-af.png",
+  };
+  for (const cached_image_version of ["../bad", "ABCDEF012345", "0123456789abcdef"]) {
+    const { image } = harness().create({ ...character, cached_image_version });
+    assert.deepEqual(image.requests, [character.cached_image]);
   }
 });
 

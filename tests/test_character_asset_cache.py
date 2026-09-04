@@ -61,7 +61,11 @@ def test_cache_downloads_only_verified_same_unit_png(tmp_path, monkeypatch):
         "downloaded_images": 1,
     }
     assert available["cached_image"] == "./assets/characters/u100e-test.png"
+    assert available["cached_image_version"] == cache.cached_image_version(
+        tmp_path / "u100e-test.png"
+    )
     assert "cached_image" not in missing
+    assert "cached_image_version" not in missing
     assert (tmp_path / "u100e-test.png").read_bytes() == png()
     assert all(timeout == cache.IMAGE_FETCH_TIMEOUT_SECONDS for _, timeout in opener.requests)
 
@@ -78,6 +82,7 @@ def test_existing_valid_cache_avoids_network_and_is_reused(tmp_path, monkeypatch
     assert stats["cached_images"] == 1
     assert stats["downloaded_images"] == 0
     assert unit["cached_image"] == "./assets/characters/u100e-test.png"
+    assert len(unit["cached_image_version"]) == 12
     assert opener.requests == []
 
 
@@ -100,6 +105,7 @@ def test_invalid_or_oversized_images_never_become_public_cache(tmp_path, monkeyp
     stats = cache.cache_character_images({"characters": [unit]})
     assert stats["cached_images"] == 0
     assert "cached_image" not in unit
+    assert "cached_image_version" not in unit
     assert not (tmp_path / "u100e-test.png").exists()
 
 
@@ -128,3 +134,4 @@ def test_main_updates_data_and_matching_health_atomically(tmp_path, monkeypatch)
     assert published["character_assets"]["cached_images"] == 2
     assert health["character_assets"] == published["character_assets"]
     assert all("cached_image" in row for row in published["characters"])
+    assert all("cached_image_version" in row for row in published["characters"])

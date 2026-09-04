@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -356,12 +357,19 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
     cached_image_count = 0
     for character, unit_code in zip(characters, unit_codes):
         cached_image = character.get("cached_image")
+        cached_version = character.get("cached_image_version")
         if cached_image is None:
+            if cached_version is not None:
+                errors.append("orphaned cached character image version")
             continue
         if cached_image != f"./assets/characters/{unit_code}.png":
             errors.append("invalid cached character image")
         else:
             cached_image_count += 1
+        if cached_version is not None and not re.fullmatch(
+            r"[a-f0-9]{12}", str(cached_version)
+        ):
+            errors.append("invalid cached character image version")
 
     character_assets = data.get("character_assets")
     if character_assets is not None:
