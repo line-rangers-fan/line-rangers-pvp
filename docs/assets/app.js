@@ -1001,6 +1001,7 @@ function applyTranslations() {
     SOURCE_STATUS_NOTICE[state.language] || SOURCE_STATUS_NOTICE.en;
   setText("#source-status-title", sourceStatus.title);
   setText("#source-status-message", sourceStatus.message);
+  updateSourceStatusNotice();
   updateWeeklyNotice();
 
   setText("#label-league", tr.league);
@@ -1047,6 +1048,25 @@ function applyTranslations() {
   if (dialog?.open && state.selectedCharacter) {
     renderEquipment(state.selectedCharacter);
   }
+}
+
+function sourceStatusNeedsNotice(data) {
+  const assets = data?.character_assets;
+  const metadata = data?.diagnostics?.character_name_metadata;
+  if (!assets || typeof assets.pending_images !== "number") return false;
+  return (
+    assets.pending_images > 0 ||
+    metadata?.translation_fetch_failed === true ||
+    Number(metadata?.pending_names || 0) > 0
+  );
+}
+
+function updateSourceStatusNotice() {
+  const notice = document.querySelector("#source-status-notice");
+  if (!notice) return;
+  // The notice follows the latest verified collection instead of becoming a
+  // stale manual flag. Missing optional assets never block the core aggregate.
+  notice.hidden = !sourceStatusNeedsNotice(state.data);
 }
 
 function setText(selector, value) {
@@ -1527,6 +1547,14 @@ function isTrustedCharacterImage(value, unitCode) {
   );
 }
 
+function isTrustedCachedCharacterImage(value, unitCode) {
+  return (
+    typeof unitCode === "string" &&
+    SAFE_ASSET_CODE.test(unitCode) &&
+    value === `./assets/characters/${unitCode}.png`
+  );
+}
+
 function isTrustedEquipmentImage(value, itemCode) {
   return (
     typeof itemCode === "string" &&
@@ -1573,7 +1601,14 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
   // Images are optional presentation assets, never a collection quality gate.
   // Retry only this validated unit's URL; never guess a different unit/host.
   const trusted = isTrustedCharacterImage(character.image, character.unit_code);
+  const cached = isTrustedCachedCharacterImage(
+    character.cached_image,
+    character.unit_code,
+  )
+    ? character.cached_image
+    : null;
   const fallback = characterImageFallback(character);
+  let canonicalTried = false;
   let retried = false;
   let fallbackTried = false;
   let imageTimeoutId = null;
@@ -1598,6 +1633,12 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
     }
     image.hidden = true;
     pending.hidden = false;
+    if (trusted && !canonicalTried) {
+      canonicalTried = true;
+      image.loading = "eager";
+      requestImage(character.image);
+      return;
+    }
     if (trusted && !retried) {
       retried = true;
       // The source caches even 404s for 12 hours. A shared ten-minute key avoids
@@ -1623,7 +1664,10 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
     image.hidden = false;
     pending.hidden = true;
   });
-  if (trusted) {
+  if (cached) {
+    requestImage(cached);
+  } else if (trusted) {
+    canonicalTried = true;
     requestImage(character.image);
   } else if (fallback) {
     fallbackTried = true;
@@ -1766,6 +1810,12 @@ function validateData(data) {
     unitCodes.add(char.unit_code);
 
     if (!isTrustedCharacterImage(char.image, char.unit_code)) {
+      throw new Error(t("imageInvalid"));
+    }
+    if (
+      char.cached_image !== undefined &&
+      !isTrustedCachedCharacterImage(char.cached_image, char.unit_code)
+    ) {
       throw new Error(t("imageInvalid"));
     }
 
