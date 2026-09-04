@@ -76,6 +76,10 @@ def test_history_and_equipment_change_contract_is_present():
     # The browser must use the same bounded collection window as the
     # collector, freshness gate, and watchdog.
     assert "const MAX_COLLECTION_DURATION_SECONDS = 15 * 60;" in app
+    assert "const PUBLIC_TARGET_PLAYER_COUNT = 200;" in app
+    assert "target !== PUBLIC_TARGET_PLAYER_COUNT" in app
+    assert "equipmentFillRate <= 0" in app
+    assert "Object.values(equipmentTypeTotals).some((count) => count === 0)" in app
     assert "isTrustedCharacterImage" in app
     assert "isTrustedCachedCharacterImage" in app
     assert "validateEquipmentRankings" in app
@@ -162,3 +166,12 @@ def test_queued_collection_checks_out_latest_main():
         encoding="utf-8"
     )
     assert "import scrape_character_usage as collector" in cache_script
+
+
+def test_static_rank_period_matches_the_javascript_default():
+    app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
+    page = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+
+    assert 'selectedRankPeriod: "day"' in app
+    assert '<span id="rank-period-current">前日締め</span>' in page
+    assert 'app.js?v=20260904-33' in page

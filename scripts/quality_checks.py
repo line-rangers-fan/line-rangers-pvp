@@ -20,6 +20,12 @@ CALENDAR_CLOSE_REFERENCE_MODE = "jst_calendar_close_v1"
 # never occupy later update windows.  Fifteen minutes leaves several bounded
 # retry passes while making recovery from an outage prompt.
 MAX_COLLECTION_DURATION_SECONDS = 15 * 60
+# Equipment is optional for an individual character slot, but a complete
+# Legend sample cannot legitimately lose an entire equipment category.  A
+# sudden loss of 80% or more of all equipment is likewise treated as an
+# upstream/schema failure.  This deliberately wide tolerance avoids blocking
+# ordinary team changes or a period with more unequipped slots.
+MIN_EQUIPMENT_RETENTION_RATIO = 0.20
 
 
 def assign_competition_ranks(rows: list[dict]) -> list[dict]:
@@ -404,6 +410,9 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
         errors.append("character sort order mismatch")
 
     equipment_slots_collected = 0
+    equipment_type_slots_collected = {
+        equipment_type: 0 for equipment_type in EQUIPMENT_TYPES
+    }
     previous_character_count: int | None = None
     previous_character_rank = 0
     for index, character in enumerate(characters, start=1):
@@ -466,6 +475,7 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
                 errors.append(f"invalid {equipment_type} totals")
                 continue
             equipment_slots_collected += category_occurrences
+            equipment_type_slots_collected[equipment_type] += category_occurrences
 
             expected_items = sorted(
                 items,
@@ -533,6 +543,10 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
 
             if item_occurrences != category_occurrences:
                 errors.append(f"{equipment_type} total mismatch")
+
+    for equipment_type, collected in equipment_type_slots_collected.items():
+        if characters and collected == 0:
+            errors.append(f"empty {equipment_type} aggregate")
 
     quality = data.get("collection_quality")
     if not isinstance(quality, dict):
@@ -633,6 +647,23 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
             new = int(data.get(key, 0))
             if old and new < old * 0.5:
                 errors.append(f"{key} dropped by 50% or more")
+        try:
+            old_equipment_fill = float(
+                previous.get("collection_quality", {}).get("equipment_fill_rate")
+            )
+            new_equipment_fill = float(
+                data.get("collection_quality", {}).get("equipment_fill_rate")
+            )
+        except (AttributeError, TypeError, ValueError):
+            old_equipment_fill = new_equipment_fill = 0.0
+        if (
+            math.isfinite(old_equipment_fill)
+            and math.isfinite(new_equipment_fill)
+            and old_equipment_fill > 0
+            and new_equipment_fill
+            <= old_equipment_fill * MIN_EQUIPMENT_RETENTION_RATIO
+        ):
+            errors.append("equipment fill rate dropped by 80% or more")
         old_time = _parse_time(previous.get("updated_at"))
         new_time = _parse_time(data.get("updated_at"))
         if old_time and new_time and new_time <= old_time:

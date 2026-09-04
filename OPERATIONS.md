@@ -22,7 +22,7 @@
 - 連続障害の監視: https://github.com/line-rangers-fan/line-rangers-pvp/actions/workflows/guard-collection-incidents.yml
 - Worker配備: https://github.com/line-rangers-fan/line-rangers-pvp/actions/workflows/deploy-cloudflare-watchdog.yml
 
-正常な品質情報の目安は、sampled_players: 200、complete_target: true、validated_full_sample: true、detail_fetch_failures: 0です。character_assets.pending_imagesやcharacter_metadata.pending_namesが残っていても、編成集計が正常なら公開を続けます。
+正常な品質情報の目安は、sampled_players: 200、complete_target: true、validated_full_sample: true、detail_fetch_failures: 0、equipment_fill_rateが0より大きいことです。装備1枠ごとの未装備は正常として許容しますが、装備全消失・カテゴリ全消失・前回から80%以上の急落は情報源の構造異常として前回データを維持します。character_assets.pending_imagesやcharacter_metadata.pending_namesが残っていても、編成集計が正常なら公開を続けます。
 
 ## 更新が遅れた場合
 

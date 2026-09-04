@@ -335,7 +335,9 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
     detailDuration >= 0 &&
     detailDuration <= collectionDuration &&
     Number.isFinite(equipmentFillRate) &&
-    equipmentFillRate >= 0 &&
+    // A zero rate means the source's equipment structure disappeared.  It is
+    // not a legitimate empty ranking and must request a repair collection.
+    equipmentFillRate > 0 &&
     equipmentFillRate <= 100 &&
     REQUIRED_PERIODS.every(
       (period) =>

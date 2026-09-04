@@ -360,6 +360,18 @@ test("health inspection distinguishes stale and invalid data", () => {
     ).status,
     "invalid_data",
   );
+  assert.equal(
+    inspectDataHealth(
+      healthySummary("2026-08-27T03:10:00Z", {
+        collection_quality: {
+          ...healthyData("2026-08-27T03:10:00Z").collection_quality,
+          equipment_fill_rate: 0,
+        },
+      }),
+      NOW,
+    ).status,
+    "invalid_data",
+  );
 });
 
 
