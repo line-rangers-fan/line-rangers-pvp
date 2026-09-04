@@ -15,6 +15,13 @@ const PUBLISHED_DATA_PATH = "/line-rangers-pvp/data/character_usage_health.json"
 const SERVICE_NAME = "line-rangers-pvp-watchdog";
 const SCHEDULE = "*/15 * * * *";
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const ACTIVE_WORKFLOW_STATUSES = new Set([
+  "requested",
+  "waiting",
+  "pending",
+  "queued",
+  "in_progress",
+]);
 
 
 function requiredEnvironment(env, name) {
@@ -408,6 +415,35 @@ async function fetchPublishedData(dataUrl, fetchImpl, nowMs, queryName) {
 }
 
 
+export async function hasActiveCollection(
+  repository,
+  token,
+  {fetchImpl = fetch} = {},
+) {
+  if (!REPOSITORY_PATTERN.test(repository)) {
+    throw new Error("Invalid repository for workflow inspection.");
+  }
+  const response = await fetchWithTimeout(
+    fetchImpl,
+    `https://api.github.com/repos/${repository}/actions/workflows/update-character-usage.yml/runs?branch=main&per_page=20`,
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "User-Agent": "line-rangers-pvp-cloudflare-watchdog",
+      },
+    },
+    readPublishedData,
+  );
+  if (!Array.isArray(response?.workflow_runs)) {
+    throw new WatchdogReadError("invalid_github_response");
+  }
+  return response.workflow_runs.some((run) =>
+    run?.head_branch === "main" && ACTIVE_WORKFLOW_STATUSES.has(run?.status)
+  );
+}
+
+
 export async function getHealthSnapshot(
   env,
   { fetchImpl = fetch, nowMs = Date.now() } = {},
@@ -482,6 +518,21 @@ export async function runWatchdog(
   }
 
   const token = requiredEnvironment(env, "GITHUB_ACTIONS_TOKEN");
+  try {
+    if (await hasActiveCollection(repository, token, {fetchImpl})) {
+      // Avoid building a long serialized queue during an upstream outage.
+      // The active run keeps its full retry/time allowance, and the next
+      // 15-minute event will check again if it fails.
+      return {dispatched: false, reason: "collection_active"};
+    }
+  } catch (error) {
+    // Failure to inspect GitHub must not disable the recovery path. A guarded
+    // duplicate is safer than suppressing collection indefinitely.
+    console.warn(
+      "Could not inspect active collection; continuing guarded dispatch.",
+      safeReadError(error),
+    );
+  }
   const dispatchResponse = await fetchWithTimeout(
     fetchImpl,
     `https://api.github.com/repos/${repository}/actions/workflows/update-character-usage.yml/dispatches`,
