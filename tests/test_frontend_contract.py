@@ -37,8 +37,12 @@ def test_frontend_assets_keep_strict_csp_and_required_controls():
         "rank-period-options",
         "equipment-dialog",
         "sunday-notice",
+        "source-status-notice",
     ):
         assert f'id="{element_id}"' in index
+    assert 'id="source-status-notice"' in index
+    notice = index.split('id="source-status-notice"', 1)[1].split(">", 1)[0]
+    assert "hidden" in notice
 
 
 def test_history_and_equipment_change_contract_is_present():
@@ -72,6 +76,7 @@ def test_history_and_equipment_change_contract_is_present():
     # collector, freshness gate, and watchdog.
     assert "const MAX_COLLECTION_DURATION_SECONDS = 15 * 60;" in app
     assert "isTrustedCharacterImage" in app
+    assert "isTrustedCachedCharacterImage" in app
     assert "validateEquipmentRankings" in app
     assert "includePeriodLabel: false" in app
     assert "renderRankPeriodChanges(rank, item.change" in app
@@ -150,3 +155,9 @@ def test_queued_collection_checks_out_latest_main():
     assert "ref: main" in checkout
     assert "cancel-in-progress: false" in update
     assert "git pull --rebase origin main" in update
+    assert "python scripts/cache_character_images.py" in update
+    assert "docs/assets/characters" in update
+    cache_script = (ROOT / "scripts/cache_character_images.py").read_text(
+        encoding="utf-8"
+    )
+    assert "import scrape_character_usage as collector" in cache_script
