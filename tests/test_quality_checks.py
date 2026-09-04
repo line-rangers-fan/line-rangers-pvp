@@ -207,6 +207,9 @@ def test_optional_cached_character_images_are_same_unit_and_counted():
         "cached_images": 1,
         "pending_images": 1,
         "downloaded_images": 1,
+        "refresh_attempted": 1,
+        "refresh_updated": 0,
+        "refresh_unavailable": 1,
     }
     assert validate_data(data)
 
@@ -217,6 +220,24 @@ def test_optional_cached_character_images_are_same_unit_and_counted():
     data = valid_data()
     data["characters"][0]["cached_image_version"] = "../bad"
     with pytest.raises(ValueError, match="cached character image version"):
+        validate_data(data)
+
+
+def test_character_asset_refresh_summary_must_be_complete_and_consistent():
+    data = valid_data()
+    code = data["characters"][0]["unit_code"]
+    data["characters"][0]["cached_image"] = f"./assets/characters/{code}.png"
+    data["characters"][0]["cached_image_version"] = "123456789abc"
+    data["character_assets"] = {
+        "characters": 2,
+        "cached_images": 1,
+        "pending_images": 1,
+        "downloaded_images": 0,
+        "refresh_attempted": 1,
+        "refresh_updated": 0,
+    }
+
+    with pytest.raises(ValueError, match="asset refresh summary"):
         validate_data(data)
 
 

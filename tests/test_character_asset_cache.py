@@ -59,6 +59,9 @@ def test_cache_downloads_only_verified_same_unit_png(tmp_path, monkeypatch):
         "cached_images": 1,
         "pending_images": 1,
         "downloaded_images": 1,
+        "refresh_attempted": 0,
+        "refresh_updated": 0,
+        "refresh_unavailable": 0,
     }
     assert available["cached_image"] == "./assets/characters/u100e-test.png"
     assert available["cached_image_version"] == cache.cached_image_version(
@@ -70,12 +73,13 @@ def test_cache_downloads_only_verified_same_unit_png(tmp_path, monkeypatch):
     assert all(timeout == cache.IMAGE_FETCH_TIMEOUT_SECONDS for _, timeout in opener.requests)
 
 
-def test_existing_valid_cache_avoids_network_and_is_reused(tmp_path, monkeypatch):
+def test_existing_valid_cache_survives_a_failed_bounded_refresh(tmp_path, monkeypatch):
     unit = character("u100e-test")
     (tmp_path / "u100e-test.png").write_bytes(png())
     opener = Opener({})
     monkeypatch.setattr(cache, "CACHE_DIR", tmp_path)
     monkeypatch.setattr(cache.collector, "SOURCE_OPENER", opener)
+    monkeypatch.setattr(cache, "sleep", lambda _seconds: None)
 
     stats = cache.cache_character_images({"characters": [unit]})
 
@@ -83,7 +87,68 @@ def test_existing_valid_cache_avoids_network_and_is_reused(tmp_path, monkeypatch
     assert stats["downloaded_images"] == 0
     assert unit["cached_image"] == "./assets/characters/u100e-test.png"
     assert len(unit["cached_image_version"]) == 12
-    assert opener.requests == []
+    assert len(opener.requests) == cache.IMAGE_FETCH_ATTEMPTS
+    assert stats["refresh_attempted"] == 1
+    assert stats["refresh_unavailable"] == 1
+
+
+def test_changed_canonical_image_replaces_a_valid_cache(tmp_path, monkeypatch):
+    unit = character("u100e-test")
+    path = tmp_path / "u100e-test.png"
+    path.write_bytes(png())
+    old_version = cache.cached_image_version(path)
+    opener = Opener({unit["image"]: png(width=96)})
+    monkeypatch.setattr(cache, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(cache.collector, "SOURCE_OPENER", opener)
+
+    stats = cache.cache_character_images(
+        {"updated_at": "2026-09-04T11:00:00+00:00", "characters": [unit]}
+    )
+
+    assert stats["downloaded_images"] == 1
+    assert stats["refresh_updated"] == 1
+    assert stats["refresh_unavailable"] == 0
+    assert path.read_bytes() == png(width=96)
+    assert unit["cached_image_version"] != old_version
+
+
+def test_valid_cache_refresh_is_limited_to_a_rotating_batch(tmp_path, monkeypatch):
+    characters = [character(f"u{index:03d}e-test") for index in range(20)]
+    responses = {}
+    for unit in characters:
+        (tmp_path / f"{unit['unit_code']}.png").write_bytes(png())
+        responses[unit["image"]] = png()
+    opener = Opener(responses)
+    monkeypatch.setattr(cache, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(cache.collector, "SOURCE_OPENER", opener)
+
+    stats = cache.cache_character_images(
+        {"updated_at": "2026-09-04T11:00:00+00:00", "characters": characters}
+    )
+
+    assert len(opener.requests) == cache.CACHED_IMAGE_REFRESH_BATCH_SIZE
+    assert stats["downloaded_images"] == 0
+    assert stats["cached_images"] == len(characters)
+    assert stats["refresh_attempted"] == cache.CACHED_IMAGE_REFRESH_BATCH_SIZE
+    assert stats["refresh_updated"] == 0
+    assert stats["refresh_unavailable"] == 0
+
+
+def test_rotating_refresh_eventually_rechecks_every_cached_character():
+    cached = [
+        (f"u{index:03d}e-test", f"https://example.invalid/{index}.png")
+        for index in range(65)
+    ]
+    selected = set()
+
+    for hour in range(9):
+        selected.update(
+            cache.rotating_refresh_candidates(
+                {"updated_at": f"2026-09-04T{hour:02d}:00:00+00:00"}, cached
+            )
+        )
+
+    assert selected == set(cached)
 
 
 def test_invalid_or_oversized_images_never_become_public_cache(tmp_path, monkeypatch):
@@ -126,6 +191,8 @@ def test_main_updates_data_and_matching_health_atomically(tmp_path, monkeypatch)
     monkeypatch.setattr(cache, "DATA_PATH", data_path)
     monkeypatch.setattr(cache, "HEALTH_PATH", health_path)
     monkeypatch.setattr(cache, "CACHE_DIR", cache_dir)
+    monkeypatch.setattr(cache.collector, "SOURCE_OPENER", Opener({}))
+    monkeypatch.setattr(cache, "sleep", lambda _seconds: None)
 
     cache.main()
 

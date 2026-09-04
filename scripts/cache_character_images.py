@@ -32,6 +32,11 @@ MIN_IMAGE_DIMENSION = 16
 IMAGE_FETCH_ATTEMPTS = 2
 IMAGE_FETCH_TIMEOUT_SECONDS = 8
 IMAGE_FETCH_WORKERS = 4
+# Recheck only a small rotating slice of valid cached images per collection.
+# Missing images are still retried every run.  This lets a source-side image
+# replacement propagate automatically without adding an all-image download to
+# every hourly publication.
+CACHED_IMAGE_REFRESH_BATCH_SIZE = 8
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
@@ -140,12 +145,51 @@ def cache_one_character(unit_code: str, image_url: str) -> bool:
             pass
 
 
+def refresh_cached_character(unit_code: str, image_url: str) -> str:
+    """Return updated, unchanged or unavailable without discarding a valid cache."""
+    path, _ = cached_image_location(unit_code)
+    if not valid_cached_file(path):
+        return "updated" if cache_one_character(unit_code, image_url) else "unavailable"
+    data = fetch_canonical_image(unit_code, image_url)
+    if data is None:
+        return "unavailable"
+    if path.read_bytes() == data:
+        return "unchanged"
+    temporary = path.with_suffix(".png.tmp")
+    try:
+        temporary.write_bytes(data)
+        if not valid_cached_file(temporary):
+            return "unavailable"
+        temporary.replace(path)
+        return "updated"
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def rotating_refresh_candidates(
+    data: dict, cached: list[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """Choose a deterministic hourly slice so every current image is revisited."""
+    if not cached or CACHED_IMAGE_REFRESH_BATCH_SIZE <= 0:
+        return []
+    timestamp = collector._parse_history_time(data.get("updated_at"))
+    hour_bucket = int(timestamp.timestamp() // 3600) if timestamp else 0
+    ordered = sorted(cached)
+    count = min(CACHED_IMAGE_REFRESH_BATCH_SIZE, len(ordered))
+    start = (hour_bucket * CACHED_IMAGE_REFRESH_BATCH_SIZE) % len(ordered)
+    return [ordered[(start + offset) % len(ordered)] for offset in range(count)]
+
+
 def cache_character_images(data: dict) -> dict[str, int]:
     characters = data.get("characters")
     if not isinstance(characters, list):
         raise ValueError("Published data is missing the character list.")
 
     pending: list[tuple[str, str]] = []
+    cached_candidates: list[tuple[str, str]] = []
     for character in characters:
         if not isinstance(character, dict):
             raise ValueError("Published character row is invalid.")
@@ -156,20 +200,42 @@ def cache_character_images(data: dict) -> dict[str, int]:
         path, _ = cached_image_location(unit_code)
         if not valid_cached_file(path):
             pending.append((unit_code, image_url))
+        else:
+            cached_candidates.append((unit_code, image_url))
+
+    refresh = rotating_refresh_candidates(data, cached_candidates)
 
     downloaded = 0
-    if pending:
+    refresh_updated = 0
+    refresh_unavailable = 0
+    if pending or refresh:
         with ThreadPoolExecutor(max_workers=IMAGE_FETCH_WORKERS) as executor:
             futures = {
-                executor.submit(cache_one_character, unit_code, image_url): unit_code
+                executor.submit(cache_one_character, unit_code, image_url): "pending"
                 for unit_code, image_url in pending
             }
+            futures.update(
+                {
+                    executor.submit(
+                        refresh_cached_character, unit_code, image_url
+                    ): "refresh"
+                    for unit_code, image_url in refresh
+                }
+            )
             for future in as_completed(futures):
                 try:
-                    downloaded += int(bool(future.result()))
+                    result = future.result()
+                    if futures[future] == "pending":
+                        downloaded += int(bool(result))
+                    elif result == "updated":
+                        downloaded += 1
+                        refresh_updated += 1
+                    elif result == "unavailable":
+                        refresh_unavailable += 1
                 except Exception:
                     # An optional asset must never reject already validated data.
-                    pass
+                    if futures[future] == "refresh":
+                        refresh_unavailable += 1
 
     cached = 0
     for character in characters:
@@ -185,6 +251,9 @@ def cache_character_images(data: dict) -> dict[str, int]:
         "cached_images": cached,
         "pending_images": len(characters) - cached,
         "downloaded_images": downloaded,
+        "refresh_attempted": len(refresh),
+        "refresh_updated": refresh_updated,
+        "refresh_unavailable": refresh_unavailable,
     }
 
 
@@ -213,7 +282,10 @@ def main() -> None:
         "[ASSETS] "
         f"cached={stats['cached_images']}/{stats['characters']}, "
         f"downloaded={stats['downloaded_images']}, "
-        f"pending={stats['pending_images']}"
+        f"pending={stats['pending_images']}, "
+        f"refresh={stats['refresh_attempted']}, "
+        f"refresh_updated={stats['refresh_updated']}, "
+        f"refresh_unavailable={stats['refresh_unavailable']}"
     )
 
 

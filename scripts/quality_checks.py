@@ -382,6 +382,7 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
         if not isinstance(character_assets, dict):
             errors.append("invalid character asset summary")
         else:
+            asset_cached = -1
             try:
                 asset_characters = int(character_assets.get("characters", -1))
                 asset_cached = int(character_assets.get("cached_images", -1))
@@ -397,6 +398,26 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
                     or not 0 <= asset_downloaded <= asset_cached
                 ):
                     errors.append("character asset summary mismatch")
+            refresh_keys = {
+                "refresh_attempted",
+                "refresh_updated",
+                "refresh_unavailable",
+            }
+            if refresh_keys.intersection(character_assets):
+                try:
+                    refresh_attempted = int(character_assets["refresh_attempted"])
+                    refresh_updated = int(character_assets["refresh_updated"])
+                    refresh_unavailable = int(character_assets["refresh_unavailable"])
+                except (KeyError, TypeError, ValueError):
+                    errors.append("invalid character asset refresh summary")
+                else:
+                    if (
+                        not 0 <= refresh_attempted <= asset_cached
+                        or not 0 <= refresh_updated <= refresh_attempted
+                        or not 0 <= refresh_unavailable <= refresh_attempted
+                        or refresh_updated + refresh_unavailable > refresh_attempted
+                    ):
+                        errors.append("character asset refresh summary mismatch")
 
     expected_order = sorted(
         characters,

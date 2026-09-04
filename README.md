@@ -24,7 +24,7 @@ LINE Rangers Handbook の PvP Tracker を参照し、レジェンド帯の防衛
 - `.github/workflows/watch-character-usage.yml`: 更新時刻と完全取得（200/200人・取得エラー0）を独立確認し、異常時に主集計を再起動
 - `.github/workflows/guard-collection-incidents.yml`: 連続失敗を重複なくIssue化し、正常な200人集計で復旧を記録
 - `scripts/check_data_freshness.py`: 両ワークフローで共用する鮮度判定
-- `scripts/cache_character_images.py`: 新キャラを含む正規PNGを安全に自動保存し、取得できない画像だけを次回へ持ち越し
+- `scripts/cache_character_images.py`: 新キャラを含む正規PNGを安全に自動保存し、取得できない画像は次回へ持ち越します。保存済み画像も毎回8件ずつ巡回確認し、同じURLの画像が正規版へ更新された場合は自動で差し替え、確認・更新・取得不能の件数を記録します。
 - `docs/data/character_usage_history.json`: 集計成功時だけ追加される軽量履歴
 - `infra/cloudflare-watchdog/`: GitHubの定時イベント停止を補う外部タイマー
 
