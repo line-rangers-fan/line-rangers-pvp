@@ -260,7 +260,11 @@ class MalformedJsonResponse(RuntimeError):
     """A bounded response that can be retried without trusting its contents."""
 
 
-def _read_json_response(response: object, label: str) -> object:
+def _read_json_response(
+    response: object,
+    label: str,
+    timeout_seconds: int | None = None,
+) -> object:
     """Read a bounded JSON response and make size failures explicit."""
     headers = getattr(response, "headers", None)
     content_length = headers.get("Content-Length") if headers else None
@@ -283,7 +287,8 @@ def _read_json_response(response: object, label: str) -> object:
     # Socket timeouts cover idle reads, not a body that trickles in forever.
     # read1 yields between transport reads so the existing request timeout
     # can also bound body consumption without reducing the retry allowance.
-    deadline = monotonic() + REQUEST_TIMEOUT_SECONDS
+    body_timeout = timeout_seconds or REQUEST_TIMEOUT_SECONDS
+    deadline = monotonic() + body_timeout
     read = getattr(response, "read1", response.read)
     body = bytearray()
     while len(body) <= MAX_JSON_RESPONSE_BYTES:
@@ -305,7 +310,13 @@ def _read_json_response(response: object, label: str) -> object:
         raise MalformedJsonResponse(f"{label} did not return valid UTF-8 JSON.") from error
 
 
-def fetch_json(url: str, label: str) -> object:
+def fetch_json(
+    url: str,
+    label: str,
+    *,
+    attempts: int | None = None,
+    timeout_seconds: int | None = None,
+) -> object:
     """Fetch a bounded, trusted JSON response with patient retry handling."""
     if not is_trusted_source_url(url):
         raise ValueError("Refusing to request an untrusted source URL.")
@@ -316,14 +327,18 @@ def fetch_json(url: str, label: str) -> object:
             "User-Agent": "line-rangers-pvp-stats/1.1",
         },
     )
+    request_attempts = REQUEST_ATTEMPTS if attempts is None else max(1, attempts)
+    request_timeout = (
+        REQUEST_TIMEOUT_SECONDS if timeout_seconds is None else max(1, timeout_seconds)
+    )
     last_error: Exception | None = None
-    for attempt in range(1, REQUEST_ATTEMPTS + 1):
+    for attempt in range(1, request_attempts + 1):
         try:
-            with SOURCE_OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            with SOURCE_OPENER.open(request, timeout=request_timeout) as response:
                 status = getattr(response, "status", 200)
                 if status >= 400:
                     raise RuntimeError(f"{label} returned HTTP {status}.")
-                return _read_json_response(response, label)
+                return _read_json_response(response, label, request_timeout)
         except MalformedJsonResponse as error:
             # A brief proxy/upstream failure may return truncated JSON with
             # HTTP 200. Retry within the same existing attempt/time bounds.
@@ -338,7 +353,7 @@ def fetch_json(url: str, label: str) -> object:
             last_error = RuntimeError(
                 f"{label} request failed ({type(error).__name__})."
             )
-        if attempt < REQUEST_ATTEMPTS:
+        if attempt < request_attempts:
             # Bounded exponential backoff gives a rate-limited source time to
             # recover while still fitting within the collection time budget.
             sleep(min(5.0, 0.75 * (2 ** (attempt - 1))))
@@ -623,7 +638,15 @@ def fetch_character_names(unit_codes: set[str]) -> dict[str, str]:
         return {}
 
     url = f"{TRANSLATE_API_URL}?{urlencode({'keys': UNIT_TRANSLATE_KEY})}"
-    payload = fetch_json(url, "Character translation API")
+    # Names are presentation metadata, not part of the 200-player completeness
+    # contract. Keep this optional request short so a catalogue outage cannot
+    # consume the retry budget reserved for ranking and player details.
+    payload = fetch_json(
+        url,
+        "Character translation API",
+        attempts=min(2, REQUEST_ATTEMPTS),
+        timeout_seconds=min(8, REQUEST_TIMEOUT_SECONDS),
+    )
     if not isinstance(payload, dict):
         raise RuntimeError("Character translation API has an invalid root structure.")
     catalog = payload.get(UNIT_TRANSLATE_KEY)
@@ -638,6 +661,76 @@ def fetch_character_names(unit_codes: set[str]) -> dict[str, str]:
         else:
             names[unit_code] = unit_code
     return names
+
+
+def _clean_character_name(value: object, unit_code: str) -> str | None:
+    """Return safe reusable display metadata without inventing a new name."""
+    if not isinstance(value, str):
+        return None
+    name = " ".join(value.replace("\n", " ").split())
+    if not name or name == unit_code or len(name) > 160:
+        return None
+    return name
+
+
+def previous_character_names(unit_codes: set[str]) -> dict[str, str]:
+    """Reuse only previously published names when optional metadata is down."""
+    previous = load_json(OUTPUT_PATH)
+    rows = previous.get("characters") if isinstance(previous, dict) else None
+    if not isinstance(rows, list):
+        return {}
+    names: dict[str, str] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        unit_code = str(row.get("unit_code") or "")
+        if unit_code not in unit_codes or not UNIT_CODE_PATTERN.fullmatch(unit_code):
+            continue
+        name = _clean_character_name(row.get("name"), unit_code)
+        if name:
+            names[unit_code] = name
+    return names
+
+
+def resolve_character_names(
+    unit_codes: set[str],
+) -> tuple[dict[str, str], dict[str, int | bool]]:
+    """Resolve optional names without ever blocking a valid core collection."""
+    previous_names = previous_character_names(unit_codes)
+    fetched_names: dict[str, str] = {}
+    fetch_failed = False
+    try:
+        fetched_names = fetch_character_names(unit_codes)
+    except (RuntimeError, ValueError) as error:
+        fetch_failed = True
+        print(
+            "[WARN] Character name metadata was unavailable; "
+            f"preserving known names ({type(error).__name__}).",
+            file=sys.stderr,
+        )
+
+    resolved: dict[str, str] = {}
+    source_count = previous_count = pending_count = 0
+    for unit_code in unit_codes:
+        source_name = _clean_character_name(fetched_names.get(unit_code), unit_code)
+        if source_name:
+            resolved[unit_code] = source_name
+            source_count += 1
+            continue
+        previous_name = previous_names.get(unit_code)
+        if previous_name:
+            resolved[unit_code] = previous_name
+            previous_count += 1
+            continue
+        resolved[unit_code] = unit_code
+        pending_count += 1
+
+    return resolved, {
+        "source_names": source_count,
+        "preserved_names": previous_count,
+        "pending_names": pending_count,
+        "translation_fetch_failed": fetch_failed,
+    }
 
 
 def build_statistics(
@@ -900,7 +993,8 @@ def scrape() -> dict:
         for player in players
         for record in player["unit_records"]
     }
-    character_names = fetch_character_names(unit_codes)
+    character_names, name_metadata = resolve_character_names(unit_codes)
+    diagnostics["character_name_metadata"] = name_metadata
     ensure_collection_within_budget(collection_started_clock)
     data = build_statistics(
         players,
@@ -1635,7 +1729,7 @@ def health_summary(data: dict) -> dict:
     """Return the minimal, non-player-specific evidence used by the watchdog."""
     comparison = data["comparison"]
     quality = data["collection_quality"]
-    return {
+    summary = {
         "health_schema_version": 1,
         "source_schema_version": data["schema_version"],
         "updated_at": data["updated_at"],
@@ -1670,6 +1764,17 @@ def health_summary(data: dict) -> dict:
             },
         },
     }
+    metadata = data.get("diagnostics", {}).get("character_name_metadata")
+    if isinstance(metadata, dict):
+        summary["character_metadata"] = {
+            "source_names": int(metadata.get("source_names", 0)),
+            "preserved_names": int(metadata.get("preserved_names", 0)),
+            "pending_names": int(metadata.get("pending_names", 0)),
+            "translation_fetch_failed": bool(
+                metadata.get("translation_fetch_failed", False)
+            ),
+        }
+    return summary
 
 
 def write_outputs(data: dict, history: dict) -> None:
@@ -1737,15 +1842,43 @@ def dump_debug(data: dict) -> None:
         save_json(DEBUG_DIR / "diagnostics.json", safe_diagnostics)
 
 
+def dump_collection_failure(
+    stage: str,
+    error: Exception,
+    previous: dict | None,
+) -> None:
+    """Persist a safe CI diagnosis while keeping player/source details private."""
+    if os.environ.get("DEBUG", "0") != "1":
+        return
+    safe_stages = {"scrape", "comparison", "validation", "history", "publication"}
+    report = {
+        "stage": stage if stage in safe_stages else "unknown",
+        "error_type": type(error).__name__,
+        "last_known_good_updated_at": (
+            previous.get("updated_at") if isinstance(previous, dict) else None
+        ),
+        "previous_data_retained": True,
+    }
+    try:
+        save_json(DEBUG_DIR / "collection_failure.json", report)
+    except OSError:
+        print("[WARN] Could not write the safe failure diagnosis.", file=sys.stderr)
+
+
 def main() -> None:
     previous = load_json(OUTPUT_PATH)
     previous_history = load_json(HISTORY_PATH)
+    stage = "scrape"
     try:
         data = scrape()
+        stage = "comparison"
         previous, previous_history = prepare_comparison_context(data, previous, previous_history)
         add_previous_comparison(data, previous, previous_history)
+        stage = "validation"
         validate_data(data, previous)
+        stage = "history"
         history = update_history(data, previous_history)
+        stage = "publication"
         write_outputs(data, history)
         try:
             dump_debug(data)
@@ -1765,6 +1898,7 @@ def main() -> None:
             f"termination={data['termination_reason']}"
         )
     except Exception as error:
+        dump_collection_failure(stage, error, previous)
         print(f"[ERROR] {error}", file=sys.stderr)
         raise
 
