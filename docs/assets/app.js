@@ -1647,6 +1647,8 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
     pending.hidden = false;
     if (cachedSource && !cachedRetried) {
       cachedRetried = true;
+      // The failed image is hidden, so a lazy retry may never start.
+      image.loading = "eager";
       const separator = cachedSource.includes("?") ? "&" : "?";
       requestImage(
         `${cachedSource}${separator}cache_retry=${Math.floor(Date.now() / AUTO_REFRESH_MS)}`,
