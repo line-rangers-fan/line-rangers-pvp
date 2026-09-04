@@ -80,6 +80,11 @@ test("verified same-unit cache is preferred and falls back to the canonical chai
 
   const failedCache = harness().create(character);
   failedCache.image.dispatch("error");
+  assert.equal(
+    failedCache.image.src,
+    `${character.cached_image}?v=0123456789ab&cache_retry=1000`,
+  );
+  failedCache.image.dispatch("error");
   assert.equal(failedCache.image.src, character.image);
   failedCache.image.dispatch("error");
   assert.match(failedCache.image.src, /image_retry=1000$/);
