@@ -139,14 +139,17 @@ def test_workflows_pin_external_actions_and_fail_shell_scripts_safely():
     workflows = (ROOT / ".github/workflows")
     update = (workflows / "update-character-usage.yml").read_text(encoding="utf-8")
     watcher = (workflows / "watch-character-usage.yml").read_text(encoding="utf-8")
+    tests = (workflows / "test-comparison-guards.yml").read_text(encoding="utf-8")
     cloudflare = (workflows / "deploy-cloudflare-watchdog.yml").read_text(
         encoding="utf-8"
     )
 
-    for content in (update, watcher, cloudflare):
-        assert "uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in content
+    for content in (update, watcher, tests, cloudflare):
+        assert "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in content
         assert "uses: actions/checkout@v4" not in content
-    assert "uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in update
+    for content in (update, watcher, tests):
+        assert "uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in content
+    assert "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in update
     assert "uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b" in watcher
     assert "uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd" in cloudflare
     assert "set -euo pipefail" in update
