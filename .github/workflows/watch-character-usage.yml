@@ -34,8 +34,37 @@ jobs:
             --max-age-minutes 55 \
             --github-output "$GITHUB_OUTPUT"
 
-      - name: Trigger a repair collection
+      - name: Check for an active collection
+        id: active
         if: steps.freshness.outputs.due == 'true'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const activeStatuses = new Set([
+              "requested", "waiting", "pending", "queued", "in_progress",
+            ]);
+            let active = false;
+            try {
+              const response = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: "update-character-usage.yml",
+                branch: "main",
+                per_page: 20,
+              });
+              active = response.data.workflow_runs.some(
+                (run) => activeStatuses.has(run.status),
+              );
+            } catch {
+              // Fail open: an inspection problem must not disable recovery.
+              core.warning("Could not inspect active collection; repair dispatch remains enabled.");
+            }
+            core.setOutput("active", active ? "true" : "false");
+
+      - name: Trigger a repair collection
+        if: >-
+          steps.freshness.outputs.due == 'true' &&
+          steps.active.outputs.active != 'true'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
@@ -46,3 +75,9 @@ jobs:
               ref: "main",
               inputs: { force_collection: "true" },
             });
+
+      - name: Report existing active recovery
+        if: >-
+          steps.freshness.outputs.due == 'true' &&
+          steps.active.outputs.active == 'true'
+        run: echo "A collection is already queued or running; no duplicate was added."
