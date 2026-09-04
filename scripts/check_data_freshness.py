@@ -91,7 +91,7 @@ def has_complete_sample(data: dict) -> bool:
             and math.isfinite(detail_duration)
             and 0 <= detail_duration <= collection_duration
             and math.isfinite(equipment_fill_rate)
-            and 0 <= equipment_fill_rate <= 100
+            and 0 < equipment_fill_rate <= 100
             and int(quality.get("detail_fetch_failures", -1)) == 0
             and int(quality.get("invalid_player_records", -1)) == 0
         )

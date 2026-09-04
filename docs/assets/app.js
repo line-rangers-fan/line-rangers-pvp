@@ -11,6 +11,7 @@ const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
 // this bound was never a valid complete snapshot, so the browser must reject
 // it too instead of showing it as current.
 const MAX_COLLECTION_DURATION_SECONDS = 15 * 60;
+const PUBLIC_TARGET_PLAYER_COUNT = 200;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 // Collection normally completes about hourly. GitHub Actions can queue a run
 // and the source can briefly throttle detail requests, so a healthy previous
@@ -1707,6 +1708,7 @@ function validateEquipmentRankings(rankings, character) {
     throw new Error(t("characterInvalid"));
   }
 
+  const categoryTotals = {};
   EQUIPMENT_TYPES.forEach(([type]) => {
     const category = rankings[type];
     if (!category || !Array.isArray(category.items)) {
@@ -1759,7 +1761,9 @@ function validateEquipmentRankings(rankings, character) {
     if (itemTotal !== equippedOccurrences) {
       throw new Error(t("characterInvalid"));
     }
+    categoryTotals[type] = equippedOccurrences;
   });
+  return categoryTotals;
 }
 
 function validateData(data) {
@@ -1782,6 +1786,7 @@ function validateData(data) {
     updatedAt > Date.now() + 10 * 60 * 1000 ||
     !isSafeInteger(sampled, 1, 10_000) ||
     !isSafeInteger(target, 1, 10_000) ||
+    target !== PUBLIC_TARGET_PLAYER_COUNT ||
     sampled !== target ||
     data.complete_target !== true
   ) {
@@ -1806,7 +1811,7 @@ function validateData(data) {
     detailDuration < 0 ||
     detailDuration > collectionDuration ||
     !Number.isFinite(equipmentFillRate) ||
-    equipmentFillRate < 0 ||
+    equipmentFillRate <= 0 ||
     equipmentFillRate > 100
   ) {
     throw new Error(t("dataError"));
@@ -1816,6 +1821,9 @@ function validateData(data) {
   let previousCount = null;
   let previousRank = 0;
   const unitCodes = new Set();
+  const equipmentTypeTotals = Object.fromEntries(
+    EQUIPMENT_TYPES.map(([type]) => [type, 0])
+  );
 
   data.characters.forEach((char, index) => {
     if (!char || typeof char !== "object") {
@@ -1894,12 +1902,29 @@ function validateData(data) {
       throw new Error(t("characterInvalid"));
     }
 
-    validateEquipmentRankings(char.equipment_rankings, char);
+    const categoryTotals = validateEquipmentRankings(char.equipment_rankings, char);
+    EQUIPMENT_TYPES.forEach(([type]) => {
+      equipmentTypeTotals[type] += categoryTotals[type];
+    });
   });
+
+  const equipmentSlotsCollected = Object.values(equipmentTypeTotals).reduce(
+    (total, count) => total + count,
+    0
+  );
+  const equipmentSlotsExpected = slots * EQUIPMENT_TYPES.length;
+  const expectedEquipmentFillRate =
+    Math.round((equipmentSlotsCollected / equipmentSlotsExpected) * 1000) / 10;
 
   if (
     slotTotal !== slots ||
-    Number(data.unique_characters) !== data.characters.length
+    Number(data.unique_characters) !== data.characters.length ||
+    Object.values(equipmentTypeTotals).some((count) => count === 0) ||
+    quality.equipment_slots_collected !== equipmentSlotsCollected ||
+    quality.equipment_slots_expected !== equipmentSlotsExpected ||
+    quality.equipment_slots_missing !==
+      equipmentSlotsExpected - equipmentSlotsCollected ||
+    !hasExpectedRate(equipmentFillRate, expectedEquipmentFillRate)
   ) {
     throw new Error(t("dataError"));
   }
@@ -1992,7 +2017,7 @@ function validateHistory(history) {
     ) {
       throw new Error("Invalid history calendar date.");
     }
-    if (!Number.isInteger(Number(snapshot.sampled_players)) || snapshot.sampled_players <= 0) {
+    if (snapshot.sampled_players !== PUBLIC_TARGET_PLAYER_COUNT) {
       throw new Error("Invalid history sample size.");
     }
     const unitCodes = new Set();

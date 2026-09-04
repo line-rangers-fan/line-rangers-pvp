@@ -80,6 +80,28 @@ def test_fresh_data_with_impossible_collection_timing_is_due(tmp_path):
     assert result.reason == "invalid_quality"
 
 
+def test_fresh_data_with_no_equipment_is_due(tmp_path):
+    now = datetime(2026, 8, 27, 3, 0, tzinfo=timezone.utc)
+    path = tmp_path / "ranking.json"
+    write_timestamp(path, now - timedelta(minutes=5))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for character in data["characters"]:
+        for category in character["equipment_rankings"].values():
+            category["equipped_occurrence_count"] = 0
+            category["equipped_player_count"] = 0
+            category["items"] = []
+    quality = data["collection_quality"]
+    quality["equipment_slots_collected"] = 0
+    quality["equipment_slots_missing"] = quality["equipment_slots_expected"]
+    quality["equipment_fill_rate"] = 0.0
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = check_freshness(path, 50, now=now)
+
+    assert result.due is True
+    assert result.reason == "invalid_quality"
+
+
 def test_legacy_schema_or_missing_hour_comparison_is_due(tmp_path):
     now = datetime(2026, 8, 27, 3, 0, tzinfo=timezone.utc)
     path = tmp_path / "ranking.json"
