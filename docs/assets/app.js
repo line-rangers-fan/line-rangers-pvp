@@ -841,7 +841,7 @@ const state = {
   language: "ja",
   selectedCharacter: null,
   selectedEquipmentType: "WEAPON",
-  selectedRankPeriod: "hour",
+  selectedRankPeriod: "day",
   rankingScrollTop: 0,
   suppressCharacterTapUntil: 0,
   isLoading: false,
