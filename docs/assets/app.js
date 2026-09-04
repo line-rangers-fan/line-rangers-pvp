@@ -1613,8 +1613,14 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
   )
     ? character.cached_image_version
     : null;
+  const cachedSource = cached
+    ? cachedVersion
+      ? `${cached}?v=${cachedVersion}`
+      : cached
+    : null;
   const fallback = characterImageFallback(character);
   let canonicalTried = false;
+  let cachedRetried = false;
   let retried = false;
   let fallbackTried = false;
   let imageTimeoutId = null;
@@ -1639,6 +1645,14 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
     }
     image.hidden = true;
     pending.hidden = false;
+    if (cachedSource && !cachedRetried) {
+      cachedRetried = true;
+      const separator = cachedSource.includes("?") ? "&" : "?";
+      requestImage(
+        `${cachedSource}${separator}cache_retry=${Math.floor(Date.now() / AUTO_REFRESH_MS)}`,
+      );
+      return;
+    }
     if (trusted && !canonicalTried) {
       canonicalTried = true;
       image.loading = "eager";
@@ -1671,7 +1685,7 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
     pending.hidden = true;
   });
   if (cached) {
-    requestImage(cachedVersion ? `${cached}?v=${cachedVersion}` : cached);
+    requestImage(cachedSource);
   } else if (trusted) {
     canonicalTried = true;
     requestImage(character.image);
