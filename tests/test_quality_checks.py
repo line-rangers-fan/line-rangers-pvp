@@ -126,6 +126,23 @@ def test_valid_data():
     assert validate_data(valid_data())
 
 
+def test_optional_cached_character_images_are_same_unit_and_counted():
+    data = valid_data()
+    code = data["characters"][0]["unit_code"]
+    data["characters"][0]["cached_image"] = f"./assets/characters/{code}.png"
+    data["character_assets"] = {
+        "characters": 2,
+        "cached_images": 1,
+        "pending_images": 1,
+        "downloaded_images": 1,
+    }
+    assert validate_data(data)
+
+    data["characters"][0]["cached_image"] = "./assets/characters/other.png"
+    with pytest.raises(ValueError, match="cached character image|asset summary"):
+        validate_data(data)
+
+
 def test_comparison_contract_requires_all_four_periods():
     assert RANK_PERIODS == ("hour", "day", "week", "month")
 

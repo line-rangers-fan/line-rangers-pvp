@@ -67,6 +67,55 @@ test("existing images retain the canonical URL, lazy loading, size and alt text"
   assert.equal(image.requests.length, 1);
 });
 
+test("verified same-unit cache is preferred and falls back to the canonical chain", () => {
+  const character = {
+    ...sample("u1556e-af"),
+    cached_image: "./assets/characters/u1556e-af.png",
+  };
+  const { image, pending } = harness().create(character);
+  assert.deepEqual(image.requests, [character.cached_image]);
+  image.dispatch("load");
+  assert.equal(pending.hidden, true);
+
+  const failedCache = harness().create(character);
+  failedCache.image.dispatch("error");
+  assert.equal(failedCache.image.src, character.image);
+  failedCache.image.dispatch("error");
+  assert.match(failedCache.image.src, /image_retry=1000$/);
+});
+
+test("mismatched or unsafe cached paths are ignored", () => {
+  const character = sample("u1556e-af");
+  for (const cached_image of [
+    "./assets/characters/u999e-other.png",
+    "../characters/u1556e-af.png",
+    "https://example.com/u1556e-af.png",
+  ]) {
+    const { image } = harness().create({ ...character, cached_image });
+    assert.deepEqual(image.requests, [character.image]);
+  }
+});
+
+test("source notice follows verified pending metadata and clears automatically", () => {
+  const { context } = harness();
+  const needsNotice = (data) => {
+    context.noticeData = data;
+    return vm.runInContext("sourceStatusNeedsNotice(noticeData)", context);
+  };
+  assert.equal(needsNotice(null), false);
+  assert.equal(needsNotice({ character_assets: { pending_images: 0 } }), false);
+  assert.equal(needsNotice({ character_assets: { pending_images: 1 } }), true);
+  assert.equal(
+    needsNotice({
+      character_assets: { pending_images: 0 },
+      diagnostics: {
+        character_name_metadata: { translation_fetch_failed: true },
+      },
+    }),
+    true,
+  );
+});
+
 test("404 or image decode errors trigger exactly one same-unit cache-busting retry", () => {
   for (const code of ["u99999e-future", "u99998h-future"]) {
     const character = sample(code);

@@ -88,3 +88,104 @@ def test_required_validation_and_publication_errors_still_fail_closed(tmp_path, 
     with pytest.raises(expected):
         scraper.main()
     assert [path.read_bytes() for path in paths] == before
+
+
+def test_optional_character_names_preserve_last_known_values(tmp_path, monkeypatch, capsys):
+    output = tmp_path / "data.json"
+    scraper.save_json(
+        output,
+        {
+            "characters": [
+                {"unit_code": "u-known", "name": "Known Name"},
+                {"unit_code": "u-new", "name": "u-new"},
+            ]
+        },
+    )
+    monkeypatch.setattr(scraper, "OUTPUT_PATH", output)
+    monkeypatch.setattr(
+        scraper,
+        "fetch_character_names",
+        lambda _codes: (_ for _ in ()).throw(RuntimeError("metadata outage")),
+    )
+
+    names, metadata = scraper.resolve_character_names({"u-known", "u-new"})
+
+    assert names == {"u-known": "Known Name", "u-new": "u-new"}
+    assert metadata == {
+        "source_names": 0,
+        "preserved_names": 1,
+        "pending_names": 1,
+        "translation_fetch_failed": True,
+    }
+    assert "metadata was unavailable" in capsys.readouterr().err
+
+
+def test_source_character_names_replace_preserved_values(tmp_path, monkeypatch):
+    output = tmp_path / "data.json"
+    scraper.save_json(
+        output,
+        {"characters": [{"unit_code": "u-known", "name": "Old Name"}]},
+    )
+    monkeypatch.setattr(scraper, "OUTPUT_PATH", output)
+    monkeypatch.setattr(
+        scraper,
+        "fetch_character_names",
+        lambda _codes: {"u-known": "Current Name", "u-new": "u-new"},
+    )
+
+    names, metadata = scraper.resolve_character_names({"u-known", "u-new"})
+
+    assert names == {"u-known": "Current Name", "u-new": "u-new"}
+    assert metadata["source_names"] == 1
+    assert metadata["preserved_names"] == 0
+    assert metadata["pending_names"] == 1
+    assert metadata["translation_fetch_failed"] is False
+
+
+def test_optional_character_name_request_uses_short_retry_budget(monkeypatch):
+    calls = []
+
+    def fetch(url, label, **kwargs):
+        calls.append((url, label, kwargs))
+        return {"ja:UNIT": {"u-known_snm": "Known Name"}}
+
+    monkeypatch.setattr(scraper, "fetch_json", fetch)
+
+    assert scraper.fetch_character_names({"u-known"}) == {"u-known": "Known Name"}
+    assert calls[0][2] == {
+        "attempts": min(2, scraper.REQUEST_ATTEMPTS),
+        "timeout_seconds": min(8, scraper.REQUEST_TIMEOUT_SECONDS),
+    }
+
+
+def test_failure_artifact_records_stage_without_error_or_player_details(
+    tmp_path, monkeypatch
+):
+    output = tmp_path / "data.json"
+    previous = {"updated_at": "2026-09-03T03:00:00+00:00", "sampled_players": 200}
+    scraper.save_json(output, previous)
+    monkeypatch.setattr(scraper, "OUTPUT_PATH", output)
+    monkeypatch.setattr(scraper, "HISTORY_PATH", tmp_path / "history.json")
+    monkeypatch.setattr(scraper, "DEBUG_DIR", tmp_path / "debug")
+    monkeypatch.setenv("DEBUG", "1")
+    monkeypatch.setattr(
+        scraper,
+        "scrape",
+        lambda: (_ for _ in ()).throw(
+            RuntimeError("sensitive-player-id and upstream payload")
+        ),
+    )
+
+    with pytest.raises(RuntimeError):
+        scraper.main()
+
+    report = json.loads(
+        (tmp_path / "debug" / "collection_failure.json").read_text(encoding="utf-8")
+    )
+    assert report == {
+        "stage": "scrape",
+        "error_type": "RuntimeError",
+        "last_known_good_updated_at": "2026-09-03T03:00:00+00:00",
+        "previous_data_retained": True,
+    }
+    assert "sensitive-player-id" not in json.dumps(report)
