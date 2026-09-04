@@ -32,6 +32,7 @@ const CALENDAR_CLOSE_PERIODS = new Set(["day", "week", "month"]);
 const TRUSTED_ASSET_ORIGIN = "https://rangers.lerico.net";
 const SAFE_ASSET_CODE = /^[A-Za-z0-9_-]+$/;
 const SAFE_LOCAL_CHARACTER_IMAGE = /^\.\/assets\/characters\/[A-Za-z0-9_-]+\.(?:png|jpe?g)$/;
+const SAFE_CHARACTER_IMAGE_VERSION = /^[a-f0-9]{12}$/;
 
 // The source normally publishes a predictable thumbnail URL, including for
 // newly added units, so no code change is needed once that asset exists. These
@@ -1607,6 +1608,11 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
   )
     ? character.cached_image
     : null;
+  const cachedVersion = SAFE_CHARACTER_IMAGE_VERSION.test(
+    character.cached_image_version,
+  )
+    ? character.cached_image_version
+    : null;
   const fallback = characterImageFallback(character);
   let canonicalTried = false;
   let retried = false;
@@ -1665,7 +1671,7 @@ function createCharacterImage(character, { className, alt, loading = "eager" }) 
     pending.hidden = true;
   });
   if (cached) {
-    requestImage(cached);
+    requestImage(cachedVersion ? `${cached}?v=${cachedVersion}` : cached);
   } else if (trusted) {
     canonicalTried = true;
     requestImage(character.image);
@@ -1815,6 +1821,13 @@ function validateData(data) {
     if (
       char.cached_image !== undefined &&
       !isTrustedCachedCharacterImage(char.cached_image, char.unit_code)
+    ) {
+      throw new Error(t("imageInvalid"));
+    }
+    if (
+      char.cached_image_version !== undefined &&
+      (char.cached_image === undefined ||
+        !SAFE_CHARACTER_IMAGE_VERSION.test(char.cached_image_version))
     ) {
       throw new Error(t("imageInvalid"));
     }
