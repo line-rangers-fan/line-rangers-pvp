@@ -353,6 +353,36 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
     unit_codes = [str(char.get("unit_code") or "") for char in characters]
     if any(not code for code in unit_codes) or len(unit_codes) != len(set(unit_codes)):
         errors.append("duplicate or missing character unit code")
+    cached_image_count = 0
+    for character, unit_code in zip(characters, unit_codes):
+        cached_image = character.get("cached_image")
+        if cached_image is None:
+            continue
+        if cached_image != f"./assets/characters/{unit_code}.png":
+            errors.append("invalid cached character image")
+        else:
+            cached_image_count += 1
+
+    character_assets = data.get("character_assets")
+    if character_assets is not None:
+        if not isinstance(character_assets, dict):
+            errors.append("invalid character asset summary")
+        else:
+            try:
+                asset_characters = int(character_assets.get("characters", -1))
+                asset_cached = int(character_assets.get("cached_images", -1))
+                asset_pending = int(character_assets.get("pending_images", -1))
+                asset_downloaded = int(character_assets.get("downloaded_images", -1))
+            except (TypeError, ValueError):
+                errors.append("invalid character asset summary")
+            else:
+                if (
+                    asset_characters != len(characters)
+                    or asset_cached != cached_image_count
+                    or asset_pending != len(characters) - cached_image_count
+                    or not 0 <= asset_downloaded <= asset_cached
+                ):
+                    errors.append("character asset summary mismatch")
 
     expected_order = sorted(
         characters,
