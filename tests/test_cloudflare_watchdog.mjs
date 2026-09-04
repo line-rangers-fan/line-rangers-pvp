@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   dataNeedsCollection,
   getHealthSnapshot,
+  hasActiveCollection,
   isCalendarAnchorWindow,
   isHourlyBaselineWindow,
   inspectDataHealth,
@@ -80,6 +81,11 @@ function healthySummary(updatedAt, overrides = {}) {
 }
 
 
+function workflowRuns(runs = []) {
+  return new Response(JSON.stringify({workflow_runs: runs}), {status: 200});
+}
+
+
 test("compact verified health summary preserves strict collection checks", () => {
   const now = Date.parse("2026-08-27T04:00:00Z");
   assert.equal(inspectDataHealth(healthySummary("2026-08-27T03:50:00Z"), now).status, "ok");
@@ -120,7 +126,7 @@ test("workerd-compatible redirect mode preserves health and dispatch redirect gu
       return new Response(null, {status: 307, headers: {Location: "https://untrusted.invalid/"}});
     },
   }), /GitHub workflow dispatch failed: HTTP 307/);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(calls.some(url => url.includes("untrusted.invalid")), false);
 });
 
@@ -155,6 +161,7 @@ test("hourly baseline forces a collection even when current data is fresh", asyn
         { status: 200 },
       );
     }
+    if (url.includes("/runs?")) return workflowRuns();
     return new Response(null, { status: 204 });
   };
 
@@ -163,7 +170,7 @@ test("hourly baseline forces a collection even when current data is fresh", asyn
   const result = await runWatchdog(ENV, { fetchImpl, nowMs: NOW });
 
   assert.deepEqual(result, { dispatched: true, reason: "hourly_baseline" });
-  assert.deepEqual(JSON.parse(calls[1].options.body), {
+  assert.deepEqual(JSON.parse(calls[2].options.body), {
     ref: "main",
     inputs: { force_collection: "true" },
   });
@@ -181,6 +188,7 @@ test("JST calendar close forces a verified baseline collection", async () => {
         { status: 200 },
       );
     }
+    if (url.includes("/runs?")) return workflowRuns();
     return new Response(null, { status: 204 });
   };
 
@@ -192,8 +200,8 @@ test("JST calendar close forces a verified baseline collection", async () => {
   const result = await runWatchdog(ENV, { fetchImpl, nowMs: closeWindow });
 
   assert.deepEqual(result, { dispatched: true, reason: "calendar_anchor" });
-  assert.equal(calls.length, 2);
-  assert.deepEqual(JSON.parse(calls[1].options.body), {
+  assert.equal(calls.length, 3);
+  assert.deepEqual(JSON.parse(calls[2].options.body), {
     ref: "main",
     inputs: { force_collection: "true" },
   });
@@ -210,6 +218,7 @@ test("stale data dispatches the guarded collection workflow", async () => {
         { status: 200 },
       );
     }
+    if (url.includes("/runs?")) return workflowRuns();
     return new Response(null, { status: 204 });
   };
 
@@ -219,11 +228,11 @@ test("stale data dispatches the guarded collection workflow", async () => {
     dispatched: true,
     reason: "stale",
   });
-  assert.equal(calls.length, 2);
-  assert.match(calls[1].url, /update-character-usage\.yml\/dispatches$/);
-  assert.equal(calls[1].options.method, "POST");
+  assert.equal(calls.length, 3);
+  assert.match(calls[2].url, /update-character-usage\.yml\/dispatches$/);
+  assert.equal(calls[2].options.method, "POST");
   assert.equal(
-    calls[1].options.headers.Authorization,
+    calls[2].options.headers.Authorization,
     "Bearer test-token",
   );
 });
@@ -235,6 +244,33 @@ test("missing and future timestamps request repair", () => {
     dataNeedsCollection(healthyData("2026-08-27T04:11:00Z"), NOW),
     true,
   );
+});
+
+
+test("an active collection suppresses duplicate repair dispatches", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({url, options});
+    if (url.startsWith(ENV.DATA_URL)) {
+      return new Response(
+        JSON.stringify(healthyData("2026-08-27T02:54:00Z")),
+        {status: 200},
+      );
+    }
+    if (url.includes("/runs?")) {
+      return workflowRuns([{head_branch: "main", status: "in_progress"}]);
+    }
+    throw new Error("dispatch should not be called");
+  };
+
+  assert.equal(
+    await hasActiveCollection(ENV.GITHUB_REPOSITORY, ENV.GITHUB_ACTIONS_TOKEN, {fetchImpl}),
+    true,
+  );
+  calls.length = 0;
+  const result = await runWatchdog(ENV, {fetchImpl, nowMs: NOW});
+  assert.deepEqual(result, {dispatched: false, reason: "collection_active"});
+  assert.equal(calls.length, 2);
 });
 
 
@@ -339,13 +375,14 @@ test("fresh but incomplete data triggers repair", async () => {
         { status: 200 },
       );
     }
+    if (url.includes("/runs?")) return workflowRuns();
     return new Response(null, { status: 204 });
   };
 
   const result = await runWatchdog(ENV, { fetchImpl, nowMs: NOW });
 
   assert.deepEqual(result, { dispatched: true, reason: "invalid_data" });
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
 });
 
 
@@ -429,13 +466,15 @@ test("invalid data forces repair outside hourly and closing windows", async () =
     nowMs: Date.parse("2026-08-27T04:20:00Z"),
     fetchImpl: async (url, options) => {
       calls.push({url, options});
-      return url.startsWith(ENV.DATA_URL)
-        ? new Response(JSON.stringify(data), {status: 200})
-        : new Response(null, {status: 204});
+      if (url.startsWith(ENV.DATA_URL)) {
+        return new Response(JSON.stringify(data), {status: 200});
+      }
+      if (url.includes("/runs?")) return workflowRuns();
+      return new Response(null, {status: 204});
     },
   });
   assert.deepEqual(result, {dispatched: true, reason: "invalid_data"});
-  assert.equal(JSON.parse(calls[1].options.body).inputs.force_collection, "true");
+  assert.equal(JSON.parse(calls[2].options.body).inputs.force_collection, "true");
 });
 
 
