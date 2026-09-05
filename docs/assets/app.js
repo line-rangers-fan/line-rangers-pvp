@@ -855,9 +855,7 @@ const elements = {
   summary: document.querySelector("#summary"),
   rankingSection: document.querySelector("#ranking-section"),
   league: document.querySelector("#summary-league"),
-  players: document.querySelector("#summary-players"),
   slots: document.querySelector("#summary-slots"),
-  characters: document.querySelector("#summary-characters"),
   updated: document.querySelector("#summary-updated"),
   freshness: document.querySelector("#summary-freshness"),
   health: document.querySelector("#summary-health"),
@@ -1007,9 +1005,7 @@ function applyTranslations() {
   updateWeeklyNotice();
 
   setText("#label-league", tr.league);
-  setText("#label-players", tr.players);
   setText("#label-slots", tr.slots);
-  setText("#label-characters", tr.characters);
   setText("#label-updated", tr.updated);
 
   setText("#ranking-title", tr.ranking);
@@ -1212,9 +1208,7 @@ function renderSummary() {
   if (!state.data) return;
 
   elements.league.textContent = translateLeague(state.data.league);
-  elements.players.textContent = formatUnit(state.data.sampled_players, "players");
   elements.slots.textContent = formatUnit(state.data.character_slots, "occurrence");
-  elements.characters.textContent = formatUnit(state.data.unique_characters, "characters");
   elements.updated.textContent = formatDate(state.data.updated_at);
   if (elements.health) {
     elements.health.textContent = formatQualitySummary();
