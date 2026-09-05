@@ -94,6 +94,21 @@ def test_history_and_equipment_change_contract_is_present():
     assert ".rank-period-pending" in style
 
 
+def test_summary_cards_keep_only_updated_card_and_key_metrics():
+    index = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+    app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
+
+    assert index.count('class="summary-card') == 1
+    assert 'class="summary-card summary-updated-card"' in index
+    assert 'class="summary-key-metrics"' in index
+    assert 'id="summary-league"' in index
+    assert 'id="summary-slots"' in index
+    assert 'id="summary-players"' not in index
+    assert 'id="summary-characters"' not in index
+    assert 'id="summary-players"' not in app
+    assert 'id="summary-characters"' not in app
+
+
 def test_character_thumbnail_frames_do_not_use_intrinsic_grid_row_height():
     style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
     frame = style.split(".character-image-frame {", 1)[1].split("}", 1)[0]

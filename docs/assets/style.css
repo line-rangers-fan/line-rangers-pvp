@@ -252,10 +252,7 @@ h1 {
    ========================================= */
 
 .summary-grid {
-  display: grid;
-  grid-template-columns:
-    repeat(5, minmax(0, 1fr));
-  gap: 1rem;
+  display: block;
   margin: 0 0 2rem;
 }
 
@@ -325,11 +322,20 @@ h1 {
   letter-spacing: -0.01em;
 }
 
-.summary-updated-card {
-  grid-column: 1 / -1;
+.summary-key-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
 }
 
-.summary-updated-card strong {
+.summary-key-metric {
+  min-width: 0;
+}
+
+.summary-updated-value {
   font-size: clamp(2.35rem, 8vw, 3.2rem);
   line-height: 1.18;
   letter-spacing: 0;
@@ -897,17 +903,6 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 }
 
 /* =========================================
-   Tablet
-   ========================================= */
-
-@media (max-width: 950px) {
-  .summary-grid {
-    grid-template-columns:
-      repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* =========================================
    Mobile
    ========================================= */
 
@@ -942,11 +937,6 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
     scroll-snap-align: start;
   }
 
-  .summary-grid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-  }
-
   .table-heading {
     align-items: flex-start;
     flex-direction: column;
@@ -976,12 +966,6 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 
   .language-switcher button {
     font-size: 0.68rem;
-  }
-
-  .summary-grid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
-    gap: 0.7rem;
   }
 
   .summary-card {

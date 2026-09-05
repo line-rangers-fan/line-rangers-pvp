@@ -118,59 +118,35 @@
       aria-label="集計概要"
       hidden
     >
-      <article class="summary-card">
-        <span
-          class="summary-label"
-          id="label-league"
-        >
-          リーグ
-        </span>
-
-        <strong id="summary-league">
-          -
-        </strong>
-      </article>
-
-      <article class="summary-card">
-        <span
-          class="summary-label"
-          id="label-players"
-        >
-          集計人数
-        </span>
-
-        <strong id="summary-players">
-          -
-        </strong>
-      </article>
-
-      <article class="summary-card">
-        <span
-          class="summary-label"
-          id="label-slots"
-        >
-          全編成キャラ数
-        </span>
-
-        <strong id="summary-slots">
-          -
-        </strong>
-      </article>
-
-      <article class="summary-card">
-        <span
-          class="summary-label"
-          id="label-characters"
-        >
-          キャラ種類数
-        </span>
-
-        <strong id="summary-characters">
-          -
-        </strong>
-      </article>
-
       <article class="summary-card summary-updated-card">
+        <div class="summary-key-metrics">
+          <div class="summary-key-metric">
+            <span
+              class="summary-label"
+              id="label-league"
+            >
+              リーグ
+            </span>
+
+            <strong id="summary-league">
+              -
+            </strong>
+          </div>
+
+          <div class="summary-key-metric">
+            <span
+              class="summary-label"
+              id="label-slots"
+            >
+              全編成キャラ数
+            </span>
+
+            <strong id="summary-slots">
+              -
+            </strong>
+          </div>
+        </div>
+
         <span
           class="summary-label"
           id="label-updated"
@@ -178,7 +154,10 @@
           最終更新
         </span>
 
-        <strong id="summary-updated">
+        <strong
+          id="summary-updated"
+          class="summary-updated-value"
+        >
           -
         </strong>
 
