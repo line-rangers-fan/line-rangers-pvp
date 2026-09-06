@@ -1,56 +1,58 @@
 {
   "health_schema_version": 1,
   "source_schema_version": 11,
-  "updated_at": "2026-09-05T21:01:16.471787+00:00",
+  "updated_at": "2026-09-06T03:51:14.921529+00:00",
   "target_players": 200,
-  "sampled_players": 200,
-  "character_slots": 1994,
-  "unique_characters": 66,
-  "complete_target": true,
-  "validated_full_sample": true,
+  "sampled_players": 199,
+  "character_slots": 1985,
+  "unique_characters": 57,
+  "complete_target": false,
+  "publication_mode": "partial_after_stale",
+  "validated_full_sample": false,
+  "validated_publishable_sample": true,
   "collection_quality": {
-    "sample_coverage": 100.0,
-    "equipment_fill_rate": 99.8,
+    "sample_coverage": 99.5,
+    "equipment_fill_rate": 99.9,
     "detail_fetch_failures": 0,
     "invalid_player_records": 0,
-    "collection_duration_seconds": 39.23,
-    "detail_fetch_duration_seconds": 38.68
+    "collection_duration_seconds": 22.72,
+    "detail_fetch_duration_seconds": 22.29
   },
   "comparison": {
     "reference_mode": "jst_calendar_close_v1",
     "calendar_date": "2026-09-06",
     "periods": {
       "hour": {
-        "comparable": true,
-        "updated_at": "2026-09-05T20:01:07.950226+00:00",
-        "calendar_date": "2026-09-06"
+        "comparable": false,
+        "updated_at": null,
+        "calendar_date": null
       },
       "day": {
-        "comparable": true,
-        "updated_at": "2026-09-05T14:01:21.600650+00:00",
-        "calendar_date": "2026-09-05"
+        "comparable": false,
+        "updated_at": null,
+        "calendar_date": null
       },
       "week": {
-        "comparable": true,
-        "updated_at": "2026-08-30T13:18:17.965879+00:00",
-        "calendar_date": "2026-08-30"
+        "comparable": false,
+        "updated_at": null,
+        "calendar_date": null
       },
       "month": {
-        "comparable": true,
-        "updated_at": "2026-08-31T14:01:37.861746+00:00",
-        "calendar_date": "2026-08-31"
+        "comparable": false,
+        "updated_at": null,
+        "calendar_date": null
       }
     }
   },
   "character_metadata": {
-    "source_names": 66,
+    "source_names": 57,
     "preserved_names": 0,
     "pending_names": 0,
     "translation_fetch_failed": false
   },
   "character_assets": {
-    "characters": 66,
-    "cached_images": 66,
+    "characters": 57,
+    "cached_images": 57,
     "pending_images": 0,
     "downloaded_images": 0,
     "refresh_attempted": 8,
