@@ -13,6 +13,7 @@ try:
     from quality_checks import (
         CALENDAR_CLOSE_REFERENCE_MODE,
         MAX_COLLECTION_DURATION_SECONDS,
+        PARTIAL_PUBLICATION_MODE,
         RANK_PERIODS,
         SCHEMA_VERSION,
         validate_data,
@@ -21,6 +22,7 @@ except ImportError:  # Allows importing this module from the test suite.
     from scripts.quality_checks import (
         CALENDAR_CLOSE_REFERENCE_MODE,
         MAX_COLLECTION_DURATION_SECONDS,
+        PARTIAL_PUBLICATION_MODE,
         RANK_PERIODS,
         SCHEMA_VERSION,
         validate_data,
@@ -122,9 +124,20 @@ def check_freshness(
             data = json.load(file)
         if not isinstance(data, dict):
             raise ValueError("ranking JSON root is not an object")
-        if not has_complete_sample(data):
-            return Freshness(True, None, "invalid_quality")
         updated_at = parse_timestamp(data.get("updated_at"))
+        if not has_complete_sample(data):
+            try:
+                validate_data(data)
+            except ValueError:
+                return Freshness(True, None, "invalid_quality")
+            if data.get("publication_mode") != PARTIAL_PUBLICATION_MODE:
+                return Freshness(True, None, "invalid_quality")
+            age_minutes = (current_time - updated_at).total_seconds() / 60
+            if age_minutes < -10:
+                return Freshness(True, age_minutes, "future_timestamp")
+            # A partial publication is safe to display but must never stop
+            # repair attempts seeking the full 200-player sample.
+            return Freshness(True, max(0.0, age_minutes), "partial_sample")
     except (OSError, TypeError, ValueError, OverflowError, RecursionError):
         return Freshness(True, None, "missing_or_invalid_data")
 

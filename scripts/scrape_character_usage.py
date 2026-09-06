@@ -30,8 +30,11 @@ from zoneinfo import ZoneInfo
 try:
     from quality_checks import (
         CALENDAR_CLOSE_REFERENCE_MODE,
+        COMPLETE_PUBLICATION_MODE,
         EQUIPMENT_TYPES,
         MAX_COLLECTION_DURATION_SECONDS,
+        PARTIAL_FALLBACK_AFTER_MINUTES,
+        PARTIAL_PUBLICATION_MODE,
         SCHEMA_VERSION,
         assign_competition_ranks,
         equipment_rankings,
@@ -40,8 +43,11 @@ try:
 except ImportError:  # Allows importing this module from the test suite.
     from scripts.quality_checks import (
         CALENDAR_CLOSE_REFERENCE_MODE,
+        COMPLETE_PUBLICATION_MODE,
         EQUIPMENT_TYPES,
         MAX_COLLECTION_DURATION_SECONDS,
+        PARTIAL_FALLBACK_AFTER_MINUTES,
+        PARTIAL_PUBLICATION_MODE,
         SCHEMA_VERSION,
         assign_competition_ranks,
         equipment_rankings,
@@ -131,6 +137,11 @@ RANK_COMPARISON_PERIODS = {
 RANK_COMPARISON_MIN_RATIO = 0.50
 RANK_COMPARISON_MAX_RATIO = 1.50
 DEBUG_DIR = Path(".artifacts/debug")
+# Set immediately before scrape() by main(). Keeping scrape's no-argument
+# interface preserves existing recovery tests and makes accidental callers use
+# the strict full-sample mode.
+ALLOW_PARTIAL_FOR_RUN = False
+LAST_COMPLETE_FOR_RUN: datetime | None = None
 
 # IDs are only used in known source URLs. Strict validation avoids publishing a
 # made-up path if the upstream response is malformed.
@@ -917,6 +928,41 @@ def ensure_collection_within_budget(collection_started_clock: float) -> None:
         )
 
 
+def _last_complete_timestamp(previous: dict | None) -> datetime | None:
+    """Return the trusted full-sample timestamp carried by public data."""
+    if not isinstance(previous, dict):
+        return None
+    if (
+        previous.get("complete_target") is True
+        and previous.get("sampled_players") == previous.get("target_players")
+    ):
+        return _parse_history_time(previous.get("updated_at"))
+    fallback = previous.get("partial_fallback")
+    if isinstance(fallback, dict):
+        return _parse_history_time(fallback.get("last_complete_updated_at"))
+    return None
+
+
+def partial_fallback_context(
+    previous: dict | None,
+    now: datetime | None = None,
+) -> tuple[bool, datetime | None]:
+    """Enable partial publication only after three hours without a full sample."""
+    try:
+        validate_data(previous)
+    except (ValueError, TypeError, AttributeError):
+        return False, None
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    current = current.astimezone(timezone.utc)
+    last_complete = _last_complete_timestamp(previous)
+    if last_complete is None or last_complete.tzinfo is None:
+        return False, None
+    age = (current - last_complete.astimezone(timezone.utc)).total_seconds()
+    return age >= PARTIAL_FALLBACK_AFTER_MINUTES * 60, last_complete
+
+
 def scrape() -> dict:
     if TARGET_PLAYER_COUNT < 1:
         raise RuntimeError("TARGET_PLAYER_COUNT must be at least 1.")
@@ -926,7 +972,9 @@ def scrape() -> dict:
 
     payload = fetch_rank_data()
     mids, ranking_diagnostics = extract_ranked_mids(payload, TARGET_PLAYER_COUNT)
-    if len(mids) != TARGET_PLAYER_COUNT:
+    if not mids:
+        raise RuntimeError("PvP ranking API did not provide any ranked players.")
+    if len(mids) != TARGET_PLAYER_COUNT and not ALLOW_PARTIAL_FOR_RUN:
         raise RuntimeError(
             "PvP ranking API did not provide the requested number of unique players: "
             f"{len(mids)} != {TARGET_PLAYER_COUNT}"
@@ -977,7 +1025,8 @@ def scrape() -> dict:
         pending_content_recheck = [mid for mid in mids if mid not in valid_mids]
     diagnostics["detail_content_rechecks"] = content_rechecks
 
-    if len(players) != TARGET_PLAYER_COUNT:
+    expected_players = len(mids)
+    if len(players) != expected_players:
         dump_detail_failure_summary(
             len(mids),
             len(players),
@@ -985,7 +1034,7 @@ def scrape() -> dict:
         )
         raise RuntimeError(
             "Some requested ranked players had incomplete team or equipment data; "
-            f"refusing to publish a partial sample ({len(players)} != {TARGET_PLAYER_COUNT})."
+            f"refusing to publish missing player details ({len(players)} != {expected_players})."
         )
 
     unit_codes = {
@@ -1002,6 +1051,18 @@ def scrape() -> dict:
         character_names=character_names,
         target_players=TARGET_PLAYER_COUNT,
     )
+    if len(players) == TARGET_PLAYER_COUNT:
+        data["publication_mode"] = COMPLETE_PUBLICATION_MODE
+    else:
+        if LAST_COMPLETE_FOR_RUN is None:
+            raise RuntimeError("Partial publication has no verified full-sample baseline.")
+        data["publication_mode"] = PARTIAL_PUBLICATION_MODE
+        data["termination_reason"] = "api_partial_after_stale"
+        data["partial_fallback"] = {
+            "trigger_after_minutes": PARTIAL_FALLBACK_AFTER_MINUTES,
+            "last_complete_updated_at": LAST_COMPLETE_FOR_RUN.isoformat(),
+            "missing_players": TARGET_PLAYER_COUNT - len(players),
+        }
     data["collection_quality"].update(
         {
             "collection_started_at": collection_started_at.isoformat(),
@@ -1738,9 +1799,11 @@ def health_summary(data: dict) -> dict:
         "character_slots": data["character_slots"],
         "unique_characters": data["unique_characters"],
         "complete_target": data["complete_target"],
-        # This assertion is made only after the complete public payload has
+        "publication_mode": data.get("publication_mode", COMPLETE_PUBLICATION_MODE),
+        # These assertions are emitted only after the public payload has
         # passed the same strict validator used before publication.
-        "validated_full_sample": True,
+        "validated_full_sample": data["complete_target"] is True,
+        "validated_publishable_sample": True,
         "collection_quality": {
             key: quality[key]
             for key in (
@@ -1866,18 +1929,36 @@ def dump_collection_failure(
 
 
 def main() -> None:
+    global ALLOW_PARTIAL_FOR_RUN, LAST_COMPLETE_FOR_RUN
     previous = load_json(OUTPUT_PATH)
     previous_history = load_json(HISTORY_PATH)
+    stored_history = previous_history
     stage = "scrape"
     try:
-        data = scrape()
+        allow_partial, last_complete = partial_fallback_context(previous)
+        ALLOW_PARTIAL_FOR_RUN = allow_partial
+        LAST_COMPLETE_FOR_RUN = last_complete
+        try:
+            data = scrape()
+        finally:
+            ALLOW_PARTIAL_FOR_RUN = False
+            LAST_COMPLETE_FOR_RUN = None
         stage = "comparison"
         previous, previous_history = prepare_comparison_context(data, previous, previous_history)
+        if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE:
+            # A changing set of fewer than 200 players is not a trustworthy
+            # hour/day/week/month baseline. Keep the last complete history and
+            # show comparison as unavailable until a full sample returns.
+            previous_history = {"snapshots": []}
         add_previous_comparison(data, previous, previous_history)
         stage = "validation"
         validate_data(data, previous)
         stage = "history"
-        history = update_history(data, previous_history)
+        history = (
+            stored_history
+            if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE
+            else update_history(data, previous_history)
+        )
         stage = "publication"
         write_outputs(data, history)
         try:

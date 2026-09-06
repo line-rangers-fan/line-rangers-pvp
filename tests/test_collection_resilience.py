@@ -10,6 +10,7 @@ import pytest
 from scripts import scrape_character_usage as scraper
 from scripts.quality_checks import validate_data
 from test_comparison_guards import complete_data
+from test_scrape_character_usage import valid_partial_publication
 
 
 class TruncatedResponse(io.BytesIO):
@@ -70,6 +71,38 @@ def test_optional_diagnostic_file_failure_does_not_reject_valid_collection(tmp_p
     assert data["updated_at"] == current["updated_at"]
     assert json.loads(paths[2].read_text()) == scraper.health_summary(data)
     assert "diagnostic" in capsys.readouterr().err.lower()
+
+
+def test_partial_publication_updates_current_data_without_entering_history(
+    tmp_path, monkeypatch
+):
+    from datetime import datetime, timezone
+
+    last_complete = datetime(2026, 8, 31, 0, 0, tzinfo=timezone.utc)
+    previous = complete_data(last_complete.isoformat())
+    history_value = {"snapshots": [scraper.history_snapshot(previous)]}
+    current = valid_partial_publication(last_complete)
+    current["diagnostics"]["equipment_items_collected"] = 3
+    current["termination_reason"] = "api_partial_after_stale"
+    output = tmp_path / "data.json"
+    history = tmp_path / "history.json"
+    health = tmp_path / "health.json"
+    scraper.save_json(output, previous)
+    scraper.save_json(history, history_value)
+    original_history = history.read_bytes()
+    monkeypatch.setattr(scraper, "OUTPUT_PATH", output)
+    monkeypatch.setattr(scraper, "HISTORY_PATH", history)
+    monkeypatch.setattr(scraper, "HEALTH_PATH", health)
+    monkeypatch.setattr(scraper, "scrape", lambda: deepcopy(current))
+    monkeypatch.setenv("DEBUG", "0")
+
+    scraper.main()
+
+    published = json.loads(output.read_text(encoding="utf-8"))
+    assert published["sampled_players"] == 199
+    assert published["publication_mode"] == scraper.PARTIAL_PUBLICATION_MODE
+    assert history.read_bytes() == original_history
+    assert json.loads(health.read_text())["validated_full_sample"] is False
 
 
 @pytest.mark.parametrize("failure", ["invalid_sample", "output_write"])

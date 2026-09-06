@@ -2,7 +2,12 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from scripts.check_data_freshness import check_freshness
-from scripts.quality_checks import CALENDAR_CLOSE_REFERENCE_MODE, SCHEMA_VERSION
+from scripts.quality_checks import (
+    CALENDAR_CLOSE_REFERENCE_MODE,
+    PARTIAL_FALLBACK_AFTER_MINUTES,
+    PARTIAL_PUBLICATION_MODE,
+    SCHEMA_VERSION,
+)
 from scripts.scrape_character_usage import add_previous_comparison
 from test_quality_checks import valid_data
 
@@ -63,6 +68,32 @@ def test_fresh_but_incomplete_data_is_due(tmp_path):
 
     assert result.due is True
     assert result.reason == "invalid_quality"
+
+
+def test_verified_partial_data_is_visible_but_keeps_recovery_due(tmp_path):
+    now = datetime(2026, 8, 27, 3, 0, tzinfo=timezone.utc)
+    path = tmp_path / "ranking.json"
+    data = valid_data(sampled_players=199)
+    data["updated_at"] = (now - timedelta(minutes=5)).isoformat()
+    data["collection_quality"]["collection_started_at"] = (
+        now - timedelta(minutes=6)
+    ).isoformat()
+    data["target_players"] = 200
+    data["complete_target"] = False
+    data["publication_mode"] = PARTIAL_PUBLICATION_MODE
+    data["partial_fallback"] = {
+        "trigger_after_minutes": PARTIAL_FALLBACK_AFTER_MINUTES,
+        "last_complete_updated_at": (now - timedelta(hours=4)).isoformat(),
+        "missing_players": 1,
+    }
+    data["collection_quality"]["sample_coverage"] = 99.5
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = check_freshness(path, 50, now=now)
+
+    assert result.due is True
+    assert result.reason == "partial_sample"
+    assert result.age_minutes == 5
 
 
 def test_fresh_data_with_impossible_collection_timing_is_due(tmp_path):
