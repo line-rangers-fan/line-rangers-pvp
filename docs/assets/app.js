@@ -12,6 +12,7 @@ const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
 // it too instead of showing it as current.
 const MAX_COLLECTION_DURATION_SECONDS = 15 * 60;
 const PUBLIC_TARGET_PLAYER_COUNT = 200;
+const PARTIAL_FALLBACK_AFTER_MINUTES = 180;
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 // Collection normally completes about hourly. GitHub Actions can queue a run
 // and the source can briefly throttle detail requests, so a healthy previous
@@ -234,18 +235,20 @@ const TAP_HINT = {
 };
 
 const WEEKLY_NOTICE = {
-  ja: "土曜のPVPランキング初期化直後は、200人分が揃うまで前回の正常データを表示する場合があります。部分集\u2060計は公開しません。",
-  en: "After Saturday's PVP reset, the last verified data may remain visible until all 200 players are available. Partial results are never published.",
-  zh: "週六 PVP 排名重置後，在湊齊 200 名玩家前可能會繼續顯示上次驗證成功的資料，不會發布不完整的統計。",
-  th: "หลังรีเซ็ตอันดับ PVP วันเสาร์ ระบบอาจแสดงข้อมูลที่ตรวจสอบแล้วครั้งล่าสุดจนกว่าจะครบ 200 คน และจะไม่เผยแพร่ผลลัพธ์ที่ไม่ครบ",
-  id: "Setelah reset PVP hari Sabtu, data terverifikasi terakhir dapat tetap ditampilkan hingga 200 pemain lengkap. Hasil parsial tidak dipublikasikan.",
-  vi: "Sau khi xếp hạng PVP được đặt lại vào thứ Bảy, dữ liệu đã xác minh gần nhất có thể tiếp tục hiển thị cho đến khi đủ 200 người chơi. Kết quả chưa đầy đủ sẽ không được công bố.",
-  ko: "토요일 PVP 랭킹 초기화 직후에는 200명이 모두 확인될 때까지 마지막 정상 데이터를 표시할 수 있습니다. 일부만 집계된 결과는 공개하지 않습니다.",
+  ja: "土曜のPVPランキング初期化直後は、200人分が揃うまで前回データを表示します。3時間以上揃わない場合は、取得できた人数を明記して更新し、200人への再取得を続けます。",
+  en: "After Saturday's PVP reset, the previous data remains until all 200 players are available. After three hours, a verified partial count may be shown while retries continue.",
+  zh: "週六 PVP 排名重置後，系統會先保留上一筆資料。若三小時後仍未滿 200 人，將標明實際人數並持續重試。",
+  th: "หลังรีเซ็ตอันดับ PVP ระบบจะเก็บข้อมูลเดิมไว้ก่อน หากยังไม่ครบ 200 คนหลัง 3 ชั่วโมง จะแสดงจำนวนจริงและลองใหม่ต่อไป",
+  id: "Setelah reset PVP, data sebelumnya dipertahankan. Jika belum mencapai 200 pemain setelah 3 jam, jumlah aktual ditampilkan dan percobaan dilanjutkan.",
+  vi: "Sau khi đặt lại PVP, dữ liệu trước đó được giữ lại. Nếu sau 3 giờ vẫn chưa đủ 200 người, số thực tế sẽ được hiển thị và hệ thống tiếp tục thử lại.",
+  ko: "토요일 PVP 초기화 후에는 이전 데이터를 유지합니다. 3시간 뒤에도 200명이 안 되면 실제 인원을 표시하고 재수집을 계속합니다.",
 };
 
 const STATUS_TEXT = {
   ja: {
     healthy: "正常更新",
+    partial: "一部更新・再取得中",
+    partialMessage: "200人に満たないため、取得できた人数で一時更新しています。監視処理が完全取得を再試行します。",
     delayed: "更新が少し遅れています。監視処理が再集\u2060計を試みます。",
     stale: "更新が2時間以上遅れています。前回の正常データを表示中です。",
     refresh: "今すぐ再読込",
@@ -268,6 +271,8 @@ const STATUS_TEXT = {
   },
   en: {
     healthy: "Up to date",
+    partial: "Partial update · retrying",
+    partialMessage: "A verified partial sample is shown while the watchdog retries all 200 players.",
     delayed: "The update is delayed. The watchdog will retry collection.",
     stale: "Over two hours late. Showing the last verified dataset.",
     refresh: "Refresh now",
@@ -290,6 +295,8 @@ const STATUS_TEXT = {
   },
   zh: {
     healthy: "更新正常",
+    partial: "部分更新・重試中",
+    partialMessage: "目前顯示已驗證的實際人數，監控程序會繼續重試取得 200 人。",
     delayed: "更新稍有延遲，監控程序將嘗試重新收集。",
     stale: "更新已延遲超過2小時，目前顯示上次驗證成功的資料。",
     refresh: "立即重新載入",
@@ -311,6 +318,8 @@ const STATUS_TEXT = {
   },
   th: {
     healthy: "อัปเดตปกติ",
+    partial: "อัปเดตบางส่วน・กำลังลองใหม่",
+    partialMessage: "กำลังแสดงจำนวนที่ตรวจสอบแล้ว และระบบจะลองเก็บให้ครบ 200 คนต่อไป",
     delayed: "การอัปเดตล่าช้า ระบบตรวจสอบจะลองรวบรวมใหม่",
     stale: "ล่าช้าเกิน 2 ชั่วโมง กำลังแสดงข้อมูลล่าสุดที่ผ่านการตรวจสอบ",
     refresh: "โหลดใหม่ตอนนี้",
@@ -332,6 +341,8 @@ const STATUS_TEXT = {
   },
   id: {
     healthy: "Pembaruan normal",
+    partial: "Pembaruan sebagian · mencoba lagi",
+    partialMessage: "Jumlah terverifikasi ditampilkan sementara sistem terus mencoba memperoleh 200 pemain.",
     delayed: "Pembaruan terlambat. Pengawas akan mencoba mengumpulkan ulang.",
     stale: "Terlambat lebih dari 2 jam. Menampilkan data terverifikasi terakhir.",
     refresh: "Muat ulang",
@@ -354,6 +365,8 @@ const STATUS_TEXT = {
   },
   vi: {
     healthy: "Cập nhật bình thường",
+    partial: "Cập nhật một phần · đang thử lại",
+    partialMessage: "Đang hiển thị số người đã xác minh trong khi hệ thống tiếp tục thử đủ 200 người.",
     delayed: "Cập nhật bị chậm. Trình giám sát sẽ thử thu thập lại.",
     stale: "Chậm hơn 2 giờ. Đang hiển thị dữ liệu đã xác minh gần nhất.",
     refresh: "Tải lại ngay",
@@ -376,6 +389,8 @@ const STATUS_TEXT = {
   },
   ko: {
     healthy: "정상 업데이트",
+    partial: "일부 업데이트・재시도 중",
+    partialMessage: "확인된 실제 인원을 표시하며 감시 시스템이 200명 전체 수집을 계속 시도합니다.",
     delayed: "업데이트가 지연되었습니다. 감시 작업이 재집계를 시도합니다.",
     stale: "2시간 이상 지연되어 마지막 정상 데이터를 표시하고 있습니다.",
     refresh: "지금 새로고침",
@@ -1116,6 +1131,7 @@ function detectLanguage() {
 }
 
 function getFreshnessLevel() {
+  if (state.data?.publication_mode === "partial_after_stale") return "partial";
   const updatedTime = new Date(state.data?.updated_at || "").getTime();
   if (Number.isNaN(updatedTime)) return "stale";
   const age = Math.max(0, Date.now() - updatedTime);
@@ -1182,7 +1198,9 @@ function updateFreshnessWarning() {
     elements.freshness.textContent = st(
       level === "healthy" ? "healthy" : level
     );
-    elements.freshness.className = `freshness-badge freshness-${level}`;
+    elements.freshness.className = `freshness-badge freshness-${
+      level === "partial" ? "delayed" : level
+    }`;
   }
 
   const existing = document.querySelector("#data-warning");
@@ -1198,7 +1216,9 @@ function updateFreshnessWarning() {
     level === "stale"
       ? "message message-error data-warning"
       : "message message-warning data-warning";
-  message.textContent = state.lastLoadError ? st("refreshError") : st(level);
+  message.textContent = state.lastLoadError
+    ? st("refreshError")
+    : st(level === "partial" ? "partialMessage" : level);
   refresh.textContent = state.isLoading ? st("refreshing") : st("refresh");
   refresh.disabled = state.isLoading;
   banner.hidden = false;
@@ -1773,6 +1793,20 @@ function validateData(data) {
   const target = data.target_players;
   const slots = data.character_slots;
   const updatedAt = Date.parse(String(data.updated_at || ""));
+  const isComplete =
+    sampled === target &&
+    data.complete_target === true &&
+    (data.publication_mode === undefined || data.publication_mode === "complete");
+  const fallback = data.partial_fallback;
+  const lastCompleteAt = Date.parse(String(fallback?.last_complete_updated_at || ""));
+  const isPartial =
+    data.publication_mode === "partial_after_stale" &&
+    sampled < target &&
+    data.complete_target === false &&
+    Number(fallback?.trigger_after_minutes) === PARTIAL_FALLBACK_AFTER_MINUTES &&
+    Number(fallback?.missing_players) === target - sampled &&
+    Number.isFinite(lastCompleteAt) &&
+    updatedAt - lastCompleteAt >= PARTIAL_FALLBACK_AFTER_MINUTES * 60 * 1000;
 
   if (
     !isSafeInteger(Number(data.schema_version), 9, 99) ||
@@ -1781,8 +1815,7 @@ function validateData(data) {
     !isSafeInteger(sampled, 1, 10_000) ||
     !isSafeInteger(target, 1, 10_000) ||
     target !== PUBLIC_TARGET_PLAYER_COUNT ||
-    sampled !== target ||
-    data.complete_target !== true
+    !(isComplete || isPartial)
   ) {
     throw new Error(t("playersInvalid"));
   }
@@ -1795,7 +1828,10 @@ function validateData(data) {
   const equipmentFillRate = Number(quality?.equipment_fill_rate);
   if (
     !quality ||
-    Number(quality.sample_coverage) !== 100 ||
+    !hasExpectedRate(
+      quality.sample_coverage,
+      Math.round((sampled / target) * 1000) / 10
+    ) ||
     Number(quality.detail_fetch_failures) !== 0 ||
     Number(quality.invalid_player_records) !== 0 ||
     !Number.isFinite(collectionDuration) ||

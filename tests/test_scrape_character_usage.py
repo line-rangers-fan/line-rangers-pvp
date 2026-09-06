@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -308,6 +308,109 @@ def test_failed_collection_keeps_previous_published_data(tmp_path, monkeypatch):
         scraper.main()
 
     assert scraper.load_json(output_path) == previous
+
+
+def test_partial_fallback_starts_at_three_hours_and_carries_full_timestamp():
+    from test_comparison_guards import complete_data
+
+    last_complete = datetime(2026, 8, 31, 0, 0, tzinfo=timezone.utc)
+    previous = complete_data(last_complete.isoformat())
+
+    allowed, timestamp = scraper.partial_fallback_context(
+        previous, last_complete + timedelta(hours=3)
+    )
+    assert allowed is True
+    assert timestamp == last_complete
+
+    allowed, _ = scraper.partial_fallback_context(
+        previous, last_complete + timedelta(hours=3) - timedelta(seconds=1)
+    )
+    assert allowed is False
+
+    partial = valid_partial_publication(last_complete)
+    allowed, timestamp = scraper.partial_fallback_context(
+        partial, last_complete + timedelta(hours=5)
+    )
+    assert allowed is True
+    assert timestamp == last_complete
+
+
+def valid_partial_publication(last_complete):
+    from test_quality_checks import valid_data
+
+    data = valid_data(sampled_players=199)
+    data["updated_at"] = (last_complete + timedelta(hours=4)).isoformat()
+    data["collection_quality"]["collection_started_at"] = (
+        last_complete + timedelta(hours=4) - timedelta(minutes=1)
+    ).isoformat()
+    data["target_players"] = 200
+    data["complete_target"] = False
+    data["publication_mode"] = scraper.PARTIAL_PUBLICATION_MODE
+    data["partial_fallback"] = {
+        "trigger_after_minutes": scraper.PARTIAL_FALLBACK_AFTER_MINUTES,
+        "last_complete_updated_at": last_complete.isoformat(),
+        "missing_players": 1,
+    }
+    data["collection_quality"]["sample_coverage"] = 99.5
+    return scraper.add_previous_comparison(data, None, {"snapshots": []})
+
+
+def test_verified_199_player_api_response_builds_partial_publication(monkeypatch):
+    mids = [f"player-{index}" for index in range(199)]
+    payload = {"top100": [{"mid": mid} for mid in mids]}
+
+    def player_detail(mid):
+        return {
+            "mid": mid,
+            "playerUnitTeamGroupMap": {
+                "pvpteam": {
+                    "1": [
+                        {
+                            "unitCode": "u-current",
+                            "equipMap": {
+                                "WEAPON": {"itemCode": "weapon-current"},
+                                "ARMOR": {"itemCode": "armor-current"},
+                                "ACC": {"itemCode": "acc-current"},
+                            },
+                        }
+                    ]
+                }
+            },
+        }
+
+    monkeypatch.setattr(scraper, "fetch_rank_data", lambda: payload)
+    monkeypatch.setattr(
+        scraper,
+        "fetch_ranked_player_details",
+        lambda requested, **_kwargs: ({mid: player_detail(mid) for mid in requested}, []),
+    )
+    monkeypatch.setattr(
+        scraper,
+        "resolve_character_names",
+        lambda _codes: ({"u-current": "Current"}, {
+            "source_names": 1,
+            "preserved_names": 0,
+            "pending_names": 0,
+            "translation_fetch_failed": False,
+        }),
+    )
+    last_complete = datetime.now(timezone.utc) - timedelta(hours=4)
+    monkeypatch.setattr(scraper, "ALLOW_PARTIAL_FOR_RUN", True)
+    monkeypatch.setattr(scraper, "LAST_COMPLETE_FOR_RUN", last_complete)
+
+    data = scraper.scrape()
+    scraper.add_previous_comparison(data, None, {"snapshots": []})
+
+    from scripts.quality_checks import validate_data
+
+    assert validate_data(data)
+    assert data["sampled_players"] == 199
+    assert data["target_players"] == 200
+    assert data["complete_target"] is False
+    assert data["publication_mode"] == scraper.PARTIAL_PUBLICATION_MODE
+    assert data["partial_fallback"]["missing_players"] == 1
+    assert data["collection_quality"]["sample_coverage"] == 99.5
+    assert data["collection_quality"]["detail_fetch_failures"] == 0
 
 
 def test_health_summary_is_small_and_derived_only_from_complete_data():

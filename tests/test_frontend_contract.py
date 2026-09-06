@@ -194,4 +194,6 @@ def test_static_rank_period_matches_the_javascript_default():
 
     assert 'selectedRankPeriod: "day"' in app
     assert '<span id="rank-period-current">前日締め</span>' in page
-    assert 'app.js?v=20260904-33' in page
+    assert 'app.js?v=20260906-34' in page
+    assert 'data.publication_mode === "partial_after_stale"' in app
+    assert "PARTIAL_FALLBACK_AFTER_MINUTES = 180" in app

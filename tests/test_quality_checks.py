@@ -5,6 +5,8 @@ from scripts.quality_checks import (
     MIN_EQUIPMENT_RETENTION_RATIO,
     RANK_PERIODS,
     SCHEMA_VERSION,
+    PARTIAL_FALLBACK_AFTER_MINUTES,
+    PARTIAL_PUBLICATION_MODE,
     equipment_rankings,
     validate_data,
 )
@@ -249,6 +251,25 @@ def test_incomplete_sample_rejected():
     data = valid_data()
     data["complete_target"] = False
     with pytest.raises(ValueError, match="incomplete sample"):
+        validate_data(data)
+
+
+def test_verified_partial_sample_is_allowed_only_after_three_hours():
+    data = valid_data(sampled_players=199)
+    data["target_players"] = 200
+    data["complete_target"] = False
+    data["publication_mode"] = PARTIAL_PUBLICATION_MODE
+    data["partial_fallback"] = {
+        "trigger_after_minutes": PARTIAL_FALLBACK_AFTER_MINUTES,
+        "last_complete_updated_at": "2026-08-26T23:59:00+00:00",
+        "missing_players": 1,
+    }
+    data["collection_quality"]["sample_coverage"] = 99.5
+
+    assert validate_data(data)
+
+    data["partial_fallback"]["last_complete_updated_at"] = "2026-08-27T00:01:00+00:00"
+    with pytest.raises(ValueError, match="partial fallback evidence"):
         validate_data(data)
 
 

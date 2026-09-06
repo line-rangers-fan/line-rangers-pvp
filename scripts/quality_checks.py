@@ -16,6 +16,9 @@ MAX_CHARACTERS_PER_PLAYER = 10
 SCHEMA_VERSION = 11
 RANK_PERIODS = ("hour", "day", "week", "month")
 CALENDAR_CLOSE_REFERENCE_MODE = "jst_calendar_close_v1"
+COMPLETE_PUBLICATION_MODE = "complete"
+PARTIAL_PUBLICATION_MODE = "partial_after_stale"
+PARTIAL_FALLBACK_AFTER_MINUTES = 180
 # A collection may retry and verify a suspect player, but a slow upstream must
 # never occupy later update windows.  Fifteen minutes leaves several bounded
 # retry passes while making recovery from an outage prompt.
@@ -336,6 +339,16 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
     target_players = int(data.get("target_players", 0))
     slots = int(data.get("character_slots", 0))
     characters = data.get("characters")
+    publication_mode = data.get("publication_mode", COMPLETE_PUBLICATION_MODE)
+    is_complete = (
+        players == target_players and data.get("complete_target") is True
+    )
+    is_partial = (
+        publication_mode == PARTIAL_PUBLICATION_MODE
+        and target_players == 200
+        and 0 < players < target_players
+        and data.get("complete_target") is False
+    )
 
     if schema_version < SCHEMA_VERSION:
         errors.append("unsupported schema")
@@ -344,12 +357,34 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
     if players <= 0 or not isinstance(characters, list) or not characters:
         errors.append("invalid sample")
         characters = []
-    if (
-        target_players <= 0
-        or players != target_players
-        or data.get("complete_target") is not True
-    ):
+    if target_players <= 0 or not (is_complete or is_partial):
         errors.append("incomplete sample")
+    if publication_mode not in {COMPLETE_PUBLICATION_MODE, PARTIAL_PUBLICATION_MODE}:
+        errors.append("invalid publication mode")
+    if is_complete and publication_mode != COMPLETE_PUBLICATION_MODE:
+        errors.append("complete sample has partial publication mode")
+    if is_partial:
+        fallback = data.get("partial_fallback")
+        last_complete = (
+            _parse_time(fallback.get("last_complete_updated_at"))
+            if isinstance(fallback, dict)
+            else None
+        )
+        current = _parse_time(data.get("updated_at"))
+        if (
+            not isinstance(fallback, dict)
+            or int(fallback.get("trigger_after_minutes", 0))
+            != PARTIAL_FALLBACK_AFTER_MINUTES
+            or int(fallback.get("missing_players", -1))
+            != target_players - players
+            or last_complete is None
+            or current is None
+            or (current - last_complete).total_seconds()
+            < PARTIAL_FALLBACK_AFTER_MINUTES * 60
+        ):
+            errors.append("invalid partial fallback evidence")
+    elif "partial_fallback" in data:
+        errors.append("unexpected partial fallback evidence")
     if slots < players or slots > players * MAX_CHARACTERS_PER_PLAYER:
         errors.append("invalid slot range")
     if sum(int(char.get("occurrence_count", 0)) for char in characters) != slots:
@@ -624,7 +659,8 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
     else:
         if int(diagnostics.get("valid_players", -1)) != players:
             errors.append("diagnostic player total mismatch")
-        if int(diagnostics.get("detail_fetches_requested", -1)) != target_players:
+        expected_fetches = players if is_partial else target_players
+        if int(diagnostics.get("detail_fetches_requested", -1)) != expected_fetches:
             errors.append("diagnostic fetch total mismatch")
         failure_keys = (
             "detail_fetch_failures",
