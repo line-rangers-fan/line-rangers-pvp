@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-09-08T20:31:01.140082+00:00",
+  "updated_at": "2026-09-08T20:45:53.490807+00:00",
   "source": {
     "name": "LINE Rangers Handbook PvP Tracker",
     "url": "https://rangers.lerico.net/ja/pvp-tracker"
@@ -16,15 +16,15 @@
   "complete_target": false,
   "collection_quality": {
     "sample_coverage": 99.5,
-    "equipment_slots_collected": 5947,
+    "equipment_slots_collected": 5945,
     "equipment_slots_expected": 5955,
-    "equipment_slots_missing": 8,
-    "equipment_fill_rate": 99.9,
+    "equipment_slots_missing": 10,
+    "equipment_fill_rate": 99.8,
     "detail_fetch_failures": 0,
     "invalid_player_records": 0,
-    "collection_started_at": "2026-09-08T20:30:36.051241+00:00",
-    "collection_duration_seconds": 25.09,
-    "detail_fetch_duration_seconds": 24.59
+    "collection_started_at": "2026-09-08T20:45:28.901588+00:00",
+    "collection_duration_seconds": 24.59,
+    "detail_fetch_duration_seconds": 24.1
   },
   "characters": [
     {
@@ -393,8 +393,8 @@
               "adoption_rate": 3.1,
               "change": {
                 "new": false,
-                "rank": -1,
-                "occurrence_count": -1,
+                "rank": 0,
+                "occurrence_count": 0,
                 "periods": {
                   "hour": {
                     "comparable": false,
@@ -872,8 +872,8 @@
               "adoption_rate": 1.6,
               "change": {
                 "new": false,
-                "rank": -2,
-                "occurrence_count": -1,
+                "rank": 0,
+                "occurrence_count": 0,
                 "periods": {
                   "hour": {
                     "comparable": false,
@@ -915,7 +915,7 @@
               "adoption_rate": 1.6,
               "change": {
                 "new": false,
-                "rank": 1,
+                "rank": 0,
                 "occurrence_count": 0,
                 "periods": {
                   "hour": {
@@ -1524,7 +1524,7 @@
               "change": {
                 "new": false,
                 "rank": 0,
-                "occurrence_count": -1,
+                "occurrence_count": 0,
                 "periods": {
                   "hour": {
                     "comparable": false,
@@ -2041,20 +2041,20 @@
       "slot_rate": 9.77,
       "equipment_rankings": {
         "WEAPON": {
-          "equipped_occurrence_count": 194,
-          "equipped_player_count": 189,
+          "equipped_occurrence_count": 193,
+          "equipped_player_count": 188,
           "items": [
             {
               "item_code": "eq_2608_wpn_19",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2608_wpn_19_icon.png",
-              "occurrence_count": 168,
-              "player_count": 163,
+              "occurrence_count": 167,
+              "player_count": 162,
               "rank": 1,
-              "adoption_rate": 86.2,
+              "adoption_rate": 85.7,
               "change": {
                 "new": false,
                 "rank": 0,
-                "occurrence_count": 0,
+                "occurrence_count": -1,
                 "periods": {
                   "hour": {
                     "comparable": false,
@@ -2305,20 +2305,20 @@
           ]
         },
         "ARMOR": {
-          "equipped_occurrence_count": 194,
-          "equipped_player_count": 189,
+          "equipped_occurrence_count": 193,
+          "equipped_player_count": 188,
           "items": [
             {
               "item_code": "eq_2607_amr_19",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2607_amr_19_icon.png",
-              "occurrence_count": 113,
-              "player_count": 108,
+              "occurrence_count": 112,
+              "player_count": 107,
               "rank": 1,
-              "adoption_rate": 57.1,
+              "adoption_rate": 56.6,
               "change": {
                 "new": false,
                 "rank": 0,
-                "occurrence_count": 0,
+                "occurrence_count": -1,
                 "periods": {
                   "hour": {
                     "comparable": false,
@@ -6952,7 +6952,7 @@
               "rank": 9,
               "adoption_rate": 0.7,
               "change": {
-                "new": true,
+                "new": false,
                 "rank": 0,
                 "occurrence_count": 0,
                 "periods": {
@@ -10951,7 +10951,7 @@
               "change": {
                 "new": false,
                 "rank": 0,
-                "occurrence_count": -1,
+                "occurrence_count": 0,
                 "periods": {
                   "hour": {
                     "comparable": false,
@@ -11080,7 +11080,7 @@
               "change": {
                 "new": false,
                 "rank": 0,
-                "occurrence_count": 1,
+                "occurrence_count": 0,
                 "periods": {
                   "hour": {
                     "comparable": false,
@@ -15642,7 +15642,7 @@
               "rank": 6,
               "adoption_rate": 1.5,
               "change": {
-                "new": true,
+                "new": false,
                 "rank": 0,
                 "occurrence_count": 0,
                 "periods": {
@@ -16745,7 +16745,7 @@
               "change": {
                 "new": false,
                 "rank": 0,
-                "occurrence_count": -1,
+                "occurrence_count": 0,
                 "periods": {
                   "hour": {
                     "comparable": false,
@@ -17359,7 +17359,7 @@
               "change": {
                 "new": false,
                 "rank": 0,
-                "occurrence_count": -1,
+                "occurrence_count": 0,
                 "periods": {
                   "hour": {
                     "comparable": false,
@@ -30865,7 +30865,7 @@
               "change": {
                 "new": false,
                 "rank": 0,
-                "occurrence_count": 1,
+                "occurrence_count": 0,
                 "periods": {
                   "hour": {
                     "comparable": false,
@@ -37097,8 +37097,8 @@
     "invalid_equipment": [],
     "units_without_equipment": 0,
     "missing_equipment_slots": {
-      "WEAPON": 3,
-      "ARMOR": 2,
+      "WEAPON": 4,
+      "ARMOR": 3,
       "ACC": 3
     },
     "valid_players": 199,
@@ -37126,9 +37126,9 @@
   },
   "comparison": {
     "reference_mode": "jst_calendar_close_v1",
-    "previous_updated_at": "2026-09-08T20:15:52.780115+00:00",
+    "previous_updated_at": "2026-09-08T20:31:01.140082+00:00",
     "calendar_date": "2026-09-09",
-    "interval_minutes": 15.1,
+    "interval_minutes": 14.9,
     "comparable": true,
     "new_characters": 0,
     "removed_characters": 0,
