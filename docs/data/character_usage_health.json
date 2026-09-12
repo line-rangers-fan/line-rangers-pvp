@@ -1,22 +1,22 @@
 {
   "health_schema_version": 1,
   "source_schema_version": 11,
-  "updated_at": "2026-09-12T15:32:36.179408+00:00",
+  "updated_at": "2026-09-12T15:46:31.787803+00:00",
   "target_players": 200,
-  "sampled_players": 199,
-  "character_slots": 1980,
-  "unique_characters": 55,
-  "complete_target": false,
-  "publication_mode": "partial_after_stale",
-  "validated_full_sample": false,
+  "sampled_players": 200,
+  "character_slots": 1995,
+  "unique_characters": 53,
+  "complete_target": true,
+  "publication_mode": "complete",
+  "validated_full_sample": true,
   "validated_publishable_sample": true,
   "collection_quality": {
-    "sample_coverage": 99.5,
-    "equipment_fill_rate": 99.8,
+    "sample_coverage": 100.0,
+    "equipment_fill_rate": 100.0,
     "detail_fetch_failures": 0,
     "invalid_player_records": 0,
-    "collection_duration_seconds": 91.28,
-    "detail_fetch_duration_seconds": 90.68
+    "collection_duration_seconds": 64.34,
+    "detail_fetch_duration_seconds": 63.21
   },
   "comparison": {
     "reference_mode": "jst_calendar_close_v1",
@@ -38,23 +38,23 @@
         "calendar_date": null
       },
       "month": {
-        "comparable": false,
-        "updated_at": null,
-        "calendar_date": null
+        "comparable": true,
+        "updated_at": "2026-08-31T14:01:37.861746+00:00",
+        "calendar_date": "2026-08-31"
       }
     }
   },
   "character_metadata": {
-    "source_names": 55,
+    "source_names": 53,
     "preserved_names": 0,
     "pending_names": 0,
     "translation_fetch_failed": false
   },
   "character_assets": {
-    "characters": 55,
-    "cached_images": 55,
+    "characters": 53,
+    "cached_images": 53,
     "pending_images": 0,
-    "downloaded_images": 0,
+    "downloaded_images": 1,
     "refresh_attempted": 8,
     "refresh_updated": 0,
     "refresh_unavailable": 0
