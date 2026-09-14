@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../infra/cloudflare-owner-preview/src/index.js', import.meta.url), 'utf8');
+const wrangler = await readFile(new URL('../infra/cloudflare-owner-preview/wrangler.toml', import.meta.url), 'utf8');
 
 assert.match(source, /application\/javascript; charset=utf-8/);
 assert.match(source, /text\/css; charset=utf-8/);
@@ -16,8 +17,16 @@ assert.match(source, /HttpOnly; Secure; SameSite=Strict/);
 assert.match(source, /MAX_FAILED_ATTEMPTS = 5/);
 assert.match(source, /LOCKOUT_MS = 15 \* 60 \* 1000/);
 assert.match(source, /constantTimeEqualHex/);
+assert.match(source, /env\?\.ASSETS\?\.fetch/);
+assert.match(source, /env\.ASSETS\.fetch/);
+assert.match(source, /data-owner-preview="true"/);
+assert.doesNotMatch(source, /raw\.githubusercontent\.com/);
 assert.doesNotMatch(source, /3e422c299a6cae56999f3cc01b0c96bafeb7b880701ab048c1e96198067416e3/);
 assert.doesNotMatch(source, /line-rangers-community-dev/);
 assert.doesNotMatch(source, /chatgpt\.site/);
 
-console.log('owner preview security and MIME guards: ok');
+assert.match(wrangler, /directory = "\.\.\/\.\.\/docs"/);
+assert.match(wrangler, /binding = "ASSETS"/);
+assert.match(wrangler, /run_worker_first = true/);
+
+console.log('owner preview private-assets, security, and MIME guards: ok');
