@@ -81,12 +81,15 @@ jobs:
           set -euo pipefail
           base="https://line-rangers-pvp-owner-preview.n-yu1791.workers.dev"
           root="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/")"
-          printf '%s' "$root" | grep -q 'レジェンド帯 キャラ集計'
-          printf '%s' "$root" | grep -q 'id="community-board-entry-slot"'
-          printf '%s' "$root" | grep -q 'id="ranking-section"'
-          if printf '%s' "$root" | grep -q '現在、サイトを改修しています。'; then
+          community_js="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/assets/community-entry.js")"
+          app_js="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/assets/app.js")"
+
+          grep -q 'レジェンド帯 キャラ集計' <<< "$root"
+          grep -q 'id="community-board-entry-slot"' <<< "$root"
+          grep -q 'id="ranking-section"' <<< "$root"
+          if grep -q '現在、サイトを改修しています。' <<< "$root"; then
             echo "No-login preview unexpectedly returned maintenance mode."
             exit 1
           fi
-          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/assets/community-entry.js" | grep -q '新キャラ情報掲示板'
-          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/assets/app.js" | grep -q 'character_usage.json'
+          grep -q '新キャラ情報掲示板' <<< "$community_js"
+          grep -q 'character_usage.json' <<< "$app_js"
