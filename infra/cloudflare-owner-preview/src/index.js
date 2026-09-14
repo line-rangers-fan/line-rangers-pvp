@@ -1,4 +1,4 @@
-const OWNER_TOKEN_SHA256 = "09628b580ff8c6612581d51807cf046e3d5a7456b8d84a0bb01bd79548b0f3b0";
+const OWNER_TOKEN_SHA256 = "3e422c299a6cae56999f3cc01b0c96bafeb7b880701ab048c1e96198067416e3";
 const RAW_BASE = "https://raw.githubusercontent.com/line-rangers-fan/line-rangers-pvp/main/docs";
 const COOKIE_NAME = "lr_owner_preview";
 
