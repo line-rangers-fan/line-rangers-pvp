@@ -51,27 +51,59 @@ function stripMaintenance(htmlText) {
     .replace(/\s*<section class="maintenance-screen"[\s\S]*?<\/section>\s*/i, "\n");
 }
 
+function contentTypeForPath(path) {
+  const normalized = path.toLowerCase();
+  if (normalized.endsWith(".html")) return "text/html; charset=utf-8";
+  if (normalized.endsWith(".js")) return "application/javascript; charset=utf-8";
+  if (normalized.endsWith(".css")) return "text/css; charset=utf-8";
+  if (normalized.endsWith(".json")) return "application/json; charset=utf-8";
+  if (normalized.endsWith(".svg")) return "image/svg+xml";
+  if (normalized.endsWith(".png")) return "image/png";
+  if (normalized.endsWith(".webp")) return "image/webp";
+  if (normalized.endsWith(".jpg") || normalized.endsWith(".jpeg")) return "image/jpeg";
+  if (normalized.endsWith(".gif")) return "image/gif";
+  if (normalized.endsWith(".ico")) return "image/x-icon";
+  if (normalized.endsWith(".woff2")) return "font/woff2";
+  if (normalized.endsWith(".woff")) return "font/woff";
+  if (normalized.endsWith(".mp4")) return "video/mp4";
+  if (normalized.endsWith(".webm")) return "video/webm";
+  return null;
+}
+
 async function proxySite(request) {
   const url = new URL(request.url);
   let path = decodeURIComponent(url.pathname);
   if (path.includes("..")) return new Response("Bad Request", { status: 400 });
   if (path === "/" || path === "") path = "/index.html";
+
   const upstream = await fetch(`${RAW_BASE}${path}`, {
     method: request.method,
     headers: { "user-agent": "line-rangers-owner-preview/1.0" },
     cf: { cacheTtl: 0, cacheEverything: false },
   });
   if (!upstream.ok) return new Response("Not Found", { status: upstream.status });
+
   const headers = new Headers(upstream.headers);
   headers.set("cache-control", "no-store");
   headers.set("x-robots-tag", "noindex, nofollow, noarchive");
   headers.set("x-content-type-options", "nosniff");
+  headers.delete("content-length");
+
+  const contentType = contentTypeForPath(path);
+  if (contentType) headers.set("content-type", contentType);
+
   if (path === "/index.html" && request.method !== "HEAD") {
     const body = stripMaintenance(await upstream.text());
     headers.set("content-type", "text/html; charset=utf-8");
+    headers.delete("content-encoding");
+    headers.delete("etag");
     return new Response(body, { status: 200, headers });
   }
-  return new Response(request.method === "HEAD" ? null : upstream.body, { status: upstream.status, headers });
+
+  return new Response(request.method === "HEAD" ? null : upstream.body, {
+    status: upstream.status,
+    headers,
+  });
 }
 
 export default {
