@@ -13,6 +13,7 @@
     content="LINEレンジャーのレジェンド帯キャラクター編成数と採用率を集計する非公式サイト"
   >
 
+  <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#07111f">
   <meta name="color-scheme" content="dark">
 
@@ -38,13 +39,33 @@
     href="./assets/style.css?v=20260904-31"
   >
 
+  <link
+    rel="stylesheet"
+    href="./assets/maintenance.css?v=20260914-1"
+  >
+
   <script
     src="./assets/app.js?v=20260906-34"
     defer
   ></script>
 </head>
 
-<body>
+<body class="maintenance-mode">
+  <section class="maintenance-screen" role="status" aria-live="polite">
+    <div class="maintenance-card">
+      <p class="maintenance-kicker">UNDER MAINTENANCE</p>
+      <h1>現在、サイトを改修しています。</h1>
+      <p class="maintenance-lead">
+        掲示板サイトの併設、キャラクター情報・スキル情報の追加のため、
+        一時的に閉鎖しています。
+      </p>
+      <p class="maintenance-detail">
+        より使いやすいサイトにするため調整中です。公開再開までしばらくお待ちください。
+      </p>
+      <p class="maintenance-note">LINEレンジャー PvP統計サイト</p>
+    </div>
+  </section>
+
   <header class="site-header">
     <div class="header-inner">
 
