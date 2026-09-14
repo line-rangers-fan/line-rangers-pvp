@@ -1,33 +1,56 @@
-const OWNER_TOKEN_SHA256 = "3e422c299a6cae56999f3cc01b0c96bafeb7b880701ab048c1e96198067416e3";
+const OWNER_TOKEN_SHA256 = "ffa15a0b53397e4812824d4c1697113e7d75ee52d2cab3a46b7a3ea24b1efaa4";
 const RAW_BASE = "https://raw.githubusercontent.com/line-rangers-fan/line-rangers-pvp/main/docs";
-const COOKIE_NAME = "lr_owner_preview";
+const COOKIE_NAME = "__Host-lr_owner_preview_v2";
+const SESSION_MAX_AGE_SECONDS = 3600;
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
+const failedAttempts = new Map();
+
+function commonSecurityHeaders() {
+  return {
+    "cache-control": "no-store, max-age=0",
+    "x-robots-tag": "noindex, nofollow, noarchive, nosnippet",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  };
+}
 
 function html(body, status = 200, headers = {}) {
   return new Response(body, {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store",
-      "x-robots-tag": "noindex, nofollow, noarchive",
-      "referrer-policy": "no-referrer",
-      "x-content-type-options": "nosniff",
+      ...commonSecurityHeaders(),
       ...headers,
     },
   });
 }
 
 function maintenancePage() {
-  return html(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LINEレンジャー PvP統計サイト</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07111f;color:#eef7ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.card{width:min(680px,calc(100% - 32px));box-sizing:border-box;padding:36px 28px;border:1px solid #1f3a4d;border-radius:20px;background:#0c1a2a;box-shadow:0 18px 60px rgba(0,0,0,.28)}.k{color:#59d38c;font-weight:800;letter-spacing:.12em;font-size:.78rem}h1{font-size:clamp(1.6rem,6vw,2.5rem);margin:.5rem 0 1rem}p{line-height:1.8;color:#c8d7e5}</style></head><body><main class="card"><div class="k">UNDER MAINTENANCE</div><h1>現在、サイトを改修しています。</h1><p>掲示板サイトの併設、キャラクター情報・スキル情報の追加のため、一時的に閉鎖しています。</p><p>より使いやすいサイトにするため調整中です。公開再開までしばらくお待ちください。</p></main></body></html>`);
+  return html(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>LINEレンジャー PvP統計サイト</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07111f;color:#eef7ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.card{width:min(680px,calc(100% - 32px));box-sizing:border-box;padding:36px 28px;border:1px solid #1f3a4d;border-radius:20px;background:#0c1a2a;box-shadow:0 18px 60px rgba(0,0,0,.28)}.k{color:#59d38c;font-weight:800;letter-spacing:.12em;font-size:.78rem}h1{font-size:clamp(1.6rem,6vw,2.5rem);margin:.5rem 0 1rem}p{line-height:1.8;color:#c8d7e5}</style></head><body><main class="card"><div class="k">UNDER MAINTENANCE</div><h1>現在、サイトを改修しています。</h1><p>掲示板サイトの併設、キャラクター情報・スキル情報の追加のため、一時的に閉鎖しています。</p><p>より使いやすいサイトにするため調整中です。公開再開までしばらくお待ちください。</p></main></body></html>`);
 }
 
 function loginPage(error = "", status = 200) {
-  return html(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Owner Preview</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07111f;color:#eef7ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.card{width:min(460px,calc(100% - 32px));box-sizing:border-box;padding:32px;border:1px solid #1f3a4d;border-radius:18px;background:#0c1a2a}label{display:block;margin-bottom:8px}input{width:100%;box-sizing:border-box;padding:13px;border-radius:10px;border:1px solid #345;background:#07111f;color:#fff}button{width:100%;margin-top:14px;padding:13px;border:0;border-radius:10px;background:#35c978;color:#04130b;font-weight:800}.e{color:#ff9d9d}</style></head><body><main class="card"><h1>Owner Preview</h1><p>管理者専用プレビューです。</p>${error ? `<p class="e">${error}</p>` : ""}<form method="post" action="/owner/login"><label for="token">アクセスキー</label><input id="token" name="token" type="password" autocomplete="current-password" required><button type="submit">開く</button></form></main></body></html>`, status);
+  return html(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>Owner Preview</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07111f;color:#eef7ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.card{width:min(460px,calc(100% - 32px));box-sizing:border-box;padding:32px;border:1px solid #1f3a4d;border-radius:18px;background:#0c1a2a}label{display:block;margin-bottom:8px}input{width:100%;box-sizing:border-box;padding:13px;border-radius:10px;border:1px solid #345;background:#07111f;color:#fff}button{width:100%;margin-top:14px;padding:13px;border:0;border-radius:10px;background:#35c978;color:#04130b;font-weight:800}.e{color:#ff9d9d}</style></head><body><main class="card"><h1>Owner Preview</h1><p>管理者専用プレビューです。</p>${error ? `<p class="e">${error}</p>` : ""}<form method="post" action="/owner/login"><label for="token">アクセスキー</label><input id="token" name="token" type="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required><button type="submit">開く</button></form></main></body></html>`, status);
 }
 
 async function sha256Hex(value) {
   const data = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function constantTimeEqualHex(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+async function tokenMatches(value) {
+  if (!value) return false;
+  return constantTimeEqualHex(await sha256Hex(value), OWNER_TOKEN_SHA256);
 }
 
 function cookieValue(request) {
@@ -40,8 +63,38 @@ function cookieValue(request) {
 }
 
 async function isAuthorized(request) {
-  const value = cookieValue(request);
-  return Boolean(value) && (await sha256Hex(value)) === OWNER_TOKEN_SHA256;
+  return tokenMatches(cookieValue(request));
+}
+
+function clientKey(request) {
+  return request.headers.get("cf-connecting-ip") || "unknown";
+}
+
+function isLockedOut(request) {
+  const key = clientKey(request);
+  const state = failedAttempts.get(key);
+  if (!state) return false;
+  if (Date.now() - state.firstAt >= LOCKOUT_MS) {
+    failedAttempts.delete(key);
+    return false;
+  }
+  return state.count >= MAX_FAILED_ATTEMPTS;
+}
+
+function recordFailedAttempt(request) {
+  const key = clientKey(request);
+  const now = Date.now();
+  const state = failedAttempts.get(key);
+  if (!state || now - state.firstAt >= LOCKOUT_MS) {
+    failedAttempts.set(key, { count: 1, firstAt: now });
+    return;
+  }
+  state.count += 1;
+  failedAttempts.set(key, state);
+}
+
+function clearFailedAttempts(request) {
+  failedAttempts.delete(clientKey(request));
 }
 
 function stripMaintenance(htmlText) {
@@ -73,20 +126,18 @@ function contentTypeForPath(path) {
 async function proxySite(request) {
   const url = new URL(request.url);
   let path = decodeURIComponent(url.pathname);
-  if (path.includes("..")) return new Response("Bad Request", { status: 400 });
+  if (path.includes("..")) return new Response("Bad Request", { status: 400, headers: commonSecurityHeaders() });
   if (path === "/" || path === "") path = "/index.html";
 
   const upstream = await fetch(`${RAW_BASE}${path}`, {
     method: request.method,
-    headers: { "user-agent": "line-rangers-owner-preview/1.0" },
+    headers: { "user-agent": "line-rangers-owner-preview/2.0" },
     cf: { cacheTtl: 0, cacheEverything: false },
   });
-  if (!upstream.ok) return new Response("Not Found", { status: upstream.status });
+  if (!upstream.ok) return new Response("Not Found", { status: upstream.status, headers: commonSecurityHeaders() });
 
   const headers = new Headers(upstream.headers);
-  headers.set("cache-control", "no-store");
-  headers.set("x-robots-tag", "noindex, nofollow, noarchive");
-  headers.set("x-content-type-options", "nosniff");
+  for (const [key, value] of Object.entries(commonSecurityHeaders())) headers.set(key, value);
   headers.delete("content-length");
 
   const contentType = contentTypeForPath(path);
@@ -109,41 +160,58 @@ async function proxySite(request) {
 export default {
   async fetch(request) {
     const url = new URL(request.url);
+
     if (url.pathname === "/owner" && request.method === "GET") {
       if (await isAuthorized(request)) return Response.redirect(`${url.origin}/`, 302);
       return loginPage();
     }
+
     if (url.pathname === "/owner/login" && request.method === "POST") {
+      if (isLockedOut(request)) {
+        return loginPage("試行回数が多すぎます。しばらく待ってから再試行してください。", 429);
+      }
+
       const contentLength = Number(request.headers.get("content-length") || "0");
-      if (contentLength > 2048) return new Response("Payload Too Large", { status: 413 });
+      if (contentLength > 2048) return new Response("Payload Too Large", { status: 413, headers: commonSecurityHeaders() });
+
       const form = await request.formData();
       const token = String(form.get("token") || "");
-      if (!token || (await sha256Hex(token)) !== OWNER_TOKEN_SHA256) {
-        return loginPage("アクセスキーが違います。", 401);
+      if (!(await tokenMatches(token))) {
+        recordFailedAttempt(request);
+        return loginPage("アクセスキーを確認してください。", 401);
       }
+
+      clearFailedAttempts(request);
       return new Response(null, {
         status: 302,
         headers: {
           location: "/",
-          "set-cookie": `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=86400`,
-          "cache-control": "no-store",
+          "set-cookie": `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_MAX_AGE_SECONDS}`,
+          ...commonSecurityHeaders(),
         },
       });
     }
+
     if (url.pathname === "/owner/logout") {
       return new Response(null, {
         status: 302,
         headers: {
           location: "/owner",
           "set-cookie": `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-          "cache-control": "no-store",
+          ...commonSecurityHeaders(),
         },
       });
     }
+
     if (!(await isAuthorized(request))) return maintenancePage();
+
     if (!["GET", "HEAD"].includes(request.method)) {
-      return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+      return new Response("Method Not Allowed", {
+        status: 405,
+        headers: { ...commonSecurityHeaders(), Allow: "GET, HEAD" },
+      });
     }
+
     return proxySite(request);
   },
 };
