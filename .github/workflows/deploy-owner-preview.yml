@@ -68,6 +68,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ steps.cloudflare.outputs.account_id }}
           workingDirectory: infra/cloudflare-owner-preview
+          wranglerVersion: "4.131.2"
           command: deploy
 
       - name: Verify public maintenance gate and owner login
