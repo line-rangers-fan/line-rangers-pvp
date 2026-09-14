@@ -1,0 +1,47 @@
+/* File: docs/assets/community-entry.css */
+
+.community-board-entry-slot[hidden] {
+  display: none !important;
+}
+
+.community-board-entry-slot {
+  margin-top: 1rem;
+}
+
+.community-board-entry-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(67, 211, 142, 0.42);
+  border-radius: 0.85rem;
+  background: rgba(13, 42, 38, 0.72);
+  color: #f3fff9;
+  text-decoration: none;
+  text-align: left;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.community-board-entry-link:hover,
+.community-board-entry-link:focus-visible {
+  border-color: rgba(95, 231, 164, 0.9);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.community-board-entry-link:focus-visible {
+  box-shadow: 0 0 0 3px rgba(95, 231, 164, 0.2);
+}
+
+.community-board-entry-title {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.community-board-entry-description {
+  color: #b9cfca;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
