@@ -29,7 +29,8 @@ jobs:
           node --check infra/cloudflare-owner-preview/src/index.js
           grep -q 'HttpOnly; Secure; SameSite=Strict' infra/cloudflare-owner-preview/src/index.js
           grep -q 'x-robots-tag' infra/cloudflare-owner-preview/src/index.js
-          if grep -q 'Tk-vJdt4soDYCDq5Wrc0-n9gZgJT3XOtDPPgSRgHQuE' infra/cloudflare-owner-preview/src/index.js; then
+          grep -Eq 'OWNER_TOKEN_SHA256 = "[a-f0-9]{64}"' infra/cloudflare-owner-preview/src/index.js
+          if grep -Eq 'OWNER_TOKEN[[:space:]]*=' infra/cloudflare-owner-preview/src/index.js; then
             echo "Plaintext owner access key must never be committed."
             exit 1
           fi
