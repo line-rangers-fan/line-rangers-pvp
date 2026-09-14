@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "infra/cloudflare-owner-preview/**"
+      - "tests/owner_preview_worker.test.mjs"
       - ".github/workflows/deploy-owner-preview.yml"
 
 permissions:
@@ -27,6 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check infra/cloudflare-owner-preview/src/index.js
+          node tests/owner_preview_worker.test.mjs
           grep -q 'HttpOnly; Secure; SameSite=Strict' infra/cloudflare-owner-preview/src/index.js
           grep -q 'x-robots-tag' infra/cloudflare-owner-preview/src/index.js
           grep -Eq 'OWNER_TOKEN_SHA256 = "[a-f0-9]{64}"' infra/cloudflare-owner-preview/src/index.js
