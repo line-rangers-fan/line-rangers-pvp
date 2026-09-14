@@ -97,24 +97,11 @@ function clearFailedAttempts(request) {
 }
 
 function stripMaintenance(htmlText) {
-  const entrySlot = htmlText.match(
-    /<div\s+id="community-board-entry-slot"[\s\S]*?<\/div>/i
-  )?.[0] || "";
-
-  let transformed = htmlText
+  return htmlText
     .replace(/\s*<link\s+rel="stylesheet"\s+href="\.\/assets\/maintenance\.css\?[^>]+>\s*/i, "\n")
     .replace(/<html\s+lang="ja">/i, '<html lang="ja" data-owner-preview="true">')
     .replace(/<body\s+class="maintenance-mode">/i, "<body>")
     .replace(/\s*<section class="maintenance-screen"[\s\S]*?<\/section>\s*/i, "\n");
-
-  if (entrySlot) {
-    transformed = transformed.replace(
-      /(<div class="header-inner">\s*)/i,
-      `$1${entrySlot}\n`
-    );
-  }
-
-  return transformed;
 }
 
 function contentTypeForPath(path) {
