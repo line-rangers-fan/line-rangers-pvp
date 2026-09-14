@@ -1,5 +1,4 @@
 const OWNER_TOKEN_SHA256 = "6e5695de527d439cda9a2d0741584c38983eddcbeb5770319e976d5e0fd61adc";
-const RAW_BASE = "https://raw.githubusercontent.com/line-rangers-fan/line-rangers-pvp/main/docs";
 const COOKIE_NAME = "__Host-lr_owner_preview_v2";
 const SESSION_MAX_AGE_SECONDS = 3600;
 const MAX_FAILED_ATTEMPTS = 5;
@@ -9,7 +8,7 @@ const failedAttempts = new Map();
 function commonSecurityHeaders() {
   return {
     "cache-control": "no-store, max-age=0",
-    "x-robots-tag": "noindex, nofollow,noarchive, nosnippet",
+    "x-robots-tag": "noindex, nofollow, noarchive, nosnippet",
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
     "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
@@ -98,10 +97,24 @@ function clearFailedAttempts(request) {
 }
 
 function stripMaintenance(htmlText) {
-  return htmlText
+  const entrySlot = htmlText.match(
+    /<div\s+id="community-board-entry-slot"[\s\S]*?<\/div>/i
+  )?.[0] || "";
+
+  let transformed = htmlText
     .replace(/\s*<link\s+rel="stylesheet"\s+href="\.\/assets\/maintenance\.css\?[^>]+>\s*/i, "\n")
+    .replace(/<html\s+lang="ja">/i, '<html lang="ja" data-owner-preview="true">')
     .replace(/<body\s+class="maintenance-mode">/i, "<body>")
     .replace(/\s*<section class="maintenance-screen"[\s\S]*?<\/section>\s*/i, "\n");
+
+  if (entrySlot) {
+    transformed = transformed.replace(
+      /(<div class="header-inner">\s*)/i,
+      `$1${entrySlot}\n`
+    );
+  }
+
+  return transformed;
 }
 
 function contentTypeForPath(path) {
@@ -123,18 +136,45 @@ function contentTypeForPath(path) {
   return null;
 }
 
-async function proxySite(request) {
+async function proxySite(request, env) {
+  if (!env?.ASSETS?.fetch) {
+    return new Response("Preview assets unavailable", {
+      status: 503,
+      headers: commonSecurityHeaders(),
+    });
+  }
+
   const url = new URL(request.url);
-  let path = decodeURIComponent(url.pathname);
-  if (path.includes("..")) return new Response("Bad Request", { status: 400, headers: commonSecurityHeaders() });
+  let path;
+  try {
+    path = decodeURIComponent(url.pathname);
+  } catch (_error) {
+    return new Response("Bad Request", { status: 400, headers: commonSecurityHeaders() });
+  }
+
+  if (path.includes("..") || path.includes("\\") || path.includes("\0")) {
+    return new Response("Bad Request", { status: 400, headers: commonSecurityHeaders() });
+  }
   if (path === "/" || path === "") path = "/index.html";
 
-  const upstream = await fetch(`${RAW_BASE}${path}`, {
-    method: request.method,
-    headers: { "user-agent": "line-rangers-owner-preview/2.0" },
-    cf: { cacheTtl: 0, cacheEverything: false },
-  });
-  if (!upstream.ok) return new Response("Not Found", { status: upstream.status, headers: commonSecurityHeaders() });
+  const assetUrl = new URL(request.url);
+  assetUrl.pathname = path;
+  assetUrl.search = "";
+  assetUrl.hash = "";
+
+  const upstream = await env.ASSETS.fetch(
+    new Request(assetUrl.toString(), {
+      method: request.method,
+      headers: request.headers,
+    })
+  );
+
+  if (!upstream.ok) {
+    return new Response("Not Found", {
+      status: upstream.status,
+      headers: commonSecurityHeaders(),
+    });
+  }
 
   const headers = new Headers(upstream.headers);
   for (const [key, value] of Object.entries(commonSecurityHeaders())) headers.set(key, value);
@@ -158,7 +198,7 @@ async function proxySite(request) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
 
     if (url.pathname === "/owner" && request.method === "GET") {
@@ -172,7 +212,12 @@ export default {
       }
 
       const contentLength = Number(request.headers.get("content-length") || "0");
-      if (contentLength > 2048) return new Response("Payload Too Large", { status: 413, headers: commonSecurityHeaders() });
+      if (contentLength > 2048) {
+        return new Response("Payload Too Large", {
+          status: 413,
+          headers: commonSecurityHeaders(),
+        });
+      }
 
       const form = await request.formData();
       const token = String(form.get("token") || "");
@@ -212,6 +257,6 @@ export default {
       });
     }
 
-    return proxySite(request);
+    return proxySite(request, env);
   },
 };

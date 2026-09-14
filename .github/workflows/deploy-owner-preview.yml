@@ -5,6 +5,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "docs/**"
       - "infra/cloudflare-owner-preview/**"
       - "tests/owner_preview_worker.test.mjs"
       - ".github/workflows/deploy-owner-preview.yml"
@@ -31,9 +32,15 @@ jobs:
           node tests/owner_preview_worker.test.mjs
           grep -q 'HttpOnly; Secure; SameSite=Strict' infra/cloudflare-owner-preview/src/index.js
           grep -q 'x-robots-tag' infra/cloudflare-owner-preview/src/index.js
+          grep -q 'run_worker_first = true' infra/cloudflare-owner-preview/wrangler.toml
+          grep -q 'binding = "ASSETS"' infra/cloudflare-owner-preview/wrangler.toml
           grep -Eq 'OWNER_TOKEN_SHA256 = "[a-f0-9]{64}"' infra/cloudflare-owner-preview/src/index.js
           if grep -Eq 'OWNER_TOKEN[[:space:]]*=' infra/cloudflare-owner-preview/src/index.js; then
             echo "Plaintext owner access key must never be committed."
+            exit 1
+          fi
+          if grep -q 'raw.githubusercontent.com' infra/cloudflare-owner-preview/src/index.js; then
+            echo "Owner preview must not depend on public raw GitHub access."
             exit 1
           fi
 
@@ -69,3 +76,4 @@ jobs:
           base="https://line-rangers-pvp-owner-preview.n-yu1791.workers.dev"
           curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/" | grep -q '現在、サイトを改修しています。'
           curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/owner" | grep -q 'Owner Preview'
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/assets/app.js" | grep -q '現在、サイトを改修しています。'
