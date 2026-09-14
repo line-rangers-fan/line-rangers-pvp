@@ -1,4 +1,4 @@
-const OWNER_TOKEN_SHA256 = "ffa15a0b53397e4812824d4c1697113e7d75ee52d2cab3a46b7a3ea24b1efaa4";
+const OWNER_TOKEN_SHA256 = "6e5695de527d439cda9a2d0741584c38983eddcbeb5770319e976d5e0fd61adc";
 const RAW_BASE = "https://raw.githubusercontent.com/line-rangers-fan/line-rangers-pvp/main/docs";
 const COOKIE_NAME = "__Host-lr_owner_preview_v2";
 const SESSION_MAX_AGE_SECONDS = 3600;
@@ -9,7 +9,7 @@ const failedAttempts = new Map();
 function commonSecurityHeaders() {
   return {
     "cache-control": "no-store, max-age=0",
-    "x-robots-tag": "noindex, nofollow, noarchive, nosnippet",
+    "x-robots-tag": "noindex, nofollow,noarchive, nosnippet",
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
     "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
