@@ -1,4 +1,4 @@
-name: deploy-owner-preview
+name: deploy-private-repo-preview
 
 on:
   workflow_dispatch:
@@ -8,13 +8,14 @@ on:
       - "docs/**"
       - "infra/cloudflare-owner-preview/**"
       - "tests/owner_preview_worker.test.mjs"
+      - "tests/test_community_entry_contract.py"
       - ".github/workflows/deploy-owner-preview.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: owner-preview-deploy
+  group: private-repo-preview-deploy
   cancel-in-progress: false
 
 jobs:
@@ -25,22 +26,21 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Validate Worker source
+      - name: Validate preview and integration contracts
         run: |
           set -euo pipefail
           node --check infra/cloudflare-owner-preview/src/index.js
           node tests/owner_preview_worker.test.mjs
-          grep -q 'HttpOnly; Secure; SameSite=Strict' infra/cloudflare-owner-preview/src/index.js
+          python -m pytest -q tests/test_community_entry_contract.py
           grep -q 'x-robots-tag' infra/cloudflare-owner-preview/src/index.js
           grep -q 'run_worker_first = true' infra/cloudflare-owner-preview/wrangler.toml
           grep -q 'binding = "ASSETS"' infra/cloudflare-owner-preview/wrangler.toml
-          grep -Eq 'OWNER_TOKEN_SHA256 = "[a-f0-9]{64}"' infra/cloudflare-owner-preview/src/index.js
-          if grep -Eq 'OWNER_TOKEN[[:space:]]*=' infra/cloudflare-owner-preview/src/index.js; then
-            echo "Plaintext owner access key must never be committed."
+          if grep -Eq 'OWNER_TOKEN|COOKIE_NAME|owner/login' infra/cloudflare-owner-preview/src/index.js; then
+            echo "Preview must remain no-login."
             exit 1
           fi
           if grep -q 'raw.githubusercontent.com' infra/cloudflare-owner-preview/src/index.js; then
-            echo "Owner preview must not depend on public raw GitHub access."
+            echo "Preview must use bundled private-repository assets."
             exit 1
           fi
 
@@ -62,7 +62,7 @@ jobs:
           fi
           echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy owner-only preview Worker
+      - name: Deploy no-login repo-backed preview Worker
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -71,10 +71,17 @@ jobs:
           wranglerVersion: "4.131.2"
           command: deploy
 
-      - name: Verify public maintenance gate and owner login
+      - name: Verify no-login preview and direct ranking layout
         run: |
           set -euo pipefail
           base="https://line-rangers-pvp-owner-preview.n-yu1791.workers.dev"
-          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/" | grep -q '現在、サイトを改修しています。'
-          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/owner" | grep -q 'Owner Preview'
-          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/assets/app.js" | grep -q '現在、サイトを改修しています。'
+          root="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/")"
+          printf '%s' "$root" | grep -q 'レジェンド帯 キャラ集計'
+          printf '%s' "$root" | grep -q 'id="community-board-entry-slot"'
+          printf '%s' "$root" | grep -q 'id="ranking-section"'
+          if printf '%s' "$root" | grep -q '現在、サイトを改修しています。'; then
+            echo "No-login preview unexpectedly returned maintenance mode."
+            exit 1
+          fi
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/assets/community-entry.js" | grep -q '新キャラ情報掲示板'
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/assets/app.js" | grep -q 'character_usage.json'

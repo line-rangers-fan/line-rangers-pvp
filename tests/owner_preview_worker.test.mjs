@@ -10,23 +10,22 @@ assert.match(source, /application\/json; charset=utf-8/);
 assert.match(source, /headers\.delete\("content-length"\)/);
 assert.match(source, /headers\.delete\("content-encoding"\)/);
 assert.match(source, /"x-content-type-options": "nosniff"/);
+assert.match(source, /"x-robots-tag": "noindex, nofollow, noarchive, nosnippet"/);
 
-assert.match(source, /__Host-lr_owner_preview_v2/);
-assert.match(source, /SESSION_MAX_AGE_SECONDS = 3600/);
-assert.match(source, /HttpOnly; Secure; SameSite=Strict/);
-assert.match(source, /MAX_FAILED_ATTEMPTS = 5/);
-assert.match(source, /LOCKOUT_MS = 15 \* 60 \* 1000/);
-assert.match(source, /constantTimeEqualHex/);
 assert.match(source, /env\?\.ASSETS\?\.fetch/);
 assert.match(source, /env\.ASSETS\.fetch/);
-assert.match(source, /data-owner-preview="true"/);
+assert.match(source, /data-repo-preview="true"/);
+assert.match(source, /\["GET", "HEAD"\]/);
+assert.match(source, /stripMaintenance/);
+assert.doesNotMatch(source, /OWNER_TOKEN/);
+assert.doesNotMatch(source, /COOKIE_NAME/);
+assert.doesNotMatch(source, /loginPage/);
+assert.doesNotMatch(source, /tokenMatches/);
 assert.doesNotMatch(source, /raw\.githubusercontent\.com/);
-assert.doesNotMatch(source, /3e422c299a6cae56999f3cc01b0c96bafeb7b880701ab048c1e96198067416e3/);
-assert.doesNotMatch(source, /line-rangers-community-dev/);
 assert.doesNotMatch(source, /chatgpt\.site/);
 
 assert.match(wrangler, /directory = "\.\.\/\.\.\/docs"/);
 assert.match(wrangler, /binding = "ASSETS"/);
 assert.match(wrangler, /run_worker_first = true/);
 
-console.log('owner preview private-assets, security, and MIME guards: ok');
+console.log('no-login private-repo preview, security, and MIME guards: ok');

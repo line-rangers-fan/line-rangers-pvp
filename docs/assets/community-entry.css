@@ -5,43 +5,121 @@
 }
 
 .community-board-entry-slot {
-  margin-top: 1rem;
+  margin: 1.15rem 0 1rem;
 }
 
-.community-board-entry-link {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.9rem 1rem;
+.community-board-entry-card {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(1rem, 4vw, 1.35rem);
   border: 1px solid rgba(67, 211, 142, 0.42);
-  border-radius: 0.85rem;
-  background: rgba(13, 42, 38, 0.72);
-  color: #f3fff9;
-  text-decoration: none;
-  text-align: left;
-  transition: border-color 160ms ease, transform 160ms ease;
+  border-left: 4px solid #32d583;
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(50, 213, 131, 0.12), transparent 16rem),
+    linear-gradient(145deg, rgba(13, 42, 38, 0.92), rgba(10, 28, 43, 0.96));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2);
 }
 
-.community-board-entry-link:hover,
-.community-board-entry-link:focus-visible {
-  border-color: rgba(95, 231, 164, 0.9);
-  transform: translateY(-1px);
-  outline: none;
+.community-board-entry-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
 }
 
-.community-board-entry-link:focus-visible {
-  box-shadow: 0 0 0 3px rgba(95, 231, 164, 0.2);
+.community-board-entry-marker {
+  flex: 0 0 auto;
+  margin-top: 0.28rem;
+  color: #32d583;
+  font-size: 0.72rem;
+  filter: drop-shadow(0 0 7px rgba(50, 213, 131, 0.45));
+}
+
+.community-board-entry-heading-text {
+  min-width: 0;
 }
 
 .community-board-entry-title {
-  font-size: 1rem;
+  margin: 0;
+  color: #f4fbf8;
+  font-size: clamp(1.08rem, 4.6vw, 1.28rem);
   line-height: 1.35;
 }
 
 .community-board-entry-description {
+  margin: 0.42rem 0 0;
   color: #b9cfca;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.community-board-entry-featured {
+  margin-top: 1rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid rgba(133, 169, 185, 0.2);
+  border-radius: 0.8rem;
+  background: rgba(5, 18, 30, 0.48);
+}
+
+.community-board-entry-featured-label {
+  display: block;
+  color: #f4f7fb;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.community-board-entry-featured-text {
+  margin: 0.38rem 0 0;
+  color: #b6c7d8;
   font-size: 0.86rem;
-  line-height: 1.5;
+  line-height: 1.6;
+}
+
+.community-board-entry-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  margin-top: 1rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid rgba(99, 235, 167, 0.72);
+  border-radius: 0.72rem;
+  color: #04160d;
+  background: linear-gradient(135deg, #52df99, #32d583);
+  box-shadow: 0 8px 24px rgba(50, 213, 131, 0.16);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-decoration: none;
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    filter 150ms ease;
+}
+
+@media (hover: hover) {
+  .community-board-entry-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 28px rgba(50, 213, 131, 0.24);
+    filter: brightness(1.04);
+  }
+}
+
+.community-board-entry-button:active {
+  transform: scale(0.98);
+}
+
+.community-board-entry-button:focus-visible {
+  outline: 3px solid rgba(99, 235, 167, 0.35);
+  outline-offset: 3px;
+}
+
+@media (min-width: 680px) {
+  .community-board-entry-card {
+    padding: 1.35rem 1.45rem;
+  }
+
+  .community-board-entry-button {
+    min-width: 10.5rem;
+  }
 }

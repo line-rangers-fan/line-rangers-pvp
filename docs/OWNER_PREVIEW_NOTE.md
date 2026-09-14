@@ -1,7 +1,9 @@
-# Owner preview loading note
+# Private-repository development preview
 
-The authenticated Cloudflare preview must set explicit MIME types when proxying files from `raw.githubusercontent.com`.
+The GitHub repository remains private and GitHub Pages is not used to expose the work-in-progress site.
 
-Without this, `X-Content-Type-Options: nosniff` can cause browsers (notably Safari) to reject proxied JavaScript and CSS served as `text/plain`, leaving the page stuck at the initial loading state.
+A Cloudflare Worker bundles the current `docs/` assets from the private repository and serves a **no-login development preview**. The Worker strips the repository's maintenance wrapper only at delivery time. The repository copy of `docs/index.html` deliberately keeps `maintenance-mode`, `noindex`, and `nofollow` so an accidental direct Pages exposure does not silently publish the work-in-progress site.
 
-Required mappings include JavaScript, CSS, JSON, HTML, images, fonts, and video types used by the site.
+The preview also sends `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet` and `Cache-Control: no-store`.
+
+Because the preview has no login gate, anyone who knows its URL can view it. Do not place secrets or private-only content in `docs/`.
