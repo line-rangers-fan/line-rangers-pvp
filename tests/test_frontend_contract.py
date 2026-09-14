@@ -45,6 +45,15 @@ def test_frontend_assets_keep_strict_csp_and_required_controls():
     assert "hidden" in notice
 
 
+def test_board_entry_is_available_during_maintenance_without_reopening_pvp():
+    index = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+    assert 'class="maintenance-mode"' in index
+    assert 'href="https://line-rangers-community-dev.n-yu1791.chatgpt.site/boards"' in index
+    assert 'class="community-entry-link"' in index
+    assert 'target="_blank"' in index
+    assert 'rel="noopener noreferrer"' in index
+
+
 def test_history_and_equipment_change_contract_is_present():
     app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
     style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
