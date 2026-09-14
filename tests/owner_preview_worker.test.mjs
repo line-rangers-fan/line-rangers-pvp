@@ -8,7 +8,7 @@ assert.match(source, /text\/css; charset=utf-8/);
 assert.match(source, /application\/json; charset=utf-8/);
 assert.match(source, /headers\.delete\("content-length"\)/);
 assert.match(source, /headers\.delete\("content-encoding"\)/);
-assert.match(source, /x-content-type-options", "nosniff"/);
+assert.match(source, /"x-content-type-options": "nosniff"/);
 
 assert.match(source, /__Host-lr_owner_preview_v2/);
 assert.match(source, /SESSION_MAX_AGE_SECONDS = 3600/);
