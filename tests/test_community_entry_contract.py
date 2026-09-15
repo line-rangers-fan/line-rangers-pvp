@@ -6,8 +6,9 @@ INDEX = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 ENTRY_JS = (ROOT / "docs" / "assets" / "community-entry.js").read_text(encoding="utf-8")
 ENTRY_CSS = (ROOT / "docs" / "assets" / "community-entry.css").read_text(encoding="utf-8")
 
-BOARD_HOST = "rangers-community-review.n-yu1791.chatgpt.site"
-BOARD_URL = f"https://{BOARD_HOST}/"
+BOARD_HOST = "line-rangers-community-dev.n-yu1791.chatgpt.site"
+BOARD_PATH = "/boards"
+BOARD_URL = f"https://{BOARD_HOST}{BOARD_PATH}"
 BANNED_RANKING_LINK_LABELS = (
     "PvP集計表を開く",
     "集計表へ",
@@ -16,8 +17,6 @@ BANNED_RANKING_LINK_LABELS = (
 
 
 def test_existing_maintenance_and_search_controls_are_preserved():
-    # GitHub Pages remains fail-closed even though the separate repo-backed
-    # preview Worker strips maintenance for the no-login development preview.
     assert '<body class="maintenance-mode">' in INDEX
     assert '<meta name="robots" content="noindex, nofollow">' in INDEX
     assert 'class="maintenance-screen"' in INDEX
@@ -30,13 +29,12 @@ def test_entry_is_single_isolated_slot_and_url_is_not_static_html():
     assert "iframe" not in INDEX.lower()
 
 
-def test_community_entry_is_immediately_before_real_ranking_section():
+def test_community_entry_is_above_update_summary_and_ranking():
     entry_position = INDEX.index('id="community-board-entry-slot"')
+    status_position = INDEX.index('id="status-message"')
+    summary_position = INDEX.index('id="summary"')
     ranking_position = INDEX.index('id="ranking-section"')
-    assert entry_position < ranking_position
-    between = INDEX[entry_position:ranking_position]
-    assert 'id="status-message"' not in between
-    assert 'id="summary"' not in between
+    assert entry_position < status_position < summary_position < ranking_position
 
 
 def test_ranking_navigation_buttons_are_removed():
@@ -52,33 +50,30 @@ def test_feature_flag_is_fail_closed_but_currently_approved():
     assert "slot.hidden = true" in ENTRY_JS
 
 
-def test_url_is_https_allowlisted_and_carries_no_url_secrets():
+def test_url_is_https_allowlisted_and_direct_to_latest_board():
     assert BOARD_URL in ENTRY_JS
     assert BOARD_HOST in ENTRY_JS
+    assert f'allowedPath: "{BOARD_PATH}"' in ENTRY_JS
     assert 'url.protocol !== "https:"' in ENTRY_JS
     assert 'url.username !== ""' in ENTRY_JS
     assert 'url.password !== ""' in ENTRY_JS
     assert 'url.search !== ""' in ENTRY_JS
     assert 'url.hash !== ""' in ENTRY_JS
+    assert 'url.pathname !== allowedPath' in ENTRY_JS
     assert 'allowedHosts.includes(url.hostname)' in ENTRY_JS
+    assert "rangers-community-review.n-yu1791.chatgpt.site" not in ENTRY_JS
 
 
-def test_only_board_button_navigates_and_uses_safe_external_attributes():
-    assert 'button.textContent = "掲示板を開く ↗"' in ENTRY_JS
-    assert 'button.target = "_blank"' in ENTRY_JS
-    assert 'button.rel = "noopener noreferrer"' in ENTRY_JS
+def test_board_button_navigates_same_tab_without_intermediate_page():
+    assert 'button.textContent = "掲示板を開く →"' in ENTRY_JS
+    assert 'button.target = "_blank"' not in ENTRY_JS
+    assert "noopener noreferrer" not in ENTRY_JS
     assert "注目コメント" in ENTRY_JS
     assert "新キャラ情報掲示板" in ENTRY_JS
 
 
 def test_entry_does_not_call_the_board_or_pvp_apis():
-    forbidden = (
-        "fetch(",
-        "XMLHttpRequest",
-        "WebSocket",
-        "EventSource",
-        "sendBeacon",
-    )
+    forbidden = ("fetch(", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon")
     for token in forbidden:
         assert token not in ENTRY_JS
 
