@@ -5,6 +5,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = (ROOT / "community" / "SECURITY_AND_MIGRATION_CONTRACT.md").read_text(encoding="utf-8")
 REGISTRY = json.loads((ROOT / "community" / "new_character_registry.json").read_text(encoding="utf-8"))
 ENTRY = (ROOT / "docs" / "assets" / "community-entry.js").read_text(encoding="utf-8")
+APP = (ROOT / "docs" / "assets" / "app.js").read_text(encoding="utf-8")
+SALLY_FALLBACK = ROOT / "docs" / "assets" / "characters" / "crab-sally-ultimate-fallback.jpg"
 
 
 def test_security_contract_contains_required_identity_and_authz_guards():
@@ -47,13 +49,17 @@ def test_september_board_has_exactly_approved_sally_target():
     assert sally["exclude_other_evolution"] is True
 
 
-def test_missing_sally_image_fails_closed_instead_of_using_wrong_evolution():
+def test_sally_uses_only_reviewed_exact_evolution_fallback():
     sally = REGISTRY["characters"][0]
     image = sally["image"]
-    assert image["status"] == "missing_requires_verified_asset"
-    assert image["repository_path"] is None
+    assert image["status"] == "reviewed_local_fallback"
+    assert image["repository_path"] == "./assets/characters/crab-sally-ultimate-fallback.jpg"
+    assert image["canonical_source_first"] is True
     assert image["allow_name_similarity_fallback"] is False
     assert image["allow_other_evolution_fallback"] is False
+    assert SALLY_FALLBACK.is_file()
+    assert '"u1631e-sally"' in APP
+    assert 'crab-sally-ultimate-fallback.jpg' in APP
 
 
 def test_pvp_entry_points_directly_to_latest_board_only():
