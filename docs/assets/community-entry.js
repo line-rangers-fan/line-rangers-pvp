@@ -15,6 +15,15 @@ const COMMUNITY_BOARD_ENTRY_CONFIG = Object.freeze({
   allowedPath: "/boards",
 });
 
+// September 2026 board target is the ultimate-evolution form only. Keep this
+// local and deterministic so a remote image outage cannot leave the entry
+// blank. Do not substitute the blue hyper-evolution form.
+const COMMUNITY_FEATURED_CHARACTER = Object.freeze({
+  unitCode: "u1631e-sally",
+  name: "かに座 サリー",
+  image: "./assets/characters/crab-sally-ultimate-fallback.jpg",
+});
+
 function normalizeCommunityBoardEntryState(value) {
   return value === true;
 }
@@ -55,6 +64,29 @@ function textElement(tagName, className, text) {
   return element;
 }
 
+function buildFeaturedCharacter() {
+  const character = document.createElement("div");
+  character.className = "community-board-entry-character";
+  character.dataset.unitCode = COMMUNITY_FEATURED_CHARACTER.unitCode;
+
+  const image = document.createElement("img");
+  image.className = "community-board-entry-character-image";
+  image.src = COMMUNITY_FEATURED_CHARACTER.image;
+  image.alt = `${COMMUNITY_FEATURED_CHARACTER.name}のキャラクター画像`;
+  image.width = 88;
+  image.height = 88;
+  image.loading = "eager";
+  image.decoding = "async";
+
+  const copy = document.createElement("div");
+  copy.className = "community-board-entry-character-copy";
+  const badge = textElement("span", "community-board-entry-character-badge", "NEW CHARACTER");
+  const name = textElement("strong", "community-board-entry-character-name", COMMUNITY_FEATURED_CHARACTER.name);
+  copy.append(badge, name);
+  character.append(image, copy);
+  return character;
+}
+
 function buildCommunityBoardEntry(url) {
   const card = document.createElement("section");
   card.className = "community-board-entry-card";
@@ -86,7 +118,7 @@ function buildCommunityBoardEntry(url) {
   button.textContent = "掲示板を開く →";
   button.setAttribute("aria-label", "新キャラ情報掲示板を開く");
 
-  card.append(headingRow, featured, button);
+  card.append(headingRow, buildFeaturedCharacter(), featured, button);
   return card;
 }
 
