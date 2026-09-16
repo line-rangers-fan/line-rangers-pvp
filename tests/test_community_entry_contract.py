@@ -6,7 +6,7 @@ INDEX = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 ENTRY_JS = (ROOT / "docs" / "assets" / "community-entry.js").read_text(encoding="utf-8")
 ENTRY_CSS = (ROOT / "docs" / "assets" / "community-entry.css").read_text(encoding="utf-8")
 
-BOARD_HOST = "line-rangers-community-dev.n-yu1791.chatgpt.site"
+BOARD_HOST = "line-rangers-pvp-community-production.n-yu1791.workers.dev"
 BOARD_PATH = "/boards"
 BOARD_URL = f"https://{BOARD_HOST}{BOARD_PATH}"
 BANNED_RANKING_LINK_LABELS = (
