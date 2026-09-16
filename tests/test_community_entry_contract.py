@@ -43,9 +43,9 @@ def test_ranking_navigation_buttons_are_removed():
         assert label not in combined
 
 
-def test_feature_flag_is_fail_closed_but_currently_approved():
+def test_feature_flag_is_fail_closed_and_publication_is_disabled():
     assert "defaultState: false" in ENTRY_JS
-    assert "state: true" in ENTRY_JS
+    assert "state: false" in ENTRY_JS
     assert "return value === true" in ENTRY_JS
     assert "slot.hidden = true" in ENTRY_JS
 
