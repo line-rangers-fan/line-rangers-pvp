@@ -8,9 +8,9 @@ const COMMUNITY_BOARD_ENTRY_CONFIG = Object.freeze({
   state: true,
   // Latest approved development board. Link directly to /boards so users do
   // not encounter the obsolete landing/intermediate page.
-  url: "https://line-rangers-community-dev.n-yu1791.chatgpt.site/boards",
+  url: "https://line-rangers-pvp-community-production.n-yu1791.workers.dev/boards",
   allowedHosts: Object.freeze([
-    "line-rangers-community-dev.n-yu1791.chatgpt.site",
+    "line-rangers-pvp-community-production.n-yu1791.workers.dev",
   ]),
   allowedPath: "/boards",
 });
