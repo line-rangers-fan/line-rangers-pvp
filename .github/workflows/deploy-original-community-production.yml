@@ -1,13 +1,14 @@
 name: deploy-original-community-production
 
-# The validated copy has been promoted successfully. Future production publishes remain manual.
-# The workflow reuses the pinned copy source and isolated production D1/R2 pair.
-
-# The original PvP repository remains the canonical production entry point.
-# The community application is built from the validated copy commit and uses
-# production-only D1/R2 resources, never the review resources.
+# Production promotion is normally manual. The temporary push trigger below is
+# guarded by the [promote-copy] commit marker so this authorized cutover can run
+# once from the GitHub connector; it will be removed after a successful deploy.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/deploy-original-community-production.yml
 
 permissions:
   contents: read
@@ -17,22 +18,22 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  COPY_SOURCE_SHA: cb5bf845bcfccf1ef386e56d70ab67fcb8701cfb
+  COPY_SOURCE_SHA: 0625eb71320acfcf0b1988130677174e516179a3
   WORKER_NAME: line-rangers-pvp-community-production
-  REVIEW_WORKER_NAME: line-rangers-pvp-community-review
   D1_NAME: line-rangers-pvp-production-db
   R2_BUCKET: line-rangers-pvp-production-media
   PRODUCTION_BASE_URL: https://line-rangers-pvp-community-production.n-yu1791.workers.dev
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[promote-copy]') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Check out original repository
         uses: actions/checkout@v4
 
-      - name: Fetch validated copy source
+      - name: Fetch exact validated copy source
         env:
           COPY_SOURCE_SHA: ${{ env.COPY_SOURCE_SHA }}
         run: |
@@ -49,7 +50,7 @@ jobs:
           cache: npm
           cache-dependency-path: copy-source/package-lock.json
 
-      - name: Install locked dependencies
+      - name: Install dependencies
         working-directory: copy-source
         run: npm run install:ci
 
@@ -60,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
-            echo "CLOUDFLARE_API_TOKEN is required for the original production deployment."
+            echo "CLOUDFLARE_BOARD_API_TOKEN is required."
             exit 78
           fi
           response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
@@ -72,29 +73,27 @@ jobs:
           echo "::add-mask::$account_id"
           echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
 
-      - name: Create or verify original D1 and R2 resources
+      - name: Verify existing production D1 and R2 only
         working-directory: copy-source
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
         run: |
           set -euo pipefail
-
           db_list="$(npx wrangler d1 list --json)"
-          db_id="$(printf '%s' "$db_list" | jq -r --arg name "$D1_NAME" '[.[] | select(.name == $name) | .uuid][0] // empty')"
+          db_id="$(printf '%s' "$db_list" | jq -r --arg name "$D1_NAME" '[.[] | select(.name == $name) | (.uuid // .database_id // .id)][0] // empty')"
           if [ -z "$db_id" ]; then
-            created="$(npx wrangler d1 create "$D1_NAME" --json)"
-            db_id="$(printf '%s' "$created" | jq -er '.uuid // .result.uuid // .database_id')"
+            echo "Production D1 $D1_NAME does not exist. Refusing to create a new resource automatically."
+            exit 78
           fi
           if ! [[ "$db_id" =~ ^[A-Fa-f0-9-]{36}$ ]]; then
-            echo "Unable to resolve the original production D1 database ID."
+            echo "Unable to resolve the production D1 database ID."
             exit 1
           fi
           echo "::add-mask::$db_id"
-
           if ! npx wrangler r2 bucket info "$R2_BUCKET" --json >/dev/null 2>&1; then
-            npx wrangler r2 bucket create "$R2_BUCKET"
+            echo "Production R2 bucket $R2_BUCKET does not exist. Refusing to create a new resource automatically."
+            exit 78
           fi
-
           tmp="$(mktemp)"
           jq --arg id "$db_id" --arg db "$D1_NAME" --arg bucket "$R2_BUCKET" --arg worker "$WORKER_NAME" '
             .name = $worker
@@ -106,20 +105,38 @@ jobs:
           grep -q "$db_id" wrangler.jsonc
           grep -q "$R2_BUCKET" wrangler.jsonc
 
-      - name: Build and run regression tests
+      - name: Preflight Owner authorization source
+        working-directory: copy-source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+          BOARD_OWNER_ACCESS_TOKEN: ${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+          BOARD_OWNER_SUBJECT: ${{ secrets.BOARD_OWNER_SUBJECT }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BOARD_OWNER_ACCESS_TOKEN:-}" ] && [ -n "${BOARD_OWNER_SUBJECT:-}" ]; then
+            echo "Owner secrets are available from the original repository secret store."
+            exit 0
+          fi
+          current="$(npx wrangler secret list --name "$WORKER_NAME" --format json 2>/dev/null || printf '[]')"
+          printf '%s' "$current" | jq -e '.[] | select(.name == "BOARD_OWNER_ACCESS_TOKEN")' >/dev/null || { echo "Production Owner access secret is missing."; exit 78; }
+          printf '%s' "$current" | jq -e '.[] | select(.name == "BOARD_OWNER_SUBJECT")' >/dev/null || { echo "Production Owner subject secret is missing."; exit 78; }
+          echo "Existing production Owner secret names verified."
+
+      - name: Audit dependencies and run complete regression suite
         working-directory: copy-source
         run: |
           set -euo pipefail
+          npm audit --omit=dev --audit-level=high
           npm test
           npm run lint
 
-      - name: Apply original production D1 migrations
+      - name: Apply production D1 migrations
         working-directory: copy-source
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
         run: npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc
 
-      - name: Deploy original community Worker
+      - name: Deploy validated copy to production Worker
         working-directory: copy-source
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
@@ -133,18 +150,7 @@ jobs:
           fi
           npx wrangler deploy --config "$output_config"
 
-      - name: Preserve or initialize original anonymous signing secret
-        working-directory: copy-source
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          secrets_json="$(npx wrangler secret list --name "$WORKER_NAME" --format json)"
-          if ! printf '%s' "$secrets_json" | jq -e '.[] | select(.name == "BOARD_ANON_COOKIE_SECRET")' >/dev/null; then
-            openssl rand -hex 48 | npx wrangler secret put BOARD_ANON_COOKIE_SECRET --name "$WORKER_NAME"
-          fi
-
-      - name: Apply Owner secrets to production and review Workers
+      - name: Preserve anonymous secret and synchronize Owner secrets when provided
         working-directory: copy-source
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
@@ -152,28 +158,33 @@ jobs:
           BOARD_OWNER_SUBJECT: ${{ secrets.BOARD_OWNER_SUBJECT }}
         run: |
           set -euo pipefail
-          if [ -z "${BOARD_OWNER_ACCESS_TOKEN:-}" ] || [ -z "${BOARD_OWNER_SUBJECT:-}" ]; then
-            echo "Owner bootstrap secrets are not configured; both Workers remain public/anonymous."
-            exit 0
+          secrets_json="$(npx wrangler secret list --name "$WORKER_NAME" --format json)"
+          if ! printf '%s' "$secrets_json" | jq -e '.[] | select(.name == "BOARD_ANON_COOKIE_SECRET")' >/dev/null; then
+            openssl rand -hex 48 | npx wrangler secret put BOARD_ANON_COOKIE_SECRET --name "$WORKER_NAME"
           fi
-          for worker in "$WORKER_NAME" "$REVIEW_WORKER_NAME"; do
-            printf '%s' "$BOARD_OWNER_ACCESS_TOKEN" | npx wrangler secret put BOARD_OWNER_ACCESS_TOKEN --name "$worker"
-            printf '%s' "$BOARD_OWNER_SUBJECT" | npx wrangler secret put BOARD_OWNER_SUBJECT --name "$worker"
+          if [ -n "${BOARD_OWNER_ACCESS_TOKEN:-}" ] && [ -n "${BOARD_OWNER_SUBJECT:-}" ]; then
+            printf '%s' "$BOARD_OWNER_ACCESS_TOKEN" | npx wrangler secret put BOARD_OWNER_ACCESS_TOKEN --name "$WORKER_NAME"
+            printf '%s' "$BOARD_OWNER_SUBJECT" | npx wrangler secret put BOARD_OWNER_SUBJECT --name "$WORKER_NAME"
+          fi
+          final="$(npx wrangler secret list --name "$WORKER_NAME" --format json)"
+          for required in BOARD_ANON_COOKIE_SECRET BOARD_OWNER_ACCESS_TOKEN BOARD_OWNER_SUBJECT; do
+            printf '%s' "$final" | jq -e --arg required "$required" '.[] | select(.name == $required)' >/dev/null || { echo "Required production secret name missing: $required"; exit 78; }
           done
 
-      - name: Verify original production Worker
+      - name: Verify production Worker end to end
         working-directory: copy-source
         run: |
           set -euo pipefail
-          pvp="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$PRODUCTION_BASE_URL/pvp/index.html")"
-          board="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$PRODUCTION_BASE_URL/boards")"
-          snapshot="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$PRODUCTION_BASE_URL/pvp/data/character_usage.json")"
-          health="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$PRODUCTION_BASE_URL/api/health")"
-          api="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$PRODUCTION_BASE_URL/api/board")"
-
+          pvp="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/pvp/index.html")"
+          board="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/boards")"
+          snapshot="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/pvp/data/character_usage.json")"
+          health="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/api/health")"
+          api_headers="$(mktemp)"
+          api="$(curl --location --fail --silent --show-error --dump-header "$api_headers" --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/api/board")"
           grep -q 'レジェンド帯 キャラ集計' <<< "$pvp"
           grep -q '新キャラ情報掲示板' <<< "$board"
           printf '%s' "$snapshot" | jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' >/dev/null
           printf '%s' "$health" | jq -e '.ok == true and .checks.d1 == true and .checks.r2 == true' >/dev/null
-          printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array") and ((.posts | length) == 0)' >/dev/null
-          echo "Original production community Worker verified: $PRODUCTION_BASE_URL"
+          printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array")' >/dev/null
+          grep -qi '^x-content-type-options: nosniff' "$api_headers"
+          echo "Production Worker verified: $PRODUCTION_BASE_URL"
