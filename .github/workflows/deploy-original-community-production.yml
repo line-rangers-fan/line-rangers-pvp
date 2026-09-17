@@ -131,26 +131,24 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
         run: |
           set -euo pipefail
-          npx wrangler d1 execute DB --remote --config wrangler.jsonc --command "PRAGMA foreign_keys=OFF; DELETE FROM post_reports; DELETE FROM translations; DELETE FROM helpful; DELETE FROM likes; DELETE FROM votes; DELETE FROM posts; DELETE FROM upload_parts; DELETE FROM upload_sessions; DELETE FROM media_cleanup; DELETE FROM visits; DELETE FROM limits; DELETE FROM audit;"
-          check="$(npx wrangler d1 execute DB --remote --config wrangler.jsonc --command "SELECT (SELECT COUNT(*) FROM posts) AS posts, (SELECT COUNT(*) FROM likes) AS likes, (SELECT COUNT(*) FROM helpful) AS helpful, (SELECT COUNT(*) FROM votes) AS votes, (SELECT COUNT(*) FROM translations) AS translations, (SELECT COUNT(*) FROM post_reports) AS reports;" --json)
-          printf '%s' "$check" | jq -e '
+          npx wrangler d1 execute DB --remote --config wrangler.jsonc --command 'DELETE FROM post_reports; DELETE FROM translations; DELETE FROM helpful; DELETE FROM likes; DELETE FROM votes; DELETE FROM posts; DELETE FROM upload_parts; DELETE FROM upload_sessions; DELETE FROM media_cleanup; DELETE FROM visits; DELETE FROM limits; DELETE FROM audit;'
+          npx wrangler d1 execute DB --remote --config wrangler.jsonc --command 'SELECT (SELECT COUNT(*) FROM posts) AS posts, (SELECT COUNT(*) FROM likes) AS likes, (SELECT COUNT(*) FROM helpful) AS helpful, (SELECT COUNT(*) FROM votes) AS votes, (SELECT COUNT(*) FROM translations) AS translations, (SELECT COUNT(*) FROM post_reports) AS reports;' --json | jq -e '
             (.[0].results // .results // .result.results // [])[0]
             | ((.posts|tonumber) == 0 and (.likes|tonumber) == 0 and (.helpful|tonumber) == 0
               and (.votes|tonumber) == 0 and (.translations|tonumber) == 0 and (.reports|tonumber) == 0)
           ' >/dev/null
-
-          objects="$(npx wrangler r2 object list "$R2_BUCKET" --json)"
           while IFS= read -r key; do
             [ -n "$key" ] || continue
             npx wrangler r2 object delete "$R2_BUCKET/$key"
-          done < <(printf '%s' "$objects" | jq -r '
-            if type == "array" then .[]?
-            elif .objects? then .objects[]?
-            elif .result? then .result[]?
-            else empty
-            end | .key // empty
-          ')
-
+          done < <(
+            npx wrangler r2 object list "$R2_BUCKET" --json | jq -r '
+              if type == "array" then (.[]? | .key // empty)
+              elif (.objects? | type) == "array" then (.objects[]? | .key // empty)
+              elif (.result? | type) == "array" then (.result[]? | .key // empty)
+              else empty
+              end
+            '
+          )
       - name: Deploy original community Worker
         working-directory: copy-source
         env:
