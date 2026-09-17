@@ -46,6 +46,8 @@ jobs:
       - name: Preserve original PvP exactly
         run: |
           set -euo pipefail
+          rm -rf "$RUNNER_TEMP/copy-pvp-before-overlay"
+          cp -a copy-source/public/pvp "$RUNNER_TEMP/copy-pvp-before-overlay"
           rm -rf copy-source/public/pvp
           mkdir -p copy-source/public/pvp
           rsync -a --delete --exclude 'OWNER_PREVIEW_NOTE.md' docs/ copy-source/public/pvp/
@@ -133,19 +135,99 @@ jobs:
           printf '%s' "$current" | jq -e '.[] | select(.name == "BOARD_OWNER_SUBJECT")' >/dev/null || { echo "Production Owner subject secret is missing."; exit 78; }
           echo "Existing production Owner secret names verified."
 
-      - name: Audit dependencies and run complete regression suite
+      - name: Audit dependencies and run complete copy regression suite
         working-directory: copy-source
         run: |
           set -euo pipefail
+          overlay="$RUNNER_TEMP/production-pvp-overlay"
+          rm -rf "$overlay"
+          mv public/pvp "$overlay"
+          cp -a "$RUNNER_TEMP/copy-pvp-before-overlay" public/pvp
+          restore_production_pvp() {
+            rm -rf public/pvp
+            mv "$overlay" public/pvp
+          }
+          trap restore_production_pvp EXIT
           npm audit --omit=dev --audit-level=high
           npm test
           npm run lint
 
+      - name: Build and validate production composite
+        working-directory: copy-source
+        run: |
+          set -euo pipefail
+          test -f public/pvp/index.html
+          cmp "$GITHUB_WORKSPACE/docs/index.html" public/pvp/index.html
+          diff -qr "$GITHUB_WORKSPACE/docs/assets" public/pvp/assets
+          diff -qr "$GITHUB_WORKSPACE/docs/data" public/pvp/data
+          if grep -Eq 'maintenance-mode|maintenance-screen|maintenance[.]css' public/pvp/index.html; then
+            echo "The original PvP overlay is still in maintenance mode."
+            exit 78
+          fi
+          grep -q 'id="community-board-entry-slot"' public/pvp/index.html
+          grep -q 'レジェンド帯 キャラ集計' public/pvp/index.html
+          jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' public/pvp/data/character_usage.json >/dev/null
+          npm run build
+          mapfile -t regression_tests < <(find tests -maxdepth 1 -type f -name '*.test.mjs'             ! -name 'original-pvp-copy.test.mjs'             ! -name 'pvp-data.test.mjs'             ! -name 'pvp-static.test.mjs' | sort)
+          if [ "${#regression_tests[@]}" -eq 0 ]; then
+            echo "No post-overlay regression tests were found."
+            exit 1
+          fi
+          node --test "${regression_tests[@]}"
+
+      - name: Back up production D1 and linked media manifest
+        working-directory: copy-source
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          backup_dir="$RUNNER_TEMP/line-rangers-production-backup"
+          umask 077
+          mkdir -p "$backup_dir"
+          npx wrangler d1 export DB --remote --skip-confirmation \
+            --output "$backup_dir/production-d1.sql" --config wrangler.jsonc
+          manifest_query='SELECT media_key FROM posts WHERE media_key IS NOT NULL AND media_key <> "" UNION SELECT media_key FROM upload_sessions WHERE media_key IS NOT NULL AND media_key <> "" UNION SELECT media_key FROM media_cleanup WHERE media_key IS NOT NULL AND media_key <> ""'
+          npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
+            --command "$manifest_query" > "$backup_dir/media-keys.json"
+          test -s "$backup_dir/production-d1.sql"
+          test -s "$backup_dir/media-keys.json"
+
+      - name: Upload production rollback artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: line-rangers-production-board-backup-\${{ github.run_id }}
+          path: \${{ runner.temp }}/line-rangers-production-backup
+          retention-days: 30
+          if-no-files-found: error
+
       - name: Apply production D1 migrations
         working-directory: copy-source
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
         run: npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc
+
+      - name: Reset production bulletin board content
+        working-directory: copy-source
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          manifest="$RUNNER_TEMP/line-rangers-production-backup/media-keys.json"
+          media_keys="$(jq -r '.. | objects | .media_key? // empty' "$manifest" | sed '/^$/d' | sort -u)"
+          while IFS= read -r key; do
+            [ -n "$key" ] || continue
+            if ! [[ "$key" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,511}$ ]] || [[ "$key" == *..* ]] || [[ "$key" == *//* ]]; then
+              echo "Unexpected media key; refusing destructive R2 cleanup."
+              exit 78
+            fi
+            npx wrangler r2 object delete "$R2_BUCKET/$key" --remote --force >/dev/null
+          done <<< "$media_keys"
+          npx wrangler d1 execute DB --remote --yes --config wrangler.jsonc --command \
+            'DELETE FROM translations; DELETE FROM helpful; DELETE FROM likes; DELETE FROM post_reports; DELETE FROM upload_parts; DELETE FROM upload_sessions; DELETE FROM votes; DELETE FROM media_cleanup; DELETE FROM posts;'
+          verification="$(npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc --command \
+            'SELECT (SELECT COUNT(*) FROM posts) posts, (SELECT COUNT(*) FROM likes) likes, (SELECT COUNT(*) FROM helpful) helpful, (SELECT COUNT(*) FROM votes) votes, (SELECT COUNT(*) FROM translations) translations, (SELECT COUNT(*) FROM upload_sessions) upload_sessions, (SELECT COUNT(*) FROM upload_parts) upload_parts, (SELECT COUNT(*) FROM post_reports) post_reports, (SELECT COUNT(*) FROM media_cleanup) media_cleanup')"
+          jq -e '.. | objects | select(has("posts") and has("likes") and has("helpful") and has("votes") and has("translations") and has("upload_sessions") and has("upload_parts") and has("post_reports") and has("media_cleanup")) | (.posts == 0 and .likes == 0 and .helpful == 0 and .votes == 0 and .translations == 0 and .upload_sessions == 0 and .upload_parts == 0 and .post_reports == 0 and .media_cleanup == 0)' <<< "$verification" >/dev/null
+          echo "Production bulletin board reset complete; boards, users, feature flags, audit, and PvP data were preserved."
 
       - name: Deploy validated copy to production Worker
         working-directory: copy-source
@@ -182,6 +264,35 @@ jobs:
             printf '%s' "$final" | jq -e --arg required "$required" '.[] | select(.name == $required)' >/dev/null || { echo "Required production secret name missing: $required"; exit 78; }
           done
 
+
+      - name: Verify Owner identity when the original secret pair is available
+        working-directory: copy-source
+        env:
+          BOARD_OWNER_ACCESS_TOKEN: \${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "\${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
+            echo "Owner identity E2E is covered by the protected production secret-name preflight; token value is not available to this workflow."
+            exit 0
+          fi
+          owner_cookie="$RUNNER_TEMP/owner-e2e-cookie.txt"
+          owner_body="$(jq -nc --arg key "$BOARD_OWNER_ACCESS_TOKEN" '{key:$key}')"
+          owner_status="$(curl --location --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
+            -H 'Content-Type: application/json' -c "$owner_cookie" \
+            --data "$owner_body" "$PRODUCTION_BASE_URL/api/owner")"
+          if [ "$owner_status" != "200" ]; then
+            echo "Owner activation failed with HTTP $owner_status."
+            exit 1
+          fi
+          owner_api="$(curl --location --fail --silent --show-error \
+            --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
+            -b "$owner_cookie" "$PRODUCTION_BASE_URL/api/board")"
+          printf '%s' "$owner_api" | jq -e '.me.role == "owner" and .me.name == "LINEレンジャーは神ゲー"' >/dev/null
+          echo "Verified server-side Owner role and canonical Owner display name."
+
       - name: Verify production Worker end to end
         working-directory: copy-source
         run: |
@@ -196,6 +307,6 @@ jobs:
           grep -q '新キャラ情報掲示板' <<< "$board"
           printf '%s' "$snapshot" | jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' >/dev/null
           printf '%s' "$health" | jq -e '.ok == true and .checks.d1 == true and .checks.r2 == true' >/dev/null
-          printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array")' >/dev/null
+          printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array") and ((.posts | length) == 0)' >/dev/null
           grep -qi '^x-content-type-options: nosniff' "$api_headers"
           echo "Production Worker verified: $PRODUCTION_BASE_URL"
