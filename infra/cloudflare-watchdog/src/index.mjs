@@ -575,7 +575,7 @@ export async function runWatchdog(
 }
 
 
-export default {
+const watchdogWorker = {
   async fetch(_request, env) {
     const health = await getHealthSnapshot(env);
     return new Response(
@@ -602,3 +602,5 @@ export default {
     );
   },
 };
+
+export default watchdogWorker;

@@ -47,7 +47,7 @@ async function serveSite(request, env) {
   let path;
   try {
     path = decodeURIComponent(url.pathname);
-  } catch (_error) {
+  } catch {
     return new Response("Bad Request", {
       status: 400,
       headers: commonSecurityHeaders(),
@@ -104,7 +104,7 @@ async function serveSite(request, env) {
   });
 }
 
-export default {
+const ownerPreviewWorker = {
   async fetch(request, env) {
     if (!["GET", "HEAD"].includes(request.method)) {
       return new Response("Method Not Allowed", {
@@ -116,3 +116,5 @@ export default {
     return serveSite(request, env);
   },
 };
+
+export default ownerPreviewWorker;

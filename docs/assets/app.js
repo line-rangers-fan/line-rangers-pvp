@@ -1267,7 +1267,7 @@ function renderRankPeriodChanges(container, change, options = {}) {
   const list = document.createElement("span");
   list.className = "rank-period-changes";
   list.setAttribute("aria-label", "period changes");
-  comparablePeriods.forEach(({ key, label, value }) => {
+  comparablePeriods.forEach(({ label, value }) => {
     const isComparable = value?.comparable === true;
     const parsedDelta = metric === "occurrence" ? value?.occurrence_count : value?.rank;
     const hasDelta = isComparable && typeof parsedDelta === "number" && Number.isSafeInteger(parsedDelta);
@@ -2118,25 +2118,6 @@ async function fetchVerifiedHistory() {
     }
   }
   throw lastError || new Error("Could not retrieve history.");
-}
-
-function ensureHistoryLoaded() {
-  if (state.history) return Promise.resolve(state.history);
-  if (state.historyPromise) return state.historyPromise;
-
-  state.historyPromise = fetchVerifiedHistory()
-    .then((history) => {
-      state.history = history;
-      return history;
-    })
-    .catch((error) => {
-      console.warn("Character history is unavailable.", error);
-      return null;
-    })
-    .finally(() => {
-      state.historyPromise = null;
-    });
-  return state.historyPromise;
 }
 
 function showInitialLoadError(error) {

@@ -52,7 +52,7 @@ function getApprovedCommunityBoardUrl(rawUrl, allowedHosts, allowedPath) {
       return null;
     }
     return url.href;
-  } catch (_error) {
+  } catch {
     return null;
   }
 }
