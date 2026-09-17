@@ -6,6 +6,9 @@ assert.ok(/^https:\/\//.test(base), "PRIVATE_PREVIEW_BASE_URL must be HTTPS");
 assert.ok(accessToken, "BOARD_OWNER_ACCESS_TOKEN is required");
 
 const cookies = new Map();
+let cleanupBoardId = "";
+let cleanupGroup = "";
+let cleanupCompleted = false;
 
 function saveCookies(response) {
   let values = [];
@@ -102,6 +105,21 @@ async function uploadVideo(board, group, body, bytes, name) {
   return String(complete.data.id);
 }
 
+async function bestEffortCleanup() {
+  if (cleanupCompleted || !cleanupBoardId || !cleanupGroup) return;
+  try {
+    const listed = await request("/api/board?board=" + encodeURIComponent(cleanupBoardId));
+    const candidate = (listed.data?.posts || []).find((post) => post.mediaGroup === cleanupGroup);
+    if (candidate?.id) {
+      await postJson("/api/board", {
+        action: "moderate",
+        operation: "delete",
+        target: String(candidate.id),
+      });
+    }
+  } catch {}
+}
+
 async function main() {
   const locked = await request("/");
   expectStatus(locked, 303, "unauthenticated root");
@@ -147,7 +165,9 @@ async function main() {
     console.log(JSON.stringify({ ok: true, ownerId }));
     return;
   }
-  const group = crypto.randomUUID();
+  const group = process.env.PRIVATE_PREVIEW_E2E_GROUP || crypto.randomUUID();
+  cleanupBoardId = boardId;
+  cleanupGroup = group;
   const body = "private E2E mixed media verification";
 
   const png = Uint8Array.from(Buffer.from(
@@ -207,6 +227,7 @@ async function main() {
   assert.equal(Number(afterDelete.data.stats.comments), initialComments, "comment count restored");
   assert.equal(Number(afterDelete.data.stats.videos), initialVideos, "video count restored");
   expectStatus(await request("/api/board?replies=" + encodeURIComponent(anchor)), 404, "deleted replies hidden");
+  cleanupCompleted = true;
 
   const logout = await request("/__private/logout", { method: "POST" });
   expectStatus(logout, 303, "private logout");
@@ -223,7 +244,8 @@ async function main() {
   }));
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
+  await bestEffortCleanup();
   console.error(error instanceof Error ? error.message : "private_preview_e2e_failed");
   process.exitCode = 1;
 });
