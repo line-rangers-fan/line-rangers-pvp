@@ -81,7 +81,10 @@ def test_featured_comment_is_live_clickable_and_shows_reaction_counts():
     assert 'clipText(featured.body)' in ENTRY_JS
     assert '`♥ ${featured.likes}`' in ENTRY_JS
     assert 'featured.helpful' in ENTRY_JS
-    assert 'data-community-helpful' not in ENTRY_JS.lower()  # DOM data is set programmatically, never unsafe HTML.
+    # Data attributes are created through the DOM dataset API. Selectors that
+    # read those attributes later are safe; raw HTML injection remains banned.
+    assert 'helpful.dataset.communityHelpful = "true"' in ENTRY_JS
+    assert 'helpful.dataset.helpfulCount = String(featured.helpful)' in ENTRY_JS
     assert 'wrapper.href = href' in ENTRY_JS
     assert 'url.searchParams.set("board", topic.id)' in ENTRY_JS
     assert 'url.searchParams.set("month", topic.month)' in ENTRY_JS
