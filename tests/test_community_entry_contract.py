@@ -9,6 +9,7 @@ ENTRY_CSS = (ROOT / "docs" / "assets" / "community-entry.css").read_text(encodin
 BOARD_HOST = "line-rangers-pvp-community-production.n-yu1791.workers.dev"
 BOARD_PATH = "/boards"
 BOARD_URL = f"https://{BOARD_HOST}{BOARD_PATH}"
+ACTIVITY_URL = f"https://{BOARD_HOST}/api/activity?public=1"
 BANNED_RANKING_LINK_LABELS = (
     "PvP集計表を開く",
     "集計表へ",
@@ -19,7 +20,7 @@ BANNED_RANKING_LINK_LABELS = (
 def test_original_ranking_shell_is_published_without_maintenance_mode():
     assert '<body class="maintenance-mode">' not in INDEX
     assert 'class="maintenance-screen"' not in INDEX
-    assert '<meta name="robots" content="noindex, nofollow">' in INDEX
+    assert '<meta name="robots" content="index, follow">' in INDEX
     assert '<title>LINEレンジャー レジェンド帯キャラ集計</title>' in INDEX
     assert 'id="ranking-section"' in INDEX
 
@@ -45,7 +46,7 @@ def test_ranking_navigation_buttons_are_removed():
         assert label not in combined
 
 
-def test_feature_flag_is_explicitly_enabled_and_still_fail_closed():
+def test_feature_flag_is_explicitly_enabled_and_fail_closed():
     assert "defaultState: true" in ENTRY_JS
     assert "state: true" in ENTRY_JS
     assert "return value === true" in ENTRY_JS
@@ -53,37 +54,52 @@ def test_feature_flag_is_explicitly_enabled_and_still_fail_closed():
     assert "slot.hidden = true" in ENTRY_JS
 
 
-def test_url_is_https_allowlisted_and_direct_to_latest_board():
+def test_urls_are_https_allowlisted_and_activity_feed_is_read_only_public_data():
     assert BOARD_URL in ENTRY_JS
+    assert ACTIVITY_URL in ENTRY_JS
     assert BOARD_HOST in ENTRY_JS
     assert f'allowedPath: "{BOARD_PATH}"' in ENTRY_JS
     assert 'url.protocol !== "https:"' in ENTRY_JS
     assert 'url.username !== ""' in ENTRY_JS
     assert 'url.password !== ""' in ENTRY_JS
-    assert 'url.search !== ""' in ENTRY_JS
-    assert 'url.hash !== ""' in ENTRY_JS
-    assert 'url.pathname !== allowedPath' in ENTRY_JS
     assert 'allowedHosts.includes(url.hostname)' in ENTRY_JS
+    assert 'url.pathname !== "/api/activity"' in ENTRY_JS
+    assert 'url.search !== "?public=1"' in ENTRY_JS
+    assert 'credentials:"omit"' in ENTRY_JS
+    assert 'mode:"cors"' in ENTRY_JS
     assert "rangers-community-review.n-yu1791.chatgpt.site" not in ENTRY_JS
 
 
+def test_csp_allows_only_the_production_worker_for_live_teaser_fetch():
+    assert f"connect-src 'self' https://{BOARD_HOST}" in INDEX
+    assert 'community-entry.js?v=20260918-featured-1' in INDEX
+    assert 'community-entry.css?v=20260918-featured-1' in INDEX
+
+
+def test_featured_comment_is_live_clickable_and_shows_reaction_counts():
+    assert 'featuredBoardUrl' in ENTRY_JS
+    assert 'clipText(featured.body)' in ENTRY_JS
+    assert '`♥ ${featured.likes}`' in ENTRY_JS
+    assert 'featured.helpful' in ENTRY_JS
+    assert 'data-community-helpful' not in ENTRY_JS.lower()  # DOM data is set programmatically, never unsafe HTML.
+    assert 'wrapper.href = href' in ENTRY_JS
+    assert 'url.searchParams.set("board", topic.id)' in ENTRY_JS
+    assert 'url.searchParams.set("month", topic.month)' in ENTRY_JS
+    assert 'innerHTML' not in ENTRY_JS
+
+
 def test_board_button_navigates_same_tab_without_intermediate_page():
-    assert 'button.textContent = "掲示板を開く →"' in ENTRY_JS
+    assert 'button.textContent = entryText("openBoard")' in ENTRY_JS
     assert 'button.target = "_blank"' not in ENTRY_JS
     assert "noopener noreferrer" not in ENTRY_JS
     assert "注目コメント" in ENTRY_JS
     assert "新キャラ情報掲示板" in ENTRY_JS
 
 
-def test_entry_does_not_call_the_board_or_pvp_apis():
-    forbidden = ("fetch(", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon")
-    for token in forbidden:
-        assert token not in ENTRY_JS
-
-
-def test_entry_assets_are_small_mobile_first_and_dedicated():
-    assert len(ENTRY_JS.encode("utf-8")) < 8_000
-    assert len(ENTRY_CSS.encode("utf-8")) < 6_000
+def test_entry_assets_remain_small_mobile_first_and_dedicated():
+    assert len(ENTRY_JS.encode("utf-8")) < 20_000
+    assert len(ENTRY_CSS.encode("utf-8")) < 8_000
     assert ".community-board-entry-card" in ENTRY_CSS
+    assert ".community-board-entry-featured-reactions" in ENTRY_CSS
     assert ".community-board-entry-button" in ENTRY_CSS
     assert "@media (min-width: 680px)" in ENTRY_CSS
