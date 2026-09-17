@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 const base = String(process.env.PRIVATE_PREVIEW_BASE_URL || "").replace(/\/+$/, "");
 const accessToken = process.env.BOARD_OWNER_ACCESS_TOKEN || "";
+const entryPath = process.env.PRIVATE_PREVIEW_ENTRY_PATH || "/__private/owner-entry-6d3c9a21b7e84f0c5a6e2d9f1b8c7340";
 assert.ok(/^https:\/\//.test(base), "PRIVATE_PREVIEW_BASE_URL must be HTTPS");
 assert.ok(accessToken, "BOARD_OWNER_ACCESS_TOKEN is required");
 
@@ -122,11 +123,15 @@ async function bestEffortCleanup() {
 
 async function main() {
   const locked = await request("/");
-  expectStatus(locked, 303, "unauthenticated root");
-  assert.equal(locked.response.headers.get("location"), "/__private/login");
+  expectStatus(locked, 404, "unauthenticated root");
+  assert.equal(locked.response.headers.get("location"), null);
 
-  const login = await request("/__private/login");
-  expectStatus(login, 200, "private login");
+  const genericLogin = await request("/__private/login");
+  expectStatus(genericLogin, 404, "generic private login route");
+
+  const login = await request(entryPath);
+  expectStatus(login, 200, "private owner entry");
+  assert.match(login.response.headers.get("set-cookie") || "", /__Host-lr_private_entry=/);
   assert.match(login.text, /__private\/activate/);
 
   const wrong = await request("/__private/activate", {
@@ -232,7 +237,7 @@ async function main() {
   const logout = await request("/__private/logout", { method: "POST" });
   expectStatus(logout, 303, "private logout");
   const relocked = await request("/");
-  expectStatus(relocked, 303, "logout relocks preview");
+  expectStatus(relocked, 404, "logout relocks preview");
 
   console.log(JSON.stringify({
     ok: true,
