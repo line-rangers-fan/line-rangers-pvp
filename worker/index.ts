@@ -24,6 +24,7 @@ const DAY_MS=24*60*60*1000;
 
 function mutationBudget(request:Request,path:string):MutationBudget|null{
   const method=request.method.toUpperCase();
+  if(path==="/__private/activate"&&method==="POST")return {max:5,seconds:900};
   if(path==="/api/board"&&method==="POST")return {max:120,seconds:600};
   if(path==="/api/owner"&&method==="POST")return {max:30,seconds:600};
   if(path==="/api/translate"&&method==="POST")return {max:60,seconds:600};
@@ -43,6 +44,9 @@ const PRIVATE_PREVIEW_TTL_SECONDS = 8 * 60 * 60;
 const OWNER_COOKIE = "__Host-lr_owner";
 const DISPLAY_NAME_COOKIE = "__Host-lr_display_name";
 const OWNER_DISPLAY_NAME = "LINEレンジャーは神ゲー";
+const PRIVATE_ENTRY_PATH = "/__private/owner-entry-6d3c9a21b7e84f0c5a6e2d9f1b8c7340";
+const PRIVATE_ENTRY_COOKIE = "__Host-lr_private_entry";
+const PRIVATE_ENTRY_TTL_SECONDS = 10 * 60;
 
 function privatePreviewEnabled(env: Env) {
   return env.PRIVATE_PREVIEW_MODE === "1";
@@ -95,11 +99,15 @@ function privateSecurityHeaders(extra: Record<string, string> = {}) {
   });
 }
 
-function privateRedirect() {
-  return new Response(null, {
-    status: 303,
-    headers: privateSecurityHeaders({ location: "/__private/login" }),
+function privateNotFound() {
+  return new Response("Not Found", {
+    status: 404,
+    headers: privateSecurityHeaders({ "content-type": "text/plain; charset=utf-8" }),
   });
+}
+
+function privateRedirect() {
+  return privateNotFound();
 }
 
 function privateCookie(value: string, maxAge: number) {
@@ -115,6 +123,11 @@ function ownerCookie(value: string, maxAge: number) {
 function displayNameCookie(value: string, maxAge: number) {
   return DISPLAY_NAME_COOKIE + "=" + encodeURIComponent(value) +
     "; Max-Age=" + maxAge + "; Path=/; HttpOnly; Secure; SameSite=Lax";
+}
+
+function privateEntryCookie(value: string, maxAge: number) {
+  return PRIVATE_ENTRY_COOKIE + "=" + value +
+    "; Max-Age=" + maxAge + "; Path=/; HttpOnly; Secure; SameSite=Strict";
 }
 
 async function createPrivateSession(secret: string) {
@@ -175,9 +188,11 @@ async function privateLogin(request: Request) {
       headers: privateSecurityHeaders({ allow: "GET, HEAD" }),
     });
   }
+  const headers = privateSecurityHeaders({ "content-type": "text/html; charset=utf-8" });
+  headers.append("set-cookie", privateEntryCookie("1", PRIVATE_ENTRY_TTL_SECONDS));
   return new Response(request.method === "HEAD" ? null : privateLoginPage(), {
     status: 200,
-    headers: privateSecurityHeaders({ "content-type": "text/html; charset=utf-8" }),
+    headers,
   });
 }
 
@@ -201,6 +216,9 @@ async function privateActivate(request: Request, env: Env) {
       status: 405,
       headers: privateSecurityHeaders({ allow: "POST" }),
     });
+  }
+  if (readCookie(request, PRIVATE_ENTRY_COOKIE) !== "1") {
+    return privateNotFound();
   }
   const url = new URL(request.url);
   const origin = request.headers.get("origin");
@@ -227,6 +245,7 @@ async function privateActivate(request: Request, env: Env) {
   headers.append("set-cookie", privateCookie(privateValue, PRIVATE_PREVIEW_TTL_SECONDS));
   headers.append("set-cookie", ownerCookie(ownerValue, 60 * 60 * 24 * 365));
   headers.append("set-cookie", displayNameCookie(OWNER_DISPLAY_NAME, 60 * 60 * 24 * 365));
+  headers.append("set-cookie", privateEntryCookie("", 0));
   return new Response(null, { status: 303, headers });
 }
 
@@ -237,10 +256,11 @@ function privateLogout(request: Request) {
       headers: privateSecurityHeaders({ allow: "POST" }),
     });
   }
-  const headers = privateSecurityHeaders({ location: "/__private/login" });
+  const headers = privateSecurityHeaders({ location: PRIVATE_ENTRY_PATH });
   headers.append("set-cookie", privateCookie("", 0));
   headers.append("set-cookie", ownerCookie("", 0));
   headers.append("set-cookie", displayNameCookie("", 0));
+  headers.append("set-cookie", privateEntryCookie("", 0));
   return new Response(null, { status: 303, headers });
 }
 
@@ -292,17 +312,33 @@ const worker = {
     // Character/media assets are served directly, avoiding a paid image-
     // transformation dependency while the site is still under development.
     if (privatePreviewEnabled(env)) {
-      if (url.pathname === "/__private/login") {
+      if (url.pathname === PRIVATE_ENTRY_PATH) {
         return secureResponse(await privateLogin(request), env);
       }
+      if (url.pathname === "/__private/login") {
+        return secureResponse(privateNotFound(), env);
+      }
       if (url.pathname === "/__private/activate") {
+        try {
+          if (!(await allowMutation(request, env, url.pathname))) {
+            return secureResponse(new Response("Too Many Requests", {
+              status: 429,
+              headers: privateSecurityHeaders({ "retry-after": "900" }),
+            }), env);
+          }
+        } catch {
+          return secureResponse(new Response("Service Unavailable", {
+            status: 503,
+            headers: privateSecurityHeaders(),
+          }), env);
+        }
         return secureResponse(await privateActivate(request, env), env);
       }
       if (url.pathname === "/__private/logout") {
         return secureResponse(privateLogout(request), env);
       }
       if (!await hasPrivateSession(request, env)) {
-        return secureResponse(privateRedirect(), env);
+        return secureResponse(privateNotFound(), env);
       }
     }
     if (url.pathname === "/_vinext/image") {
