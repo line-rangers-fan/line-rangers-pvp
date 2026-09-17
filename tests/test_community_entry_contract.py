@@ -16,10 +16,12 @@ BANNED_RANKING_LINK_LABELS = (
 )
 
 
-def test_existing_maintenance_and_search_controls_are_preserved():
-    assert '<body class="maintenance-mode">' in INDEX
+def test_original_ranking_shell_is_published_without_maintenance_mode():
+    assert '<body class="maintenance-mode">' not in INDEX
+    assert 'class="maintenance-screen"' not in INDEX
     assert '<meta name="robots" content="noindex, nofollow">' in INDEX
-    assert 'class="maintenance-screen"' in INDEX
+    assert '<title>LINEレンジャー レジェンド帯キャラ集計</title>' in INDEX
+    assert 'id="ranking-section"' in INDEX
 
 
 def test_entry_is_single_isolated_slot_and_url_is_not_static_html():
@@ -43,10 +45,11 @@ def test_ranking_navigation_buttons_are_removed():
         assert label not in combined
 
 
-def test_feature_flag_is_fail_closed_and_publication_is_disabled():
-    assert "defaultState: false" in ENTRY_JS
-    assert "state: false" in ENTRY_JS
+def test_feature_flag_is_explicitly_enabled_and_still_fail_closed():
+    assert "defaultState: true" in ENTRY_JS
+    assert "state: true" in ENTRY_JS
     assert "return value === true" in ENTRY_JS
+    assert "if (!enabled) return" in ENTRY_JS
     assert "slot.hidden = true" in ENTRY_JS
 
 
