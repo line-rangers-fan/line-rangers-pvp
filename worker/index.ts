@@ -24,7 +24,7 @@ const DAY_MS=24*60*60*1000;
 
 function mutationBudget(request:Request,path:string):MutationBudget|null{
   const method=request.method.toUpperCase();
-  if(path==="/__private/activate"&&method==="POST")return {max:5,seconds:900};
+  if(path==="/__private/activate"&&method==="POST")return {max:10,seconds:900};
   if(path==="/api/board"&&method==="POST")return {max:120,seconds:600};
   if(path==="/api/owner"&&method==="POST")return {max:30,seconds:600};
   if(path==="/api/translate"&&method==="POST")return {max:60,seconds:600};
@@ -104,10 +104,6 @@ function privateNotFound() {
     status: 404,
     headers: privateSecurityHeaders({ "content-type": "text/plain; charset=utf-8" }),
   });
-}
-
-function privateRedirect() {
-  return privateNotFound();
 }
 
 function privateCookie(value: string, maxAge: number) {
@@ -319,20 +315,23 @@ const worker = {
         return secureResponse(privateNotFound(), env);
       }
       if (url.pathname === "/__private/activate") {
-        try {
-          if (!(await allowMutation(request, env, url.pathname))) {
-            return secureResponse(new Response("Too Many Requests", {
-              status: 429,
-              headers: privateSecurityHeaders({ "retry-after": "900" }),
+        const activation = await privateActivate(request, env);
+        if (activation.status === 401) {
+          try {
+            if (!(await allowMutation(request, env, url.pathname))) {
+              return secureResponse(new Response("Too Many Requests", {
+                status: 429,
+                headers: privateSecurityHeaders({ "retry-after": "900" }),
+              }), env);
+            }
+          } catch {
+            return secureResponse(new Response("Service Unavailable", {
+              status: 503,
+              headers: privateSecurityHeaders(),
             }), env);
           }
-        } catch {
-          return secureResponse(new Response("Service Unavailable", {
-            status: 503,
-            headers: privateSecurityHeaders(),
-          }), env);
         }
-        return secureResponse(await privateActivate(request, env), env);
+        return secureResponse(activation, env);
       }
       if (url.pathname === "/__private/logout") {
         return secureResponse(privateLogout(request), env);
