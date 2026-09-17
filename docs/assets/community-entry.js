@@ -4,10 +4,10 @@
 // Keep the board isolated from PvP data loading: this entry performs no board
 // API fetches. A board outage therefore cannot stop the ranking from rendering.
 const COMMUNITY_BOARD_ENTRY_CONFIG = Object.freeze({
-  defaultState: false,
-  state: false,
-  // Approved board configuration is retained but hidden until publication is explicitly approved. Link directly to /boards so users do
-  // not encounter the obsolete landing/intermediate page.
+  defaultState: true,
+  state: true,
+  // The validated production board is enabled directly at /boards so users do
+  // not encounter an obsolete landing/intermediate page.
   url: "https://line-rangers-pvp-community-production.n-yu1791.workers.dev/boards",
   allowedHosts: Object.freeze([
     "line-rangers-pvp-community-production.n-yu1791.workers.dev",
