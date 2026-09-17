@@ -63,7 +63,7 @@ jobs:
           echo "::add-mask::$account_id"
           echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
 
-      - name: Create or verify isolated original D1 and R2
+      - name: Verify existing isolated original D1 and R2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
@@ -77,8 +77,8 @@ jobs:
             ][0] // empty
           ')"
           if [ -z "$db_id" ]; then
-            created="$(npx wrangler d1 create "$D1_NAME" 2>&1)"
-            db_id="$(printf '%s' "$created" | grep -Eo '[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}' | head -n1 || true)"
+            echo "Required isolated original D1 database is missing; refusing to create it automatically."
+            exit 1
           fi
           if ! [[ "$db_id" =~ ^[A-Fa-f0-9-]{36}$ ]]; then
             echo "Unable to resolve the original production D1 database ID."
@@ -87,7 +87,8 @@ jobs:
           echo "::add-mask::$db_id"
 
           if ! npx wrangler r2 bucket info "$R2_BUCKET" --json >/dev/null 2>&1; then
-            npx wrangler r2 bucket create "$R2_BUCKET"
+            echo "Required isolated original R2 bucket is missing; refusing to create it automatically."
+            exit 1
           fi
 
           tmp="$(mktemp)"

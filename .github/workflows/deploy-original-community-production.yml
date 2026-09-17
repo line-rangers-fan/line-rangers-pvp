@@ -73,7 +73,7 @@ jobs:
           echo "::add-mask::$account_id"
           echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
 
-      - name: Create or verify original D1 and R2 resources
+      - name: Verify existing original D1 and R2 resources
         working-directory: copy-source
         env:
           CLOUDFLARE_BOARD_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
@@ -83,8 +83,8 @@ jobs:
           db_list="$(npx wrangler d1 list --json)"
           db_id="$(printf '%s' "$db_list" | jq -r --arg name "$D1_NAME" '[.[] | select(.name == $name) | .uuid][0] // empty')"
           if [ -z "$db_id" ]; then
-            created="$(npx wrangler d1 create "$D1_NAME" --json)"
-            db_id="$(printf '%s' "$created" | jq -er '.uuid // .result.uuid // .database_id')"
+            echo "Required original production D1 database is missing; refusing to create it automatically."
+            exit 1
           fi
           if ! [[ "$db_id" =~ ^[A-Fa-f0-9-]{36}$ ]]; then
             echo "Unable to resolve the original production D1 database ID."
@@ -93,7 +93,8 @@ jobs:
           echo "::add-mask::$db_id"
 
           if ! npx wrangler r2 bucket info "$R2_BUCKET" --json >/dev/null 2>&1; then
-            npx wrangler r2 bucket create "$R2_BUCKET"
+            echo "Required original production R2 bucket is missing; refusing to create it automatically."
+            exit 1
           fi
 
           tmp="$(mktemp)"
