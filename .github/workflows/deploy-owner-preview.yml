@@ -71,23 +71,23 @@ jobs:
           echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
 
       - name: Deploy owner-only repo-backed preview Worker
-        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ steps.cloudflare.outputs.account_id }}
-          workingDirectory: infra/cloudflare-owner-preview
-          wranglerVersion: "4.131.2"
-          command: deploy
+        working-directory: infra/cloudflare-owner-preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ steps.cloudflare.outputs.account_id }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.131.2 deploy --config ./wrangler.toml
 
       - name: Configure Owner-only preview secrets
         working-directory: infra/cloudflare-owner-preview
         env:
-          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: \${{ steps.cloudflare.outputs.account_id }}
-          BOARD_OWNER_ACCESS_TOKEN: \${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ steps.cloudflare.outputs.account_id }}
+          BOARD_OWNER_ACCESS_TOKEN: ${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "\${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
+          if [ -z "${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
             echo "BOARD_OWNER_ACCESS_TOKEN repository secret is required for the private Owner Preview."
             exit 78
           fi
@@ -100,10 +100,10 @@ jobs:
 
       - name: Verify owner-only preview and direct ranking layout
         env:
-          BOARD_OWNER_ACCESS_TOKEN: \${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+          BOARD_OWNER_ACCESS_TOKEN: ${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "\${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
+          if [ -z "${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
             echo "BOARD_OWNER_ACCESS_TOKEN repository secret is required."
             exit 78
           fi
