@@ -92,11 +92,11 @@ jobs:
             exit 78
           fi
           wrangler="npx --yes wrangler@4.131.2"
-          secrets_json="$($wrangler secret list --name line-rangers-pvp-owner-preview --format json --account-id "$CLOUDFLARE_ACCOUNT_ID")"
+          secrets_json="$($wrangler secret list --name line-rangers-pvp-owner-preview --format json)"
           if ! printf '%s' "$secrets_json" | jq -e '.[] | select(.name == "OWNER_PREVIEW_COOKIE_SECRET")' >/dev/null; then
-            openssl rand -hex 48 | $wrangler secret put OWNER_PREVIEW_COOKIE_SECRET --name line-rangers-pvp-owner-preview --account-id "$CLOUDFLARE_ACCOUNT_ID"
+            openssl rand -hex 48 | $wrangler secret put OWNER_PREVIEW_COOKIE_SECRET --name line-rangers-pvp-owner-preview
           fi
-          printf '%s' "$BOARD_OWNER_ACCESS_TOKEN" | $wrangler secret put BOARD_OWNER_ACCESS_TOKEN --name line-rangers-pvp-owner-preview --account-id "$CLOUDFLARE_ACCOUNT_ID"
+          printf '%s' "$BOARD_OWNER_ACCESS_TOKEN" | $wrangler secret put BOARD_OWNER_ACCESS_TOKEN --name line-rangers-pvp-owner-preview
 
       - name: Verify owner-only preview and direct ranking layout
         env:
