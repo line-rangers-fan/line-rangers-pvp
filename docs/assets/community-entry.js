@@ -118,6 +118,11 @@ function normalizeFeatured(value) {
   return {body, board:value.board, likes:Math.max(0, Number(value.likes) || 0), helpful:Math.max(0, Number(value.helpful) || 0)};
 }
 
+function normalizeUnread(value) {
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count > 0 ? count : 0;
+}
+
 function buildCharacter(topic, baseUrl) {
   const href = topicBoardUrl(topic, baseUrl);
   const element = document.createElement(href ? "a" : "div");
@@ -139,14 +144,18 @@ function buildCharacter(topic, baseUrl) {
   return element;
 }
 
-function buildFeatured(featured, baseUrl) {
+function buildFeatured(featured, baseUrl, unread) {
   const href = featuredBoardUrl(featured, baseUrl) || baseUrl.href;
   const wrapper = document.createElement("a");
   wrapper.className = "community-board-entry-featured";
   wrapper.href = href;
   wrapper.setAttribute("aria-label", entryText("featuredAria"));
   wrapper.dataset.communityAria = "featuredAria";
-  wrapper.append(textElement("strong", "community-board-entry-featured-label", entryText("featuredLabel"), "featuredLabel"));
+  const labelRow = document.createElement("div");
+  labelRow.className = "community-board-entry-featured-heading";
+  labelRow.append(textElement("strong", "community-board-entry-featured-label", entryText("featuredLabel"), "featuredLabel"));
+  if (unread > 0) labelRow.append(textElement("span", "community-board-entry-unread", `NEW ${unread}`));
+  wrapper.append(labelRow);
   if (!featured) {
     wrapper.append(textElement("p", "community-board-entry-featured-text", entryText("featuredEmpty"), "featuredEmpty"));
     return wrapper;
@@ -190,7 +199,7 @@ function buildCommunityBoardEntry(baseUrl, state) {
   button.dataset.communityText = "openBoard";
   button.setAttribute("aria-label", entryText("openBoardAria"));
   button.dataset.communityAria = "openBoardAria";
-  card.append(headingRow, characterList, buildFeatured(state.featured, baseUrl), button);
+  card.append(headingRow, characterList, buildFeatured(state.featured, baseUrl, state.unread), button);
   return card;
 }
 
@@ -241,7 +250,7 @@ async function loadCommunityActivity() {
     const response = await fetch(endpoint, {method:"GET", mode:"cors", credentials:"omit", cache:"no-store", headers:{Accept:"application/json"}});
     if (!response.ok) return;
     const payload = await response.json();
-    const state = {topics:normalizeTopics(payload.topics), featured:normalizeFeatured(payload.featured)};
+    const state = {topics:normalizeTopics(payload.topics), featured:normalizeFeatured(payload.featured), unread:normalizeUnread(payload.unread)};
     renderCommunityBoardEntry(state);
   } catch {
     // The ranking itself must remain usable if the community API is unavailable.
@@ -251,6 +260,6 @@ async function loadCommunityActivity() {
 document.addEventListener("DOMContentLoaded", () => {
   communityEntryLanguage = detectCommunityLanguage();
   installCommunityLanguageSync();
-  renderCommunityBoardEntry({topics:COMMUNITY_FALLBACK_TOPICS, featured:null});
+  renderCommunityBoardEntry({topics:COMMUNITY_FALLBACK_TOPICS, featured:null, unread:0});
   void loadCommunityActivity();
 });

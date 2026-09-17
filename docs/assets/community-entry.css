@@ -35,7 +35,9 @@
   background:rgba(5,18,30,.48); color:inherit; text-decoration:none;
   transition:border-color 150ms ease,background 150ms ease,transform 150ms ease;
 }
+.community-board-entry-featured-heading { display:flex; align-items:center; justify-content:space-between; gap:.65rem; }
 .community-board-entry-featured-label { display:block; color:#f4f7fb; font-size:.88rem; line-height:1.4; }
+.community-board-entry-unread { flex:0 0 auto; padding:.2rem .45rem; border:1px solid rgba(255,211,92,.62); border-radius:999px; color:#ffe49a; background:rgba(121,82,5,.32); font-size:.7rem; font-weight:900; letter-spacing:.04em; line-height:1.2; white-space:nowrap; }
 .community-board-entry-featured-text { margin:.38rem 0 0; color:#b6c7d8; font-size:.86rem; line-height:1.6; overflow-wrap:anywhere; }
 .community-board-entry-featured-reactions { display:flex; flex-wrap:wrap; gap:.55rem .85rem; align-items:center; margin-top:.65rem; color:#93aabd; font-size:.78rem; }
 .community-board-entry-featured-more { margin-left:auto; color:#63eba7; font-weight:800; }
