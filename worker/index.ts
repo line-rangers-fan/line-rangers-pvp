@@ -36,6 +36,7 @@ function mutationBudget(request:Request,path:string):MutationBudget|null{
 }
 
 function base64url(bytes:Uint8Array){let binary="";for(const byte of bytes)binary+=String.fromCharCode(byte);return btoa(binary).replaceAll("+","-").replaceAll("/","_").replace(/=+$/g,"");}
+function randomHex(length=16){const bytes=new Uint8Array(length);crypto.getRandomValues(bytes);return Array.from(bytes,byte=>byte.toString(16).padStart(2,"0")).join("");}
 
 const PRIVATE_PREVIEW_COOKIE = "__Host-lr_private_preview";
 const PRIVATE_PREVIEW_TTL_SECONDS = 8 * 60 * 60;
