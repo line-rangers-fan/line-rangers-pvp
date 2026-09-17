@@ -40,6 +40,7 @@ function contentTypeForPath(path) {
 
 const OWNER_SESSION_COOKIE = "__Host-lr_owner_preview";
 const OWNER_SESSION_TTL_SECONDS = 8 * 60 * 60;
+const PRIVATE_BOARD_PREVIEW_PATH = "/__owner/board-staging-required";
 const textEncoder = new TextEncoder();
 
 function privateHeaders(extra = {}) {
@@ -264,6 +265,40 @@ function ownerLogout(request) {
   return new Response(null, { status: 303, headers });
 }
 
+function ownerBoardStagingRequiredPage(request) {
+  if (!["GET", "HEAD"].includes(request.method)) {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: privateHeaders({ allow: "GET, HEAD" }),
+    });
+  }
+  const headers = privateHeaders({
+    "content-type": "text/html; charset=utf-8",
+    "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
+  });
+  const body = [
+    "<!doctype html><html lang=\"ja\"><head><meta charset=\"utf-8\">",
+    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">",
+    "<title>Private board staging</title></head><body>",
+    "<main><h1>非公開掲示板プレビュー / Private board preview</h1>",
+    "<p>この確認環境から公開Communityへは移動しません。</p>",
+    "<p>This private review does not open the public Community.</p>",
+    "<p>隔離されたD1/R2の動的検証環境を準備後に確認できます。</p>",
+    "</main></body></html>",
+  ].join("");
+  return new Response(request.method === "HEAD" ? null : body, {
+    status: 200,
+    headers,
+  });
+}
+
+function isolateCommunityEntry(script) {
+  return script.replace(
+    /https?:\\/\\/line-rangers-pvp-community-[^"'\\s]+\\/boards/g,
+    PRIVATE_BOARD_PREVIEW_PATH
+  );
+}
+
 async function serveSite(request, env) {
   if (!env?.ASSETS?.fetch) {
     return new Response("Preview assets unavailable", {
@@ -319,6 +354,14 @@ async function serveSite(request, env) {
   const contentType = contentTypeForPath(path);
   if (contentType) headers.set("content-type", contentType);
 
+  if (path === "/assets/community-entry.js" && request.method !== "HEAD") {
+    const body = isolateCommunityEntry(await upstream.text());
+    headers.set("content-type", "application/javascript; charset=utf-8");
+    headers.delete("content-encoding");
+    headers.delete("etag");
+    return new Response(body, { status: upstream.status, headers });
+  }
+
   if (path === "/index.html" && request.method !== "HEAD") {
     const body = stripMaintenance(await upstream.text());
     headers.set("content-type", "text/html; charset=utf-8");
@@ -345,6 +388,13 @@ const ownerPreviewWorker = {
     }
     if (pathname === "/__owner/logout") {
       return ownerLogout(request);
+    }
+
+    if (pathname === PRIVATE_BOARD_PREVIEW_PATH) {
+      if (!await hasOwnerSession(request, env)) {
+        return redirectToLogin();
+      }
+      return ownerBoardStagingRequiredPage(request);
     }
 
     if (!["GET", "HEAD"].includes(request.method)) {
