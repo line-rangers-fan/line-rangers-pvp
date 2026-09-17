@@ -1,0 +1,62 @@
+name: deploy-github-pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/deploy-github-pages.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: line-rangers-github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out site source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate public static entry
+        run: |
+          set -euo pipefail
+          test -s docs/index.html
+          test -s docs/assets/community-entry.js
+          test -s docs/assets/community-entry.css
+          grep -q 'id="community-board-entry-slot"' docs/index.html
+          grep -q 'community-entry.js?v=20260917-1' docs/index.html
+          grep -q 'defaultState: true' docs/assets/community-entry.js
+          grep -q 'state: true' docs/assets/community-entry.js
+          grep -q 'allowedPath: "/boards"' docs/assets/community-entry.js
+          grep -q 'レジェンド帯 キャラ集計' docs/index.html
+          jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
+          if rg -n 'BOARD_OWNER_ACCESS_TOKEN|BOARD_OWNER_SUBJECT|BOARD_ANON_COOKIE_SECRET|CLOUDFLARE_.*TOKEN' docs; then
+            echo "A secret-like value was found in the Pages artifact source."
+            exit 1
+          fi
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ./docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
