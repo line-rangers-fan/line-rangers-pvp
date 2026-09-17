@@ -4,6 +4,10 @@ name: deploy-original-community-production
 # validated copy commit and refuses to create missing production D1/R2 resources.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/production-promotion-trigger.txt'
 
 permissions:
   contents: read
