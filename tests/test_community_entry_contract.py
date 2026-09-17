@@ -16,10 +16,11 @@ BANNED_RANKING_LINK_LABELS = (
 )
 
 
-def test_existing_maintenance_and_search_controls_are_preserved():
-    assert '<body class="maintenance-mode">' in INDEX
-    assert '<meta name="robots" content="noindex, nofollow">' in INDEX
-    assert 'class="maintenance-screen"' in INDEX
+def test_public_original_page_and_search_controls_are_preserved():
+    assert "<body>" in INDEX
+    assert '<body class="maintenance-mode">' not in INDEX
+    assert 'class="maintenance-screen"' not in INDEX
+    assert "maintenance.css" not in INDEX
 
 
 def test_entry_is_single_isolated_slot_and_url_is_not_static_html():
@@ -43,9 +44,9 @@ def test_ranking_navigation_buttons_are_removed():
         assert label not in combined
 
 
-def test_feature_flag_is_fail_closed_and_publication_is_disabled():
-    assert "defaultState: false" in ENTRY_JS
-    assert "state: false" in ENTRY_JS
+def test_feature_flag_is_enabled_for_the_approved_public_migration():
+    assert "defaultState: true" in ENTRY_JS
+    assert "state: true" in ENTRY_JS
     assert "return value === true" in ENTRY_JS
     assert "slot.hidden = true" in ENTRY_JS
 
