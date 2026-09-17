@@ -1,9 +1,14 @@
 name: deploy-original-community-production
 
-# Production promotion stays manual. The workflow is pinned to the currently
-# validated copy commit and refuses to create missing production D1/R2 resources.
+# Production promotion stays manual or uses the one-shot promotion marker.
+# The workflow is pinned to the currently validated copy commit and refuses
+# to create missing production D1/R2 resources.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .production-promotion-trigger
 
 permissions:
   contents: read
