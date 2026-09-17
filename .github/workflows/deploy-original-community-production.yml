@@ -1,9 +1,8 @@
 name: deploy-original-community-production
 
-# Production promotion stays manual or uses the one-shot promotion marker.
-# The workflow is pinned to the currently validated copy commit and refuses
-# to create missing production D1/R2 resources. Original PvP is overlaid from
-# this repository immediately before build so community promotion cannot alter it.
+# Production promotion stays manual or uses the promotion marker. The workflow
+# is pinned to a validated copy commit, refuses to create missing D1/R2 resources,
+# and preserves existing production board data on routine code deployments.
 on:
   workflow_dispatch:
   push:
@@ -19,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  COPY_SOURCE_SHA: 3494cea70ad5123a9c76019cd38e8f59ea3c1584
+  COPY_SOURCE_SHA: d4fb4aedc4dc38219d0940263a8eb276af78fa67
   WORKER_NAME: line-rangers-pvp-community-production
   D1_NAME: line-rangers-pvp-production-db
   R2_BUCKET: line-rangers-pvp-production-media
@@ -166,10 +165,14 @@ jobs:
             exit 78
           fi
           grep -q 'id="community-board-entry-slot"' public/pvp/index.html
+          grep -q 'api/activity?public=1' public/pvp/assets/community-entry.js
           grep -q 'レジェンド帯 キャラ集計' public/pvp/index.html
           jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' public/pvp/data/character_usage.json >/dev/null
           npm run build
-          mapfile -t regression_tests < <(find tests -maxdepth 1 -type f -name '*.test.mjs'             ! -name 'original-pvp-copy.test.mjs'             ! -name 'pvp-data.test.mjs'             ! -name 'pvp-static.test.mjs' | sort)
+          mapfile -t regression_tests < <(find tests -maxdepth 1 -type f -name '*.test.mjs' \
+            ! -name 'original-pvp-copy.test.mjs' \
+            ! -name 'pvp-data.test.mjs' \
+            ! -name 'pvp-static.test.mjs' | sort)
           if [ "${#regression_tests[@]}" -eq 0 ]; then
             echo "No post-overlay regression tests were found."
             exit 1
@@ -205,34 +208,14 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      - name: Apply production D1 migrations
-        working-directory: copy-source
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
-        run: npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc
-
-      - name: Reset production bulletin board content
+      - name: Apply production D1 migrations without deleting user content
         working-directory: copy-source
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
         run: |
           set -euo pipefail
-          manifest="$RUNNER_TEMP/line-rangers-production-backup/media-keys.json"
-          media_keys="$(jq -r '.. | objects | .media_key? // empty' "$manifest" | sed '/^$/d' | sort -u)"
-          while IFS= read -r key; do
-            [ -n "$key" ] || continue
-            if ! [[ "$key" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,511}$ ]] || [[ "$key" == *..* ]] || [[ "$key" == *//* ]]; then
-              echo "Unexpected media key; refusing destructive R2 cleanup."
-              exit 78
-            fi
-            npx wrangler r2 object delete "$R2_BUCKET/$key" --remote --force >/dev/null
-          done <<< "$media_keys"
-          npx wrangler d1 execute DB --remote --yes --config wrangler.jsonc --command \
-            'DELETE FROM translations; DELETE FROM helpful; DELETE FROM likes; DELETE FROM post_reports; DELETE FROM upload_parts; DELETE FROM upload_sessions; DELETE FROM votes; DELETE FROM media_cleanup; DELETE FROM posts;'
-          verification="$(npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc --command \
-            'SELECT (SELECT COUNT(*) FROM posts) posts, (SELECT COUNT(*) FROM likes) likes, (SELECT COUNT(*) FROM helpful) helpful, (SELECT COUNT(*) FROM votes) votes, (SELECT COUNT(*) FROM translations) translations, (SELECT COUNT(*) FROM upload_sessions) upload_sessions, (SELECT COUNT(*) FROM upload_parts) upload_parts, (SELECT COUNT(*) FROM post_reports) post_reports, (SELECT COUNT(*) FROM media_cleanup) media_cleanup')"
-          jq -e '.. | objects | select(has("posts") and has("likes") and has("helpful") and has("votes") and has("translations") and has("upload_sessions") and has("upload_parts") and has("post_reports") and has("media_cleanup")) | (.posts == 0 and .likes == 0 and .helpful == 0 and .votes == 0 and .translations == 0 and .upload_sessions == 0 and .upload_parts == 0 and .post_reports == 0 and .media_cleanup == 0)' <<< "$verification" >/dev/null
-          echo "Production bulletin board reset complete; boards, users, feature flags, audit, and PvP data were preserved."
+          npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc
+          echo "Production posts, reactions, votes, translations, upload sessions, and R2 media were preserved."
 
       - name: Deploy validated copy to production Worker
         working-directory: copy-source
@@ -266,7 +249,6 @@ jobs:
           for required in BOARD_ANON_COOKIE_SECRET BOARD_OWNER_ACCESS_TOKEN BOARD_OWNER_SUBJECT; do
             printf '%s' "$final" | jq -e --arg required "$required" '.[] | select(.name == $required)' >/dev/null || { echo "Required production secret name missing: $required"; exit 78; }
           done
-
 
       - name: Verify Owner identity when the original secret pair is available
         working-directory: copy-source
@@ -306,10 +288,14 @@ jobs:
           health="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/api/health")"
           api_headers="$(mktemp)"
           api="$(curl --location --fail --silent --show-error --dump-header "$api_headers" --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/api/board")"
+          activity_headers="$(mktemp)"
+          activity="$(curl --location --fail --silent --show-error --dump-header "$activity_headers" --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 -H 'Origin: https://line-rangers-fan.github.io' "$PRODUCTION_BASE_URL/api/activity?public=1")"
           grep -q 'レジェンド帯 キャラ集計' <<< "$pvp"
           grep -q '新キャラ情報掲示板' <<< "$board"
           printf '%s' "$snapshot" | jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' >/dev/null
           printf '%s' "$health" | jq -e '.ok == true and .checks.d1 == true and .checks.r2 == true' >/dev/null
-          printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array") and ((.posts | length) == 0)' >/dev/null
+          printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array")' >/dev/null
+          printf '%s' "$activity" | jq -e '(.topics | type == "array") and ((.featured == null) or (.featured | type == "object"))' >/dev/null
           grep -qi '^x-content-type-options: nosniff' "$api_headers"
-          echo "Production Worker verified: $PRODUCTION_BASE_URL"
+          grep -qi '^access-control-allow-origin: https://line-rangers-fan.github.io' "$activity_headers"
+          echo "Production Worker verified without deleting existing board content: $PRODUCTION_BASE_URL"
