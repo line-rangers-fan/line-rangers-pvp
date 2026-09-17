@@ -126,6 +126,12 @@ async function main() {
   expectStatus(locked, 404, "unauthenticated root");
   assert.equal(locked.response.headers.get("location"), null);
 
+  for (const path of ["/pvp/", "/pvp/assets/app.js", "/pvp/assets/community-entry.js", "/api/board"]) {
+    const staticLocked = await request(path);
+    expectStatus(staticLocked, 404, "unauthenticated private route " + path);
+    assert.equal(staticLocked.response.headers.get("location"), null);
+  }
+
   const genericLogin = await request("/__private/login");
   expectStatus(genericLogin, 404, "generic private login route");
 
@@ -154,6 +160,15 @@ async function main() {
   const boardPage = await request("/boards");
   expectStatus(boardPage, 200, "authenticated board page");
   assert.match(boardPage.text, /掲示板|Community|New character board/);
+
+  const pvpPage = await request("/pvp/");
+  expectStatus(pvpPage, 200, "authenticated PvP page");
+  assert.match(pvpPage.text, /community-entry\\.js/);
+
+  const communityEntry = await request("/pvp/assets/community-entry.js");
+  expectStatus(communityEntry, 200, "authenticated community bridge asset");
+  assert.match(communityEntry.text, /url:\s*"\\/boards"/);
+  assert.doesNotMatch(communityEntry.text, /community-review\\.n-yu1791\\.workers\\.dev/);
 
   const initial = await request("/api/board");
   expectStatus(initial, 200, "initial board API");
