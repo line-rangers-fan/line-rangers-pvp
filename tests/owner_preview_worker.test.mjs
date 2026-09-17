@@ -25,6 +25,8 @@ assert.match(source, /OWNER_PREVIEW_COOKIE_SECRET/);
 assert.match(source, /__Host-lr_owner_preview/);
 assert.match(source, /__owner\/login/);
 assert.match(source, /constantTimeEqual/);
+assert.match(source, /PRIVATE_BOARD_PREVIEW_PATH/);
+assert.match(source, /isolateCommunityEntry/);
 assert.doesNotMatch(source, /raw\.githubusercontent\.com/);
 assert.doesNotMatch(source, /chatgpt\.site/);
 
@@ -36,11 +38,17 @@ const html = "<html lang=\"ja\"><body class=\"maintenance-mode\">" +
   "<section class=\"maintenance-screen\">maintenance</section>" +
   "<main><h1>レジェンド帯 キャラ集計</h1></main></body></html>";
 const env = {
-  BOARD_OWNER_ACCESS_TOKEN: "1791",
+  BOARD_OWNER_ACCESS_TOKEN: ownerAccessToken,
   OWNER_PREVIEW_COOKIE_SECRET: "test-cookie-secret",
   ASSETS: {
     async fetch(request) {
       const pathname = new URL(request.url).pathname;
+      if (pathname === "/assets/community-entry.js") {
+        return new Response(
+          "const boardUrl = 'https://line-rangers-pvp-community-production.n-yu1791.workers.dev/boards';",
+          { status: 200, headers: { "content-type": "application/javascript" } }
+        );
+      }
       if (pathname === "/index.html") {
         return new Response(html, {
           status: 200,
@@ -60,6 +68,7 @@ const env = {
   },
 };
 const base = "https://preview.example";
+const ownerAccessToken = "test-owner-access-token";
 
 const locked = await ownerPreviewWorker.fetch(new Request(base + "/"), env);
 assert.equal(locked.status, 303);
@@ -76,7 +85,7 @@ const wrongOrigin = await ownerPreviewWorker.fetch(
       origin: "https://evil.example",
       "content-type": "application/x-www-form-urlencoded",
     },
-    body: "access_token=1791",
+    body: "access_token=" + ownerAccessToken,
   }),
   env
 );
@@ -97,7 +106,7 @@ const activated = await ownerPreviewWorker.fetch(
   new Request(base + "/__owner/activate", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: "access_token=1791",
+    body: "access_token=" + ownerAccessToken,
   }),
   env
 );
@@ -118,6 +127,32 @@ assert.match(unlockedHtml, /レジェンド帯 キャラ集計/);
 assert.doesNotMatch(unlockedHtml, /maintenance-screen/);
 assert.equal(unlocked.headers.get("content-type"), "text/html; charset=utf-8");
 assert.equal(unlocked.headers.get("content-encoding"), null);
+
+const lockedBoard = await ownerPreviewWorker.fetch(
+  new Request(base + "/__owner/board-staging-required"),
+  env
+);
+assert.equal(lockedBoard.status, 303);
+
+const communityEntry = await ownerPreviewWorker.fetch(
+  new Request(base + "/assets/community-entry.js", {
+    headers: { cookie: cookiePair },
+  }),
+  env
+);
+assert.equal(communityEntry.status, 200);
+const communityEntryBody = await communityEntry.text();
+assert.match(communityEntryBody, /__owner\/board-staging-required/);
+assert.doesNotMatch(communityEntryBody, /line-rangers-pvp-community-production/);
+
+const privateBoard = await ownerPreviewWorker.fetch(
+  new Request(base + "/__owner/board-staging-required", {
+    headers: { cookie: cookiePair },
+  }),
+  env
+);
+assert.equal(privateBoard.status, 200);
+assert.match(await privateBoard.text(), /Private board preview/);
 
 const asset = await ownerPreviewWorker.fetch(
   new Request(base + "/assets/app.js", { headers: { cookie: cookiePair } }),
@@ -141,7 +176,7 @@ const unavailable = await ownerPreviewWorker.fetch(
   new Request(base + "/__owner/activate", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: "access_token=1791",
+    body: "access_token=" + ownerAccessToken,
   }),
   { ...env, OWNER_PREVIEW_COOKIE_SECRET: "" }
 );
