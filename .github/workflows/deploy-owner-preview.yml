@@ -3,7 +3,7 @@ name: deploy-private-repo-preview
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, migration/private-review-2026-09-17]
     paths:
       - "docs/**"
       - "infra/cloudflare-owner-preview/**"
@@ -40,12 +40,15 @@ jobs:
           grep -q 'x-robots-tag' infra/cloudflare-owner-preview/src/index.js
           grep -q 'run_worker_first = true' infra/cloudflare-owner-preview/wrangler.toml
           grep -q 'binding = "ASSETS"' infra/cloudflare-owner-preview/wrangler.toml
-          if grep -Eq 'OWNER_TOKEN|COOKIE_NAME|owner/login' infra/cloudflare-owner-preview/src/index.js; then
-            echo "Preview must remain no-login."
-            exit 1
-          fi
+          grep -q 'BOARD_OWNER_ACCESS_TOKEN' infra/cloudflare-owner-preview/src/index.js
+          grep -q '__Host-lr_owner_preview' infra/cloudflare-owner-preview/src/index.js
+          grep -q '__owner/login' infra/cloudflare-owner-preview/src/index.js
           if grep -q 'raw.githubusercontent.com' infra/cloudflare-owner-preview/src/index.js; then
             echo "Preview must use bundled private-repository assets."
+            exit 1
+          fi
+          if grep -Eq 'OWNER_TOKEN|COOKIE_NAME' infra/cloudflare-owner-preview/src/index.js; then
+            echo "Preview contains an obsolete authentication contract."
             exit 1
           fi
 
@@ -67,7 +70,7 @@ jobs:
           fi
           echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy no-login repo-backed preview Worker
+      - name: Deploy owner-only repo-backed preview Worker
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -76,20 +79,62 @@ jobs:
           wranglerVersion: "4.131.2"
           command: deploy
 
-      - name: Verify no-login preview and direct ranking layout
+      - name: Configure Owner-only preview secrets
+        working-directory: infra/cloudflare-owner-preview
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: \${{ steps.cloudflare.outputs.account_id }}
+          BOARD_OWNER_ACCESS_TOKEN: \${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          base="https://line-rangers-pvp-owner-preview.n-yu1791.workers.dev"
-          root="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/")"
-          community_js="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/assets/community-entry.js")"
-          app_js="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/assets/app.js")"
+          if [ -z "\${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
+            echo "BOARD_OWNER_ACCESS_TOKEN repository secret is required for the private Owner Preview."
+            exit 78
+          fi
+          wrangler="npx --yes wrangler@4.131.2"
+          secrets_json="$($wrangler secret list --name line-rangers-pvp-owner-preview --format json --account-id "$CLOUDFLARE_ACCOUNT_ID")"
+          if ! printf '%s' "$secrets_json" | jq -e '.[] | select(.name == "OWNER_PREVIEW_COOKIE_SECRET")' >/dev/null; then
+            openssl rand -hex 48 | $wrangler secret put OWNER_PREVIEW_COOKIE_SECRET --name line-rangers-pvp-owner-preview --account-id "$CLOUDFLARE_ACCOUNT_ID"
+          fi
+          printf '%s' "$BOARD_OWNER_ACCESS_TOKEN" | $wrangler secret put BOARD_OWNER_ACCESS_TOKEN --name line-rangers-pvp-owner-preview --account-id "$CLOUDFLARE_ACCOUNT_ID"
 
+      - name: Verify owner-only preview and direct ranking layout
+        env:
+          BOARD_OWNER_ACCESS_TOKEN: \${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "\${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
+            echo "BOARD_OWNER_ACCESS_TOKEN repository secret is required."
+            exit 78
+          fi
+          base="https://line-rangers-pvp-owner-preview.n-yu1791.workers.dev"
+          locked_headers="$(mktemp)"
+          locked_body="$(mktemp)"
+          locked_status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -D "$locked_headers" -o "$locked_body" -w '%{http_code}' "$base/")"
+          test "$locked_status" = "303"
+          grep -qi '^location: /__owner/login' "$locked_headers"
+
+          login_body="$(mktemp)"
+          login_status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -o "$login_body" -w '%{http_code}' "$base/__owner/login")"
+          test "$login_status" = "200"
+          grep -q '__owner/activate' "$login_body"
+
+          cookie_jar="$(mktemp)"
+          activate_headers="$(mktemp)"
+          activate_status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -D "$activate_headers" -c "$cookie_jar" -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/x-www-form-urlencoded' --data-urlencode "access_token=$BOARD_OWNER_ACCESS_TOKEN" "$base/__owner/activate")"
+          test "$activate_status" = "303"
+          grep -qi '^set-cookie: __Host-lr_owner_preview=' "$activate_headers"
+
+          root="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -b "$cookie_jar" "$base/")"
           grep -q 'レジェンド帯 キャラ集計' <<< "$root"
           grep -q 'id="community-board-entry-slot"' <<< "$root"
           grep -q 'id="ranking-section"' <<< "$root"
           if grep -q '現在、サイトを改修しています。' <<< "$root"; then
-            echo "No-login preview unexpectedly returned maintenance mode."
+            echo "Owner Preview unexpectedly returned maintenance mode."
             exit 1
           fi
+
+          community_js="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -b "$cookie_jar" "$base/assets/community-entry.js")"
+          app_js="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -b "$cookie_jar" "$base/assets/app.js")"
           grep -q '新キャラ情報掲示板' <<< "$community_js"
           grep -q 'character_usage.json' <<< "$app_js"
