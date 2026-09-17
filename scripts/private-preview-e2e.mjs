@@ -126,7 +126,23 @@ async function main() {
   expectStatus(locked, 404, "unauthenticated root");
   assert.equal(locked.response.headers.get("location"), null);
 
-  for (const path of ["/pvp/", "/pvp/assets/app.js", "/pvp/assets/community-entry.js", "/api/board"]) {
+  const privateStaticPaths = ["/pvp/", "/pvp/assets/app.js", "/pvp/assets/community-entry.js", "/api/board"];
+  let staticRoutesLocked = false;
+  for (let attempt = 0; attempt < 30 && !staticRoutesLocked; attempt += 1) {
+    staticRoutesLocked = true;
+    for (const path of privateStaticPaths) {
+      const staticLocked = await request(path);
+      if (staticLocked.response.status === 404) continue;
+      if (staticLocked.response.status !== 200) {
+        expectStatus(staticLocked, 404, "unauthenticated private route " + path);
+      }
+      staticRoutesLocked = false;
+      break;
+    }
+    if (!staticRoutesLocked) await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  assert.equal(staticRoutesLocked, true, "private static routes must finish propagating before E2E");
+  for (const path of privateStaticPaths) {
     const staticLocked = await request(path);
     expectStatus(staticLocked, 404, "unauthenticated private route " + path);
     assert.equal(staticLocked.response.headers.get("location"), null);
