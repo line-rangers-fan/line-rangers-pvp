@@ -1,0 +1,211 @@
+name: deploy-private-dynamic-preview
+
+# Owner-only dynamic preview for the private migration branch.
+# It uses the already isolated copy review D1/R2 resources and never uses
+# original production D1/R2. The Worker itself is locked before any app route.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - migration/private-review-2026-09-17
+    paths:
+      - "worker/**"
+      - "app/**"
+      - "components/**"
+      - "db/**"
+      - "drizzle/**"
+      - "lib/**"
+      - "public/**"
+      - "scripts/private-preview-e2e.mjs"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - "wrangler.jsonc"
+      - ".github/workflows/deploy-private-dynamic-preview.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-dynamic-preview
+  cancel-in-progress: false
+
+env:
+  WORKER_NAME: line-rangers-pvp-private-review
+  D1_NAME: line-rangers-copy-review-db
+  R2_BUCKET: line-rangers-copy-review-media
+  PRIVATE_BASE_URL: https://line-rangers-pvp-private-review.n-yu1791.workers.dev
+
+jobs:
+  deploy-and-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out private migration branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm run install:ci
+
+      - name: Resolve Cloudflare account safely
+        id: cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "\${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "CLOUDFLARE_API_TOKEN is required for private preview."
+            exit 78
+          fi
+          response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --header "Authorization: Bearer \$CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+          account_id="$(printf '%s' "\$response" | jq -er '.result | if length == 1 then .[0].id else error("Token must access exactly one Cloudflare account") end')"
+          if ! [[ "\$account_id" =~ ^[A-Fa-f0-9]{32}\$ ]]; then
+            echo "Cloudflare returned an invalid account ID."
+            exit 1
+          fi
+          echo "::add-mask::\$account_id"
+          echo "account_id=\$account_id" >> "\$GITHUB_OUTPUT"
+
+      - name: Verify existing isolated copy D1/R2 and prepare private config
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: \${{ steps.cloudflare.outputs.account_id }}
+        run: |
+          set -euo pipefail
+          db_list="$(npx wrangler d1 list --json)"
+          db_id="$(printf '%s' "\$db_list" | jq -r --arg name "\$D1_NAME" '
+            [
+              (if type == "array" then . else (.result // []) end)[]
+              | select(.name == \$name)
+              | (.uuid // .database_id // .id)
+            ][0] // empty
+          ')"
+          if [ -z "\$db_id" ]; then
+            echo "Required isolated copy D1 is missing; refusing to create a resource."
+            exit 78
+          fi
+          if ! [[ "\$db_id" =~ ^[A-Fa-f0-9-]{36}\$ ]]; then
+            echo "Unable to resolve isolated copy D1 ID."
+            exit 1
+          fi
+          echo "::add-mask::\$db_id"
+          if ! npx wrangler r2 bucket info "\$R2_BUCKET" --json >/dev/null 2>&1; then
+            echo "Required isolated copy R2 is missing; refusing to create a resource."
+            exit 78
+          fi
+
+          tmp="$(mktemp)"
+          jq --arg worker "\$WORKER_NAME" --arg id "\$db_id" --arg db "\$D1_NAME" --arg bucket "\$R2_BUCKET" '
+            .name = \$worker
+            | .vars = ((.vars // {}) + {PRIVATE_PREVIEW_MODE: "1"})
+            | (.d1_databases[] | select(.binding == "DB") | .database_name) = \$db
+            | (.d1_databases[] | select(.binding == "DB") | .database_id) = \$id
+            | (.r2_buckets[] | select(.binding == "BUCKET") | .bucket_name) = \$bucket
+          ' wrangler.jsonc > "\$tmp"
+          mv "\$tmp" wrangler.jsonc
+          grep -q "\$WORKER_NAME" wrangler.jsonc
+          grep -q "\$db_id" wrangler.jsonc
+          grep -q "\$R2_BUCKET" wrangler.jsonc
+
+      - name: Audit dependencies and run full regression suite
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --audit-level=high
+          npm test
+          npm run lint
+
+      - name: Apply D1 migrations to the isolated review database
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: \${{ steps.cloudflare.outputs.account_id }}
+        run: npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc
+
+      - name: Deploy owner-gated dynamic Worker
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: \${{ steps.cloudflare.outputs.account_id }}
+        run: |
+          set -euo pipefail
+          output_config="$(find dist -type f -name wrangler.json -print -quit)"
+          if [ -z "\$output_config" ]; then
+            echo "Build did not produce a Wrangler output config."
+            exit 1
+          fi
+          npx wrangler deploy --config "\$output_config"
+
+      - name: Configure private preview secrets without exposing values
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: \${{ steps.cloudflare.outputs.account_id }}
+          BOARD_OWNER_ACCESS_TOKEN: \${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+          BOARD_OWNER_SUBJECT: \${{ secrets.BOARD_OWNER_SUBJECT }}
+        run: |
+          set -euo pipefail
+          if [ -z "\${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
+            echo "BOARD_OWNER_ACCESS_TOKEN repository secret is required."
+            exit 78
+          fi
+          wrangler="npx wrangler"
+          secrets_json="\$("\$wrangler" secret list --name "\$WORKER_NAME" --format json)"
+
+          if ! printf '%s' "\$secrets_json" | jq -e '.[] | select(.name == "BOARD_ANON_COOKIE_SECRET")' >/dev/null; then
+            openssl rand -hex 48 | "\$wrangler" secret put BOARD_ANON_COOKIE_SECRET --name "\$WORKER_NAME"
+          fi
+          if ! printf '%s' "\$secrets_json" | jq -e '.[] | select(.name == "PRIVATE_PREVIEW_COOKIE_SECRET")' >/dev/null; then
+            openssl rand -hex 48 | "\$wrangler" secret put PRIVATE_PREVIEW_COOKIE_SECRET --name "\$WORKER_NAME"
+          fi
+
+          printf '%s' "\$BOARD_OWNER_ACCESS_TOKEN" | "\$wrangler" secret put BOARD_OWNER_ACCESS_TOKEN --name "\$WORKER_NAME"
+          if [ -n "\${BOARD_OWNER_SUBJECT:-}" ]; then
+            printf '%s' "\$BOARD_OWNER_SUBJECT" | "\$wrangler" secret put BOARD_OWNER_SUBJECT --name "\$WORKER_NAME"
+          elif ! printf '%s' "\$secrets_json" | jq -e '.[] | select(.name == "BOARD_OWNER_SUBJECT")' >/dev/null; then
+            openssl rand -hex 16 | "\$wrangler" secret put BOARD_OWNER_SUBJECT --name "\$WORKER_NAME"
+          fi
+
+      - name: Verify owner gate and run real mixed-media E2E
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: \${{ steps.cloudflare.outputs.account_id }}
+          BOARD_OWNER_ACCESS_TOKEN: \${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "\${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
+            echo "BOARD_OWNER_ACCESS_TOKEN repository secret is required."
+            exit 78
+          fi
+
+          locked_headers="$(mktemp)"
+          locked_status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -D "\$locked_headers" -o /dev/null -w '%{http_code}' "\$PRIVATE_BASE_URL/")"
+          test "\$locked_status" = "303"
+          grep -qi '^location: /__private/login' "\$locked_headers"
+
+          login_status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -o /dev/null -w '%{http_code}' "\$PRIVATE_BASE_URL/__private/login")"
+          test "\$login_status" = "200"
+
+          owner_info="$(PRIVATE_PREVIEW_BASE_URL="\$PRIVATE_BASE_URL" BOARD_OWNER_ACCESS_TOKEN="\$BOARD_OWNER_ACCESS_TOKEN" PRIVATE_PREVIEW_E2E_MODE=discover node scripts/private-preview-e2e.mjs)"
+          owner_id="$(printf '%s' "\$owner_info" | jq -er '.ok == true and (.ownerId | test("^[a-f0-9-]{36}\$")) | .ownerId')"
+          prefix="uploads/\$owner_id/"
+          r2_keys() {
+            npx wrangler r2 object list "\$R2_BUCKET" --prefix "\$1" --json |
+              jq -c 'if type == "array" then map(.key) | sort else ((.objects // []) | map(.key) | sort) end'
+          }
+          before_keys="$(r2_keys "\$prefix")"
+
+          test_group="$(node -e 'console.log(crypto.randomUUID())')"
+          e2e_output="$(PRIVATE_PREVIEW_BASE_URL="\$PRIVATE_BASE_URL" BOARD_OWNER_ACCESS_TOKEN="\$BOARD_OWNER_ACCESS_TOKEN" PRIVATE_PREVIEW_E2E_GROUP="\$test_group" node scripts/private-preview-e2e.mjs)"
+          printf '%s\n' "\$e2e_output" | jq -e '.ok == true and .mediaCount == 4 and .logicalComments == 1 and .logicalVideos == 2' >/dev/null
+
+          after_keys="$(r2_keys "\$prefix")"
+          if [ "\$before_keys" != "\$after_keys" ]; then
+            echo "R2 object set changed after grouped-media deletion; orphan cleanup failed."
+            exit 1
+          fi
+          echo "Owner-gated dynamic private preview, grouped media E2E, reactions, reply, deletion, and R2 cleanup: ok"
+
