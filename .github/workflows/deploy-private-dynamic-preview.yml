@@ -188,6 +188,21 @@ jobs:
           login_status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -o /dev/null -w '%{http_code}' "$PRIVATE_BASE_URL/__private/login")"
           test "$login_status" = "200"
 
+          ready_status=""
+          for attempt in $(seq 1 30); do
+            ready_status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1 -o /dev/null -w '%{http_code}' -X POST -H "origin: $PRIVATE_BASE_URL" -H 'sec-fetch-site: same-origin' -H 'content-type: application/x-www-form-urlencoded' --data-urlencode 'access_token=invalid-preview-check' "$PRIVATE_BASE_URL/__private/activate" || true)"
+            if [ "$ready_status" = "401" ]; then
+              break
+            fi
+            if [ "$ready_status" != "503" ]; then
+              echo "Private activation readiness returned unexpected status: $ready_status"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "private_activation_ready_status=$ready_status"
+          test "$ready_status" = "401"
+
           owner_info="$(PRIVATE_PREVIEW_BASE_URL="$PRIVATE_BASE_URL" BOARD_OWNER_ACCESS_TOKEN="$BOARD_OWNER_ACCESS_TOKEN" PRIVATE_PREVIEW_E2E_MODE=discover node scripts/private-preview-e2e.mjs)"
           owner_id="$(printf '%s' "$owner_info" | jq -er 'select(.ok == true) | .ownerId | select(test("^[a-f0-9-]{36}$"))')"
           prefix="uploads/$owner_id/"
