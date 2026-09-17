@@ -2105,21 +2105,6 @@ function validateHistory(history) {
   return history;
 }
 
-async function fetchVerifiedHistory() {
-  let lastError = null;
-  for (const delay of DATA_RETRY_DELAYS_MS) {
-    if (delay > 0) await wait(delay);
-    try {
-      return validateHistory(
-        await fetchJsonWithLimits(HISTORY_PATH, "Could not retrieve history.")
-      );
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError || new Error("Could not retrieve history.");
-}
-
 function showInitialLoadError(error) {
   const currentTranslations = translations[state.language];
   const knownMessages = Object.values(currentTranslations).filter(
