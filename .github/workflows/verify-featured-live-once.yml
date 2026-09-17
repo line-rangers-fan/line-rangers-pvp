@@ -1,0 +1,28 @@
+name: verify-featured-live-once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/verify-featured-live-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify live featured teaser contains the ranked public comment
+        run: |
+          set -euo pipefail
+          base='https://line-rangers-pvp-community-production.n-yu1791.workers.dev'
+          headers="$(mktemp)"
+          body="$(curl --location --fail --silent --show-error --dump-header "$headers" \
+            --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H 'Origin: https://line-rangers-fan.github.io' \
+            "$base/api/activity?public=1")"
+          grep -qi '^access-control-allow-origin: https://line-rangers-fan.github.io' "$headers"
+          printf '%s' "$body" | jq -e '.featured != null and (.featured.body | type == "string" and length > 0) and (.featured.board | type == "string" and length > 0) and (.featured.likes | type == "number") and (.featured.helpful | type == "number")' >/dev/null
+          printf '%s' "$body" | jq '{featured:{body:.featured.body,board:.featured.board,likes:.featured.likes,helpful:.featured.helpful},topicCount:(.topics|length)}'
