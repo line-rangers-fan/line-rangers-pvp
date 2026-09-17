@@ -184,8 +184,12 @@ jobs:
           backup_dir="$RUNNER_TEMP/line-rangers-production-backup"
           umask 077
           mkdir -p "$backup_dir"
-          npx wrangler d1 export DB --remote --skip-confirmation \
-            --output "$backup_dir/production-d1.sql" --config wrangler.jsonc
+          export_log="$RUNNER_TEMP/line-rangers-production-d1-export.log"
+          if ! npx wrangler d1 export DB --remote --skip-confirmation \
+            --output "$backup_dir/production-d1.sql" --config wrangler.jsonc > "$export_log" 2>&1; then
+            echo "Production D1 export failed."
+            exit 1
+          fi
           manifest_query='SELECT media_key FROM posts WHERE media_key IS NOT NULL AND media_key <> "" UNION SELECT media_key FROM upload_sessions WHERE media_key IS NOT NULL AND media_key <> "" UNION SELECT media_key FROM media_cleanup WHERE media_key IS NOT NULL AND media_key <> ""'
           npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
             --command "$manifest_query" > "$backup_dir/media-keys.json"
