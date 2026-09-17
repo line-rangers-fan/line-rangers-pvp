@@ -271,7 +271,7 @@ jobs:
           BOARD_OWNER_ACCESS_TOKEN: ${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "\${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
+          if [ -z "${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
             echo "Owner identity E2E is covered by the protected production secret-name preflight; token value is not available to this workflow."
             exit 0
           fi
