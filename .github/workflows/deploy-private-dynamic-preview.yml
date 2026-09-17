@@ -207,8 +207,32 @@ jobs:
           owner_id="$(printf '%s' "$owner_info" | jq -er 'select(.ok == true) | .ownerId | select(test("^[a-f0-9-]{36}$"))')"
           prefix="uploads/$owner_id/"
           r2_keys() {
-            npx wrangler r2 object list "$R2_BUCKET" --prefix "$1" --json |
-              jq -c 'if type == "array" then map(.key) | sort else ((.objects // []) | map(.key) | sort) end'
+            local prefix="$1"
+            local cursor=""
+            local page=0
+            local all_keys="[]"
+            while [ "$page" -lt 100 ]; do
+              page=$((page + 1))
+              encoded_prefix="$(jq -rn --arg value "$prefix" '$value | @uri')"
+              query="per_page=1000&prefix=$encoded_prefix"
+              if [ -n "$cursor" ]; then
+                encoded_cursor="$(jq -rn --arg value "$cursor" '$value | @uri')"
+                query="$query&cursor=$encoded_cursor"
+              fi
+              response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/$R2_BUCKET/objects?$query")"
+              printf '%s' "$response" | jq -e '.success == true' >/dev/null
+              page_keys="$(printf '%s' "$response" | jq -c '(.result // []) | map(.key)')"
+              all_keys="$(jq -cn --argjson left "$all_keys" --argjson right "$page_keys" '$left + $right')"
+              cursor="$(printf '%s' "$response" | jq -r '.result_info.cursor // empty')"
+              if [ -z "$cursor" ]; then
+                break
+              fi
+            done
+            if [ -n "$cursor" ]; then
+              echo "R2 listing exceeded the safety page bound."
+              exit 1
+            fi
+            printf '%s' "$all_keys" | jq -c 'sort'
           }
           before_keys="$(r2_keys "$prefix")"
 
