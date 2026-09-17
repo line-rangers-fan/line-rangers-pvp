@@ -142,6 +142,11 @@ async function main() {
   assert.match(ownerId, /^[a-f0-9-]{36}$/, "persisted Owner user id");
   const initialComments = Number(initial.data.stats?.comments || 0);
   const initialVideos = Number(initial.data.stats?.videos || 0);
+  if (process.env.PRIVATE_PREVIEW_E2E_MODE === "discover") {
+    await request("/__private/logout", { method: "POST" });
+    console.log(JSON.stringify({ ok: true, ownerId }));
+    return;
+  }
   const group = crypto.randomUUID();
   const body = "private E2E mixed media verification";
 
