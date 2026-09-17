@@ -163,12 +163,12 @@ async function main() {
 
   const pvpPage = await request("/pvp/");
   expectStatus(pvpPage, 200, "authenticated PvP page");
-  assert.match(pvpPage.text, /community-entry\\.js/);
+  assert.ok(pvpPage.text.includes("community-entry.js"), "PvP page includes the community bridge");
 
   const communityEntry = await request("/pvp/assets/community-entry.js");
   expectStatus(communityEntry, 200, "authenticated community bridge asset");
-  assert.match(communityEntry.text, /url:\s*"\\/boards"/);
-  assert.doesNotMatch(communityEntry.text, /community-review\\.n-yu1791\\.workers\\.dev/);
+  assert.ok(communityEntry.text.includes('url: "/boards"'), "community bridge stays same-origin");
+  assert.equal(communityEntry.text.includes("community-review.n-yu1791.workers.dev"), false, "community bridge does not point at the closed public review");
 
   const initial = await request("/api/board");
   expectStatus(initial, 200, "initial board API");
