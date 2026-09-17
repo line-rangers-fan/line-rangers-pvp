@@ -2,7 +2,8 @@ name: deploy-original-community-production
 
 # Production promotion stays manual or uses the one-shot promotion marker.
 # The workflow is pinned to the currently validated copy commit and refuses
-# to create missing production D1/R2 resources.
+# to create missing production D1/R2 resources. Original PvP is overlaid from
+# this repository immediately before build so community promotion cannot alter it.
 on:
   workflow_dispatch:
   push:
@@ -41,6 +42,17 @@ jobs:
           git -C copy-source fetch --depth=1 origin "$COPY_SOURCE_SHA"
           git -C copy-source checkout --detach "$COPY_SOURCE_SHA"
           test "$(git -C copy-source rev-parse HEAD)" = "$COPY_SOURCE_SHA"
+
+      - name: Preserve original PvP exactly
+        run: |
+          set -euo pipefail
+          rm -rf copy-source/public/pvp
+          mkdir -p copy-source/public/pvp
+          rsync -a --delete --exclude 'OWNER_PREVIEW_NOTE.md' docs/ copy-source/public/pvp/
+          cmp docs/index.html copy-source/public/pvp/index.html
+          diff -qr docs/assets copy-source/public/pvp/assets
+          diff -qr docs/data copy-source/public/pvp/data
+          echo "Original PvP HTML, assets, and data preserved unchanged."
 
       - name: Set up Node
         uses: actions/setup-node@v4
