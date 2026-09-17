@@ -3,8 +3,9 @@ name: ranking-freshness-watchdog
 on:
   workflow_dispatch:
   schedule:
-    # This independent workflow checks between the collector's two slots.
-    - cron: "7,37 * * * *"
+    # Hourly recovery check, offset from the :07 Cloudflare baseline and the
+    # :17 collector fallback. Healthy data never starts another collection.
+    - cron: "37 * * * *"
 
 permissions:
   contents: read
