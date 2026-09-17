@@ -1,0 +1,46 @@
+name: private-migration-review
+
+on:
+  push:
+    branches:
+      - migration/private-review-2026-09-17
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out private migration branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install locked Node dependencies
+        run: npm run install:ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Build and run JavaScript regression tests
+        run: npm test
+
+      - name: Run JavaScript lint
+        run: npm run lint
+
+      - name: Run preserved PvP regression tests
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          PYTHONPATH=. python -m pytest -q
