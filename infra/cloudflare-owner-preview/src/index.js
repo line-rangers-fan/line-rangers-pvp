@@ -294,7 +294,7 @@ function ownerBoardStagingRequiredPage(request) {
 
 function isolateCommunityEntry(script) {
   return script.replace(
-    /https?:\\/\\/line-rangers-pvp-community-[^"'\\s]+\\/boards/g,
+    /https?:\/\/line-rangers-pvp-community-[^"'\\s]+\/boards/g,
     PRIVATE_BOARD_PREVIEW_PATH
   );
 }
