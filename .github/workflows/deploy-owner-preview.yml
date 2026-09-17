@@ -108,33 +108,43 @@ jobs:
             exit 78
           fi
           base="https://line-rangers-pvp-owner-preview.n-yu1791.workers.dev"
+
           locked_headers="$(mktemp)"
           locked_body="$(mktemp)"
           locked_status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -D "$locked_headers" -o "$locked_body" -w '%{http_code}' "$base/")"
+          echo "locked_status=$locked_status"
           test "$locked_status" = "303"
           grep -qi '^location: /__owner/login' "$locked_headers"
 
           login_body="$(mktemp)"
           login_status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -o "$login_body" -w '%{http_code}' "$base/__owner/login")"
+          echo "login_status=$login_status"
           test "$login_status" = "200"
           grep -q '__owner/activate' "$login_body"
 
           cookie_jar="$(mktemp)"
           activate_headers="$(mktemp)"
           activate_status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -D "$activate_headers" -c "$cookie_jar" -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/x-www-form-urlencoded' --data-urlencode "access_token=$BOARD_OWNER_ACCESS_TOKEN" "$base/__owner/activate")"
+          echo "activate_status=$activate_status"
           test "$activate_status" = "303"
           grep -qi '^set-cookie: __Host-lr_owner_preview=' "$activate_headers"
 
-          root="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -b "$cookie_jar" "$base/")"
-          grep -q 'レジェンド帯 キャラ集計' <<< "$root"
-          grep -q 'id="community-board-entry-slot"' <<< "$root"
-          grep -q 'id="ranking-section"' <<< "$root"
-          if grep -q '現在、サイトを改修しています。' <<< "$root"; then
+          root_body="$(mktemp)"
+          root_status="$(curl --location --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -b "$cookie_jar" -o "$root_body" -w '%{http_code}' "$base/")"
+          echo "authenticated_root_status=$root_status"
+          test "$root_status" = "200"
+          grep -Fq 'レジェンド帯 キャラ集計' "$root_body"
+          grep -Fq 'id="community-board-entry-slot"' "$root_body"
+          grep -Fq 'id="ranking-section"' "$root_body"
+          if grep -Fq '現在、サイトを改修しています。' "$root_body"; then
             echo "Owner Preview unexpectedly returned maintenance mode."
             exit 1
           fi
 
-          community_js="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -b "$cookie_jar" "$base/assets/community-entry.js")"
-          app_js="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -b "$cookie_jar" "$base/assets/app.js")"
-          grep -q '新キャラ情報掲示板' <<< "$community_js"
-          grep -q 'character_usage.json' <<< "$app_js"
+          community_js="$(mktemp)"
+          app_js="$(mktemp)"
+          curl --location --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -b "$cookie_jar" -o "$community_js" "$base/assets/community-entry.js"
+          curl --location --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -b "$cookie_jar" -o "$app_js" "$base/assets/app.js"
+          grep -Fq '新キャラ情報掲示板' "$community_js"
+          grep -Fq 'character_usage.json' "$app_js"
+          echo "authenticated owner-only preview checks: ok"
