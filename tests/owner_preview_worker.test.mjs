@@ -37,6 +37,7 @@ assert.match(wrangler, /run_worker_first = true/);
 const html = "<html lang=\"ja\"><body class=\"maintenance-mode\">" +
   "<section class=\"maintenance-screen\">maintenance</section>" +
   "<main><h1>レジェンド帯 キャラ集計</h1></main></body></html>";
+const ownerAccessToken = "test-owner-access-token";
 const env = {
   BOARD_OWNER_ACCESS_TOKEN: ownerAccessToken,
   OWNER_PREVIEW_COOKIE_SECRET: "test-cookie-secret",
@@ -68,7 +69,6 @@ const env = {
   },
 };
 const base = "https://preview.example";
-const ownerAccessToken = "test-owner-access-token";
 
 const locked = await ownerPreviewWorker.fetch(new Request(base + "/"), env);
 assert.equal(locked.status, 303);
