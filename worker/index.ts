@@ -52,6 +52,16 @@ function privatePreviewEnabled(env: Env) {
   return env.PRIVATE_PREVIEW_MODE === "1";
 }
 
+function isPrivatePvpAssetPath(pathname: string) {
+  return (
+    pathname === "/pvp" ||
+    pathname === "/pvp/" ||
+    pathname === "/pvp/index.html" ||
+    pathname.startsWith("/pvp/assets/") ||
+    pathname.startsWith("/pvp/data/")
+  );
+}
+
 function readCookie(request: Request, name: string) {
   const header = request.headers.get("cookie") || "";
   if (header.length > 8192) return "";
@@ -338,6 +348,12 @@ const worker = {
       }
       if (!await hasPrivateSession(request, env)) {
         return secureResponse(privateNotFound(), env);
+      }
+      // With run_worker_first enabled, authenticated static PvP assets must be
+      // handed to the Assets binding explicitly. The app router is for SSR/API
+      // routes and otherwise canonicalizes /pvp/ to an unusable 308 response.
+      if (isPrivatePvpAssetPath(url.pathname)) {
+        return secureResponse(await env.ASSETS.fetch(request), env);
       }
     }
     if (url.pathname === "/_vinext/image") {
