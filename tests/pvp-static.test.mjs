@@ -70,11 +70,11 @@ test('runtime preserves original image-first table and keeps the local board rou
   assert.match(js,/href = "\/boards"/);
 });
 
-test('public review serves built browser assets before dynamic Worker routes',async()=>{
+test('private review gates built browser assets before serving them',async()=>{
   const config=await read('wrangler.jsonc');
   assert.match(config,/"binding":\s*"ASSETS"/);
   assert.match(config,/"not_found_handling":\s*"none"/);
-  assert.doesNotMatch(config,/"run_worker_first":\s*true/);
+  assert.match(config,/"run_worker_first":\s*true/);
 });
 
 test('ranking browser reads only the isolated local validated snapshot',async()=>{
