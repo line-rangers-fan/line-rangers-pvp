@@ -1,0 +1,63 @@
+name: promote-community-hotfix-once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/promote-community-hotfix-once.yml
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: promote-community-hotfix-once
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_OLD_SHA: d4fb4aedc4dc38219d0940263a8eb276af78fa67
+      VALIDATED_COPY_SHA: c2c767534621b551b130aceaca6c8d4b208f7653
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pin the validated copy without changing any other production contract
+        run: |
+          set -euo pipefail
+          file=.github/workflows/deploy-original-community-production.yml
+          test "$(grep -c "COPY_SOURCE_SHA: $EXPECTED_OLD_SHA" "$file")" -eq 1
+          sed -i "s/COPY_SOURCE_SHA: $EXPECTED_OLD_SHA/COPY_SOURCE_SHA: $VALIDATED_COPY_SHA/" "$file"
+          test "$(grep -c "COPY_SOURCE_SHA: $VALIDATED_COPY_SHA" "$file")" -eq 1
+          ! grep -q 'Reset production bulletin board content' "$file"
+          grep -q 'Apply production D1 migrations without deleting user content' "$file"
+          grep -q 'api/activity?public=1' "$file"
+          git diff --check
+          git diff -- "$file"
+      - name: Remove this one-shot workflow before committing
+        run: git rm .github/workflows/promote-community-hotfix-once.yml
+      - name: Commit the guarded pin update
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/deploy-original-community-production.yml
+          git diff --cached --check
+          git commit -m 'Promote validated video and featured-comment fixes'
+          git push origin HEAD:main
+      - name: Dispatch the non-destructive production deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          payload='{"ref":"main"}'
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/deploy-original-community-production.yml/dispatches \
+            -d "$payload"
