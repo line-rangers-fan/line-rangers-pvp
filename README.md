@@ -1,46 +1,47 @@
-# line-rangers-pvp
+# LINEレンジャー PvP統計＋新キャラ情報掲示板 確認版
 
-LINE Rangers Handbook の PvP Tracker を参照し、レジェンド帯の防衛チームを集計する非公式ファンサイトです。
+このRepositoryは、**PvPランキングを主画面として復元し、同一サイトへ新キャラ情報掲示板を併設するOwner確認版**です。
 
-## 仕様
-- データ取得元: https://rangers.lerico.net/ja/pvp-tracker の公開PvP API
-- 画面の画像要素ではなく、公開APIの `unitCode` を直接集計します。遅延読み込み・画面外表示・分割行による取りこぼしを防ぎ、1体だけ編成されたキャラクターも集計対象です。
-- GitHub Actions は手動実行でき、取得人数・編成枠数・重複・順位・採用率・装備率・異常な急減を相互検証してからJSONを公開します。200人の情報が揃わない場合は部分データを公開せず、前回の正常JSONと更新時刻を維持します。
-- キャラクターは編成数、採用人数、採用率でランキングします。同一プレイヤー内の同一キャラクター重複は編成数では加算し、採用人数では1人にまとめます。
-- 装備はキャラクターごとに `WEAPON` / `ARMOR` / `ACC` を分け、装着回数、使用プレイヤー数、装備IDの順で順位を決めます。
-- 前回データと比較して集計人数または総編成枠数が50%以上減った場合は、壊れたデータを公開しません。
-- 主集計は毎時17分に50分の鮮度判定を行います。Cloudflare Workerは15分ごとに監視し、正時付近とJST 22〜23時の締め保存時刻には強制集計を要求します。別ワークフローも毎時7分・37分に確認し、55分以上古いデータや品質異常を検知すると主集計を再起動します。
-- Workerと独立監視は、主集計が待機中または実行中なら重複起動を追加しません。実行状態の確認自体に失敗した場合は復旧を止めないfail-open動作です。主集計が2回連続で失敗した場合だけ障害Issueを1件作成し、正常な200人集計後に自動で閉じます。
-- 主集計は `repository_dispatch` の `collect-pvp-data` にも対応しています。GitHub外のタイマーから同じ品質ゲート付き集計を起動でき、外部側の認証情報をリポジトリへ保存する必要はありません。
-- 各キャラクターには編成数の変動を付与し、個人を特定できるIDを含まない軽量履歴を、直近6時間とJST締め40日・最大96件の範囲で保持します。「1時間前」は30〜90分前で60分に最も近い正常履歴、「前日締め」「先週締め」「先月締め」は確定したJST 22〜23時の履歴を使います。履歴が無い場合は推測せず「履歴待ち」とします。
-- キャラクターを開くと、軽量履歴から過去24時間の採用率推移を表示します。履歴JSONは必要になった時だけ読み込み、通常のランキング表示を重くしません。
-- 成功データには集計全体と200人の詳細取得にかかった時間を記録します。遅延がスケジュール待ちか取得処理の長時間化かを後から区別できます。
-- 公開前・監視時・画面読み込み時の3段階で、集計時間の上下限、詳細取得時間との前後関係、装備充足率、履歴の時系列順を検証します。装備全消失・カテゴリ全消失・前回から80%以上の急落は情報源の異常として拒否しますが、個々の未装備は許容します。値が不正なら新しいデータを採用せず、前回の正常データを維持します。
-- 画面は最新JSONをキャッシュせず最大3回再試行し、10分ごと・タブ復帰時・通信復帰時に自動で再確認します。再取得に失敗しても表示中の正常データを消しません。
+## 現在の構成
 
-## 自動更新の構成
+- `/` : `/pvp/index.html` のPvPランキングを開く。
+- `/pvp/index.html` : pre-maintenance版の画面構造・操作契約を基準に復元したランキング画面。
+- `/boards` : 新キャラ情報掲示板。投票、コメント、写真/動画、翻訳、Owner/Moderator機能を扱う。
+- PvP画面から同一サイトの `/boards` へ移動できる。
+- 掲示板を主画面にしてPvPランキングを小型表示する旧方式へ戻さない。
 
-- `.github/workflows/update-character-usage.yml`: 品質テスト、集計、正常データの保存、Pages公開
-- `.github/workflows/watch-character-usage.yml`: 更新時刻と完全取得（200/200人・取得エラー0）を独立確認し、異常時に主集計を再起動
-- `.github/workflows/guard-collection-incidents.yml`: 連続失敗を重複なくIssue化し、正常な200人集計で復旧を記録
-- `scripts/check_data_freshness.py`: 両ワークフローで共用する鮮度判定
-- `scripts/cache_character_images.py`: 新キャラを含む正規PNGを安全に自動保存し、取得できない画像は次回へ持ち越します。保存済み画像も毎回8件ずつ巡回確認し、同じURLの画像が正規版へ更新された場合は自動で差し替え、確認・更新・取得不能の件数を記録します。
-- `docs/data/character_usage_history.json`: 集計成功時だけ追加される軽量履歴
-- `infra/cloudflare-watchdog/`: GitHubの定時イベント停止を補う外部タイマー
+## PvPファイルとデータ
 
-障害時の確認・手動復旧手順は [`OPERATIONS.md`](OPERATIONS.md) にまとめています。
+- `public/pvp/index.html`
+- `public/pvp/assets/style.css`
+- `public/pvp/assets/app.js`
+- `public/pvp/data/character_usage.json`
+- `public/pvp/data/character_usage_history.json`
+- `scripts/collect-pvp.mjs`
+- `scripts/patch-pvp-metadata.mjs`
+- `.github/workflows/refresh-pvp-data.yml`
 
-GitHub外のタイマーを接続する場合は、外部サービス側からGitHub APIの
-`workflow_dispatch` を1時間ごとに送信します。Cloudflare用の実装は
-`infra/cloudflare-watchdog/` にあり、JSONが55分以上古い時、または完全取得の品質条件を満たさない時だけ起動します。
-トークンは `Actions: write` の最小権限で外部サービスのシークレットに保存し、
-コードやPagesには置きません。
+PvP正本Repository `line-rangers-fan/line-rangers-pvp` はPrivateのまま読み取り専用とし、確認版BuildはPrivate raw/codeloadへ依存しません。確認版のcollectorが `rangers.lerico.net` の公開APIからLEGEND上位200人を取得し、**200/200の正常検証に成功した場合だけ**snapshotを生成します。部分/異常取得では正常snapshotを上書きしません。
 
-## 開発
-```bash
-pip install -r requirements.txt
-pytest -q
-node --test tests/*.mjs
-python scripts/scrape_character_usage.py
-python scripts/cache_character_images.py
-```
+workflowは毎時17分に更新し、ブラウザは同一originの追跡済みsnapshotを読みます。履歴は蓄積式で、基準snapshotがない比較期間は推測せず「履歴待ち」と表示します。
+
+## 掲示板の重要仕様
+
+- 2026-09対象は `u1631e-sally` / `かに座 サリー` / 究極進化側のみ。
+- コメントは投稿成功時だけ入力欄とlocalStorage draftを消し、失敗時は保持。
+- Owner / Moderator / Userはサーバー側で判定し、表示名からRoleを付与しない。
+- Secrets、Token、Cookie signing secret、Owner認証情報、DB/Storage credentialをCommitしない。
+- noindex / nofollow / noarchive / nosnippetを維持する。
+
+## Build / Test
+
+- Node.js `>=22.13.0`
+- `npm run install:ci`
+- `npm run build`
+- `npm test`
+- `.github/workflows/verify-owner-copy.yml` はBuild/Test専用でDeployしない。
+- `.github/workflows/refresh-pvp-data.yml` はPvP snapshot更新専用で、サイトDeployは行わない。
+
+## Workへの正本指示
+
+Owner Previewを作るときはRepository rootの `WORK_OWNER_PREVIEW_HANDOFF.md` を最優先で読み、**現在mainに追跡済みの `public/pvp/` を上書きせずそのままBuild**すること。

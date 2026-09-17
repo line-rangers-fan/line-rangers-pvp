@@ -1,0 +1,63 @@
+name: audit-cloudflare-inventory
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-cloudflare-inventory.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect Cloudflare resource and secret-name presence safely
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_API_TOKEN is not configured.'
+            exit 78
+          fi
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          accounts="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors "${auth[@]}" 'https://api.cloudflare.com/client/v4/accounts?per_page=50')"
+          account_id="$(printf '%s' "$accounts" | jq -er '.result | if length == 1 then .[0].id else error("expected exactly one accessible account") end')"
+          echo "::add-mask::$account_id"
+
+          d1="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$account_id/d1/database?per_page=100")"
+          r2="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets")"
+          workers="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$account_id/workers/scripts")"
+
+          echo 'D1 database names:'
+          printf '%s' "$d1" | jq -r '.result[]?.name' | sort
+          echo 'R2 bucket names:'
+          printf '%s' "$r2" | jq -r '.result.buckets[]?.name // .result[]?.name' | sort
+          echo 'Worker script names:'
+          printf '%s' "$workers" | jq -r '.result[]?.id' | sort
+
+          # Fail closed if the isolated review resources disappeared.
+          printf '%s' "$d1" | jq -e '.result | any(.name == "line-rangers-copy-review-db")' >/dev/null
+          printf '%s' "$r2" | jq -e '[(.result.buckets // .result)[]?.name] | any(. == "line-rangers-copy-review-media")' >/dev/null
+          printf '%s' "$workers" | jq -e '.result | any(.id == "line-rangers-pvp-community-review")' >/dev/null
+
+          secret_meta="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors "${auth[@]}" "https://api.cloudflare.com/client/v4/accounts/$account_id/workers/scripts/line-rangers-pvp-community-review/secrets")"
+          secret_names="$(printf '%s' "$secret_meta" | jq -r '.result[]?.name' | sort)"
+          report_secret() {
+            local key="$1"
+            if grep -Fxq "$key" <<< "$secret_names"; then
+              printf '%s: PRESENT\n' "$key"
+            else
+              printf '%s: MISSING\n' "$key"
+            fi
+          }
+          echo 'Review Worker secret-name presence (values never requested or printed):'
+          report_secret BOARD_ANON_COOKIE_SECRET
+          report_secret BOARD_OWNER_ACCESS_TOKEN
+          report_secret BOARD_OWNER_SUBJECT
+          report_secret GOOGLE_TRANSLATE_API_KEY

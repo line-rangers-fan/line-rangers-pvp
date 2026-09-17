@@ -1,0 +1,206 @@
+name: deploy-cloudflare-review
+
+# Isolated public review Worker. The canonical production site is not modified here.
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["refresh-pvp-data"]
+    types: [completed]
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-cloudflare-review.yml'
+      - 'app/**'
+      - 'components/**'
+      - 'db/**'
+      - 'drizzle/**'
+      - 'lib/**'
+      - 'public/pvp/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'worker/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'wrangler.jsonc'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: line-rangers-copy-cloudflare-review
+  cancel-in-progress: true
+
+env:
+  WORKER_NAME: line-rangers-pvp-community-review
+  D1_NAME: line-rangers-copy-review-db
+  R2_BUCKET: line-rangers-copy-review-media
+  REVIEW_BASE_URL: https://line-rangers-pvp-community-review.n-yu1791.workers.dev
+
+jobs:
+  deploy:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm run install:ci
+
+      - name: Audit production dependency vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Resolve Cloudflare account safely
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "CLOUDFLARE_API_TOKEN is not configured for copy-LINE-."
+            exit 78
+          fi
+          response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+          account_id="$(printf '%s' "$response" | jq -er '.result | if length == 1 then .[0].id else error("Token must access exactly one Cloudflare account") end')"
+          if ! [[ "$account_id" =~ ^[A-Fa-f0-9]{32}$ ]]; then
+            echo "Cloudflare returned an invalid account ID."
+            exit 1
+          fi
+          echo "::add-mask::$account_id"
+          echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
+
+      - name: Verify existing isolated D1 and R2 resources
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          db_list="$(npx wrangler d1 list --json)"
+          db_id="$(printf '%s' "$db_list" | jq -r --arg name "$D1_NAME" '[.[] | select(.name == $name) | .uuid][0] // empty')"
+          if [ -z "$db_id" ]; then
+            echo "Required review D1 database is missing; refusing to create a new resource automatically."
+            exit 78
+          fi
+          if ! [[ "$db_id" =~ ^[A-Fa-f0-9-]{36}$ ]]; then
+            echo "Unable to resolve the isolated D1 database ID."
+            exit 1
+          fi
+          echo "::add-mask::$db_id"
+
+          if ! npx wrangler r2 bucket info "$R2_BUCKET" --json >/dev/null 2>&1; then
+            echo "Required review R2 bucket is missing; refusing to create a new resource automatically."
+            exit 78
+          fi
+
+          tmp="$(mktemp)"
+          jq --arg id "$db_id" '(.d1_databases[] | select(.binding == "DB").database_id) = $id' wrangler.jsonc > "$tmp"
+          mv "$tmp" wrangler.jsonc
+          grep -q "$db_id" wrangler.jsonc
+
+      - name: Build and run regression tests
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: npm test
+
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc
+
+      - name: Deploy isolated public review Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          output_config="$(find dist -type f -name wrangler.json -print -quit)"
+          if [ -z "$output_config" ]; then
+            echo "Cloudflare Vite output config was not generated."
+            find dist -maxdepth 3 -type f -print || true
+            exit 1
+          fi
+          echo "Deploying generated config: $output_config"
+          npx wrangler deploy --config "$output_config"
+
+      - name: Preserve or initialize anonymous signing secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          secrets_json="$(npx wrangler secret list --name "$WORKER_NAME" --format json)"
+          if ! printf '%s' "$secrets_json" | jq -e '.[] | select(.name == "BOARD_ANON_COOKIE_SECRET")' >/dev/null; then
+            openssl rand -hex 48 | npx wrangler secret put BOARD_ANON_COOKIE_SECRET --name "$WORKER_NAME"
+          fi
+
+      - name: Apply optional Owner secrets without exposing them
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+          BOARD_OWNER_ACCESS_TOKEN: ${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+          BOARD_OWNER_SUBJECT: ${{ secrets.BOARD_OWNER_SUBJECT }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BOARD_OWNER_ACCESS_TOKEN:-}" ] && [ -n "${BOARD_OWNER_SUBJECT:-}" ]; then
+            printf '%s' "$BOARD_OWNER_ACCESS_TOKEN" | npx wrangler secret put BOARD_OWNER_ACCESS_TOKEN --name "$WORKER_NAME"
+            printf '%s' "$BOARD_OWNER_SUBJECT" | npx wrangler secret put BOARD_OWNER_SUBJECT --name "$WORKER_NAME"
+          else
+            echo "Owner bootstrap secrets are not configured; public/anonymous review remains available."
+          fi
+
+      - name: Verify deployed ranking, board, D1, R2, assets and security headers
+        run: |
+          set -euo pipefail
+          pvp="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$REVIEW_BASE_URL/pvp/index.html")"
+          board="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$REVIEW_BASE_URL/boards")"
+          snapshot="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$REVIEW_BASE_URL/pvp/data/character_usage.json")"
+          health="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$REVIEW_BASE_URL/api/health")"
+          api_headers="$(mktemp)"
+          api_body="$(mktemp)"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -D "$api_headers" -o "$api_body" "$REVIEW_BASE_URL/api/board"
+
+          grep -q 'レジェンド帯 キャラ集計' <<< "$pvp" || { echo 'PvP marker missing after deploy.'; exit 1; }
+          grep -q '20260916-ui-1' <<< "$pvp" || { echo 'Latest PvP UI bundle marker missing after deploy.'; exit 1; }
+          grep -q '新キャラ情報掲示板' <<< "$board" || { echo 'Board title missing after deploy.'; exit 1; }
+          if grep -q 'PvPランキング' <<< "$board"; then
+            echo 'Board unexpectedly renders the removed PvP ranking card.'
+            exit 1
+          fi
+          printf '%s' "$snapshot" | jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true and (.characters | length > 0)' >/dev/null || { echo 'PvP snapshot is not a complete validated 200/200 sample.'; exit 1; }
+          printf '%s' "$health" | jq -e '.ok == true and .checks.d1 == true and .checks.r2 == true' >/dev/null || { echo 'Runtime D1/R2 health check failed.'; exit 1; }
+          jq -e '.boards | type == "array"' "$api_body" >/dev/null || { echo 'Board API did not return a valid boards array.'; exit 1; }
+          grep -qi '^x-content-type-options: nosniff' "$api_headers" || { echo 'Board API security header missing.'; exit 1; }
+          grep -qi '^strict-transport-security: max-age=31536000' "$api_headers" || { echo 'HSTS header missing.'; exit 1; }
+          grep -qi '^set-cookie: __Host-lr_guest=' "$api_headers" || { echo 'Anonymous signed cookie was not issued.'; exit 1; }
+          if grep -q '現在、サイトを改修しています。' <<< "$pvp"; then
+            echo "Review Worker unexpectedly returned maintenance mode."
+            exit 1
+          fi
+
+          board_assets="$({ printf '%s' "$board" | grep -oE '(href|src)="[^"]+\.(css|js)(\?[^"]*)?"' | sed -E 's/^(href|src)="([^"]+)"/\2/' | grep '^/' | sort -u; } || true)"
+          if [ -z "$board_assets" ]; then
+            echo "Board HTML did not expose any same-origin browser CSS/JS assets."
+            exit 1
+          fi
+          while IFS= read -r asset; do
+            [ -z "$asset" ] && continue
+            asset_headers="$(mktemp)"
+            asset_body="$(mktemp)"
+            curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 -D "$asset_headers" -o "$asset_body" "$REVIEW_BASE_URL$asset"
+            if [ ! -s "$asset_body" ]; then
+              echo "Board browser asset is empty: $asset"
+              exit 1
+            fi
+            if grep -qi '^content-type:.*text/html' "$asset_headers"; then
+              echo "Board browser asset was incorrectly served as HTML: $asset"
+              exit 1
+            fi
+          done <<< "$board_assets"
+
+          echo "Cloudflare review fully verified: $REVIEW_BASE_URL"

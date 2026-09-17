@@ -1,0 +1,57 @@
+name: refresh-pvp-data
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/collect-pvp.mjs'
+      - 'scripts/patch-pvp-metadata.mjs'
+      - 'scripts/update-community-characters.mjs'
+      - '.github/workflows/refresh-pvp-data.yml'
+permissions:
+  contents: write
+concurrency:
+  group: refresh-pvp-data
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+      - name: Collect and validate Legend top 200
+        run: node scripts/collect-pvp.mjs
+      - name: Apply trusted display metadata
+        run: node scripts/patch-pvp-metadata.mjs
+      - name: Discover multi-character community topics
+        run: node scripts/update-community-characters.mjs
+      - name: Commit only validated snapshot and discovery changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            public/pvp/data/character_usage.json \
+            public/pvp/data/character_usage_history.json \
+            config/community-characters.json \
+            data/community-character-discovery.json
+          if git diff --cached --quiet; then
+            echo 'No PvP snapshot or community discovery change.'
+            exit 0
+          fi
+          git commit -m 'Refresh validated PvP snapshot and community topics'
+          git pull --rebase origin main
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push attempt ${attempt} failed; retrying."
+            sleep $((attempt * 5))
+            git pull --rebase origin main
+          done
+          echo 'Validated refresh could not be pushed after three attempts.' >&2
+          exit 1

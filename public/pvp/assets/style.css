@@ -1,0 +1,1434 @@
+/* File: docs/assets/style.css */
+
+:root {
+  color-scheme: dark;
+  --background: #07111f;
+  --surface: #101d2f;
+  --surface-light: #172840;
+  --border: #29405f;
+  --text: #f4f7fb;
+  --muted: #9fb0c6;
+  --accent: #32d583;
+  --accent-dark: #069454;
+  --danger: #ff6b6b;
+  --warning: #fdb022;
+  --shadow: 0 18px 45px rgb(0 0 0 / 28%);
+  --radius-sm: 0.65rem;
+  --radius-md: 0.8rem;
+  --radius-lg: 1rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--background);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(
+      circle at top right,
+      rgb(50 213 131 / 12%),
+      transparent 30rem
+    ),
+    var(--background);
+  font-family:
+    Inter,
+    "Noto Sans JP",
+    "Noto Sans",
+    "Noto Sans Thai",
+    "Noto Sans KR",
+    "Noto Sans TC",
+    "Hiragino Kaku Gothic ProN",
+    "Yu Gothic",
+    sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font: inherit;
+}
+
+a {
+  color: var(--accent);
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.site-header {
+  padding: 4.5rem 1.25rem 3rem;
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(
+      135deg,
+      rgb(13 31 51 / 96%),
+      rgb(7 17 31 / 92%)
+    );
+}
+
+.header-inner,
+.main-content {
+  width: min(1120px, 100%);
+  margin-inline: auto;
+}
+
+/* =========================================
+   Language Switcher
+   ========================================= */
+
+.language-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-bottom: 1.5rem;
+}
+
+.language-switcher button {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 2.35rem;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+@media (hover: hover) {
+  .language-switcher button:hover {
+    color: var(--text);
+    border-color: var(--accent-dark);
+    background: var(--surface-light);
+    transform: translateY(-1px);
+  }
+}
+
+.language-switcher button:active {
+  transform: scale(0.96);
+}
+
+.language-switcher button:focus-visible {
+  outline: 3px solid rgb(50 213 131 / 35%);
+  outline-offset: 2px;
+}
+
+/* 選択中の言語をハッキリ強調 */
+.language-switcher button.language-active {
+  border-color: var(--accent);
+  color: #06251a;
+  background: var(--accent);
+  font-weight: 800;
+  box-shadow:
+    0 0 0 3px rgb(50 213 131 / 20%),
+    0 4px 14px rgb(50 213 131 / 35%);
+}
+
+/* =========================================
+   Header
+   ========================================= */
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 3.8rem);
+  line-height: 1.15;
+  overflow-wrap: normal;
+  text-wrap: balance;
+  word-break: keep-all;
+}
+
+.header-description {
+  max-width: 48rem;
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.main-content {
+  padding: 2rem 1rem 4rem;
+}
+
+/* =========================================
+   Messages
+   ========================================= */
+
+.message {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  background: var(--surface);
+}
+
+/* 読み込み中のみスピナーを表示（エラー・警告時は出さない） */
+.message:not(.message-error):not(.message-warning)::before {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  content: "";
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.message-error {
+  color: var(--danger);
+  border-color: rgb(255 107 107 / 50%);
+}
+
+.message-warning {
+  color: var(--warning);
+  border-color: rgb(253 176 34 / 50%);
+}
+
+.source-status-notice {
+  max-width: 48rem;
+  margin: 1.35rem 0 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid #6f3544;
+  border-left: 4px solid #a64d5d;
+  border-radius: var(--radius-md);
+  color: #edc2ca;
+  background:
+    linear-gradient(135deg, rgb(66 24 37 / 92%), rgb(39 20 29 / 96%));
+  box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
+}
+
+.source-status-notice h2 {
+  margin: 0;
+  color: #ffd5db;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.source-status-notice p {
+  margin: 0.45rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.72;
+  white-space: pre-line;
+}
+
+/* =========================================
+   Summary
+   ========================================= */
+
+.summary-grid {
+  display: block;
+  margin: 0 0 2rem;
+}
+
+.summary-card {
+  position: relative;
+  min-width: 0;
+  padding: 1.4rem 1.25rem 1.25rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(
+      145deg,
+      var(--surface-light),
+      var(--surface)
+    );
+  box-shadow: var(--shadow);
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+/* カード上部にアクセントの帯を追加して、情報のまとまりを視覚化 */
+.summary-card::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background:
+    linear-gradient(
+      90deg,
+      var(--accent-dark),
+      var(--accent)
+    );
+  content: "";
+}
+
+@media (hover: hover) {
+  .summary-card:hover {
+    border-color: var(--accent-dark);
+    transform: translateY(-2px);
+  }
+}
+
+.summary-card:active {
+  transform: scale(0.98);
+}
+
+.summary-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* 数字を主役にする：大きく、太く、桁がブレないように */
+.summary-card strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.summary-key-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.summary-key-metric {
+  min-width: 0;
+}
+
+.summary-updated-value {
+  font-size: clamp(2.35rem, 8vw, 3.2rem);
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.summary-update-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.freshness-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.6rem;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.freshness-healthy {
+  border-color: rgb(50 213 131 / 55%);
+  color: var(--accent);
+  background: rgb(50 213 131 / 9%);
+}
+
+.freshness-delayed {
+  border-color: rgb(253 176 34 / 55%);
+  color: var(--warning);
+  background: rgb(253 176 34 / 9%);
+}
+
+.freshness-stale {
+  border-color: rgb(255 107 107 / 55%);
+  color: var(--danger);
+  background: rgb(255 107 107 / 9%);
+}
+
+.data-warning {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.data-warning-text {
+  flex: 1 1 18rem;
+}
+
+.data-refresh-button {
+  min-height: 2.3rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* =========================================
+   Ranking
+   ========================================= */
+
+.ranking-section {
+  overflow: visible;
+  touch-action: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.table-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.table-heading h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.table-heading p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Select one baseline for the character-count change. The fixed caption
+   makes it clear that the badge is a count difference, not a rank movement. */
+.rank-period-selector {
+  --rank-period-label-size: 0.98rem;
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: end;
+  min-width: 10rem;
+}
+
+.rank-period-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  min-height: 2.35rem;
+  min-width: 10rem;
+  padding: 0.4rem 0.65rem 0.4rem 0.75rem;
+  border-color: var(--border);
+  border-radius: 0.65rem;
+  color: var(--text);
+  background: var(--background);
+  font-size: var(--rank-period-label-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-period-trigger:hover,
+.rank-period-trigger.rank-period-open {
+  border-color: var(--accent-dark);
+  background: var(--surface-light);
+}
+
+.rank-period-arrow {
+  color: var(--accent);
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.rank-period-trigger.rank-period-open .rank-period-arrow {
+  transform: rotate(180deg);
+}
+
+.rank-period-comparison-label {
+  display: block;
+  max-width: 24rem;
+  margin-top: 0.35rem;
+  color: var(--text);
+  font-size: var(--rank-period-label-size);
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  text-align: right;
+}
+
+.rank-period-options {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  display: grid;
+  min-width: 10.25rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+  box-shadow: var(--shadow);
+}
+
+.rank-period-options[hidden] {
+  display: none;
+}
+
+.rank-period-options button {
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  color: var(--text);
+  background: transparent;
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.rank-period-options button:hover {
+  background: var(--surface-light);
+}
+
+.rank-period-options button.rank-period-selected {
+  border-color: var(--accent-dark);
+  color: #062417;
+  background: var(--accent);
+}
+
+/* =========================================
+   General Buttons
+   ========================================= */
+
+button {
+  min-height: 2.8rem;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  border: 1px solid var(--accent-dark);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  background: var(--accent-dark);
+  font-weight: 700;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+@media (hover: hover) {
+  button:hover {
+    background: #087b49;
+  }
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+button:focus-visible {
+  outline: 3px solid rgb(50 213 131 / 35%);
+  outline-offset: 2px;
+}
+
+/* =========================================
+   Table
+   ========================================= */
+
+.table-wrapper {
+  max-height: none;
+  overflow: visible;
+}
+
+.table-wrapper table {
+  table-layout: fixed;
+}
+
+.table-wrapper th,
+.table-wrapper td {
+  touch-action: pan-y pinch-zoom;
+}
+
+.ranking-tap-hint {
+  margin: 1.25rem 0 0;
+  color: #64b5ff;
+  font-size: clamp(0.95rem, 3.8vw, 1.1rem);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+}
+
+.weekly-notice {
+  max-width: 48rem;
+  margin: 0.85rem 0 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--warning);
+  color: #ffd77d;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+thead th {
+  position: static;
+  color: var(--muted);
+  background: #0a1729;
+  box-shadow: 0 1px 0 var(--border);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+/* 偶数行をうっすら塗って視線がブレないように */
+tbody tr:nth-child(even) {
+  background: rgb(255 255 255 / 2.5%);
+}
+
+@media (hover: hover) {
+  tbody tr:hover {
+    background: var(--surface-light);
+  }
+}
+
+tbody tr:active {
+  background: var(--surface-light);
+}
+
+.rank-cell {
+  position: relative;
+  width: 4.5rem;
+  color: var(--muted);
+  font-weight: 800;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.rank-number {
+  display: block;
+  font: inherit;
+  line-height: 1.1;
+}
+
+.rank-change {
+  position: absolute;
+  right: 0.22rem;
+  bottom: 0.2rem;
+  padding: 0.03rem 0.18rem;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.rank-up {
+  color: var(--accent);
+  background: rgb(50 213 131 / 12%);
+}
+
+.rank-down {
+  color: var(--danger);
+  background: rgb(255 107 107 / 12%);
+}
+
+.rank-change-new {
+  color: #64b5ff;
+  background: rgb(100 181 255 / 12%);
+}
+
+/* Longer-period changes remain in the normal document flow below the rank.
+   Absolute positioning made the labels overlap the number on compact mobile
+   rows.  The column is naturally sized by its character image, so this keeps
+   all three periods visible without moving into a neighbouring cell. */
+.rank-period-changes {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  margin: 0.28rem auto 0;
+  gap: 1px;
+  color: var(--muted);
+  font-size: 0.46rem;
+  font-weight: 800;
+  line-height: 1.05;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.rank-period-change {
+  display: block;
+  padding: 0.02rem 0.12rem;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-period-up {
+  color: var(--accent);
+  background: rgb(50 213 131 / 9%);
+}
+
+.rank-period-down {
+  color: var(--danger);
+  background: rgb(255 107 107 / 9%);
+}
+
+.rank-period-neutral {
+  color: var(--muted);
+  background: rgb(148 163 184 / 8%);
+}
+
+.rank-period-pending {
+  color: var(--muted);
+  background: transparent;
+  font-weight: 700;
+}
+
+.rank-cell[data-rank="1"] {
+  color: #ffd166;
+}
+
+.rank-cell[data-rank="2"] {
+  color: #d8e1eb;
+}
+
+.rank-cell[data-rank="3"] {
+  color: #d69b64;
+}
+
+/* 上位3位のランク数字の背後にメダル風の丸を追加 */
+.rank-cell[data-rank="1"]::before,
+.rank-cell[data-rank="2"]::before,
+.rank-cell[data-rank="3"]::before {
+  position: absolute;
+  inset: 0.3rem;
+  z-index: -1;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+  opacity: 0.16;
+}
+
+/* 上位3位の行全体もうっすら色付け */
+tbody tr:has(.rank-cell[data-rank="1"]) {
+  background: rgb(255 209 102 / 6%);
+}
+
+tbody tr:has(.rank-cell[data-rank="2"]) {
+  background: rgb(216 225 235 / 5%);
+}
+
+tbody tr:has(.rank-cell[data-rank="3"]) {
+  background: rgb(214 155 100 / 6%);
+}
+
+.character-cell {
+  min-width: 5.5rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.character-image {
+  width: 4.5rem;
+  height: 4.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+  object-fit: contain;
+}
+
+.number-cell {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.rate-cell {
+  min-width: 13rem;
+}
+
+.rate-value {
+  display: inline-block;
+  min-width: 4.2rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.rate-track {
+  display: inline-block;
+  width: min(10rem, 35vw);
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  vertical-align: middle;
+  background: var(--background);
+}
+
+.rate-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      90deg,
+      var(--accent-dark),
+      var(--accent)
+    );
+  transition: width 0.6s ease;
+}
+
+.result-count {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+/* =========================================
+   Notes
+   ========================================= */
+
+.notes {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.notes h2 {
+  margin-top: 0;
+  color: var(--text);
+  font-size: 1.2rem;
+}
+
+.notes ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  list-style: none;
+}
+
+.notes li {
+  position: relative;
+}
+
+.notes li#method-8 {
+  white-space: pre-line;
+}
+
+.notes li + li {
+  margin-top: 0.6rem;
+}
+
+/* チェックマークの箇条書きに */
+.notes li::before {
+  position: absolute;
+  left: -1.5rem;
+  color: var(--accent);
+  font-weight: 800;
+  content: "✓";
+}
+
+/* =========================================
+   Footer
+   ========================================= */
+
+.site-footer {
+  padding: 2rem 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  text-align: center;
+}
+
+.site-footer p + p {
+  margin-top: 0.5rem;
+}
+
+/* =========================================
+   Accessibility
+   ========================================= */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* =========================================
+   Mobile
+   ========================================= */
+
+@media (max-width: 700px) {
+  /* 折り返す代わりに、横スクロールの1本の帯に */
+  .language-switcher {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 12px,
+      black calc(100% - 12px),
+      transparent
+    );
+  }
+
+  .language-switcher::-webkit-scrollbar {
+    display: none;
+  }
+
+  .language-switcher button {
+    min-height: 2.2rem;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.72rem;
+    scroll-snap-align: start;
+  }
+
+  .table-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .rank-period-selector {
+    align-self: flex-end;
+  }
+
+  .table-wrapper {
+    overflow: visible;
+  }
+}
+
+/* =========================================
+   Small Mobile
+   ========================================= */
+
+@media (max-width: 480px) {
+  .site-header {
+    padding-top: 3rem;
+  }
+
+  h1 {
+    font-size: clamp(1.9rem, 8.6vw, 2.35rem);
+  }
+
+  .language-switcher button {
+    font-size: 0.68rem;
+  }
+
+  .summary-card {
+    padding: 1rem 0.9rem 0.9rem;
+  }
+
+  .summary-card strong {
+    font-size: clamp(1.15rem, 5vw, 1.4rem);
+  }
+
+  th,
+  td {
+    padding: 0.55rem 0.45rem;
+    font-size: 0.92rem;
+  }
+
+  th:nth-child(1),
+  td:nth-child(1) {
+    width: 2.4rem;
+    min-width: 2.4rem;
+  }
+
+  th:nth-child(2),
+  td:nth-child(2) {
+    width: 4.8rem;
+    min-width: 4.8rem;
+  }
+
+  th:nth-child(3),
+  td:nth-child(3),
+  th:nth-child(4),
+  td:nth-child(4),
+  th:nth-child(5),
+  td:nth-child(5) {
+    width: 4.1rem;
+    min-width: 4.1rem;
+  }
+
+  .rank-cell {
+    width: 2.4rem;
+    min-width: 2.4rem;
+  }
+
+  .rank-change {
+    right: 0.08rem;
+    bottom: 0.12rem;
+    font-size: 0.52rem;
+  }
+
+  .rank-period-changes {
+    font-size: 0.42rem;
+  }
+
+  .rank-cell[data-rank="1"]::before,
+  .rank-cell[data-rank="2"]::before,
+  .rank-cell[data-rank="3"]::before {
+    inset: 0.45rem 0.2rem;
+  }
+
+  .character-image {
+    width: 3.2rem;
+    height: 3.2rem;
+  }
+
+  .number-cell,
+  .rate-value {
+    font-size: 1rem;
+  }
+
+  .rate-cell {
+    min-width: 4.1rem;
+  }
+
+  .rate-track {
+    display: none;
+  }
+
+  .rate-value {
+    min-width: 0;
+  }
+}
+
+/* Keep translated ranking headers within their own columns on phones.
+   This only applies to translations that need additional header width. */
+@media (max-width: 700px) {
+  html[lang="en"] .ranking-section thead th,
+  html[lang="th"] .ranking-section thead th,
+  html[lang="id"] .ranking-section thead th,
+  html[lang="vi"] .ranking-section thead th {
+    padding-block: 0.65rem;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
+    word-break: normal;
+  }
+}
+
+@media (max-width: 480px) {
+  html[lang="en"] .ranking-section thead th,
+  html[lang="th"] .ranking-section thead th,
+  html[lang="id"] .ranking-section thead th,
+  html[lang="vi"] .ranking-section thead th {
+    font-size: 0.74rem;
+    letter-spacing: 0;
+  }
+
+  html[lang="en"] .ranking-section th:nth-child(1),
+  html[lang="en"] .ranking-section td:nth-child(1),
+  html[lang="th"] .ranking-section th:nth-child(1),
+  html[lang="th"] .ranking-section td:nth-child(1),
+  html[lang="id"] .ranking-section th:nth-child(1),
+  html[lang="id"] .ranking-section td:nth-child(1),
+  html[lang="vi"] .ranking-section th:nth-child(1),
+  html[lang="vi"] .ranking-section td:nth-child(1) {
+    width: 11.5%;
+    min-width: 0;
+  }
+
+  html[lang="en"] .ranking-section th:nth-child(2),
+  html[lang="en"] .ranking-section td:nth-child(2),
+  html[lang="th"] .ranking-section th:nth-child(2),
+  html[lang="th"] .ranking-section td:nth-child(2),
+  html[lang="id"] .ranking-section th:nth-child(2),
+  html[lang="id"] .ranking-section td:nth-child(2),
+  html[lang="vi"] .ranking-section th:nth-child(2),
+  html[lang="vi"] .ranking-section td:nth-child(2) {
+    width: 21.5%;
+    min-width: 0;
+  }
+
+  html[lang="en"] .ranking-section th:nth-child(3),
+  html[lang="en"] .ranking-section td:nth-child(3),
+  html[lang="th"] .ranking-section th:nth-child(3),
+  html[lang="th"] .ranking-section td:nth-child(3),
+  html[lang="id"] .ranking-section th:nth-child(3),
+  html[lang="id"] .ranking-section td:nth-child(3),
+  html[lang="vi"] .ranking-section th:nth-child(3),
+  html[lang="vi"] .ranking-section td:nth-child(3) {
+    width: 21.5%;
+    min-width: 0;
+  }
+
+  html[lang="en"] .ranking-section th:nth-child(4),
+  html[lang="en"] .ranking-section td:nth-child(4),
+  html[lang="th"] .ranking-section th:nth-child(4),
+  html[lang="th"] .ranking-section td:nth-child(4),
+  html[lang="id"] .ranking-section th:nth-child(4),
+  html[lang="id"] .ranking-section td:nth-child(4),
+  html[lang="vi"] .ranking-section th:nth-child(4),
+  html[lang="vi"] .ranking-section td:nth-child(4) {
+    width: 25.5%;
+    min-width: 0;
+  }
+
+  html[lang="en"] .ranking-section th:nth-child(5),
+  html[lang="en"] .ranking-section td:nth-child(5),
+  html[lang="th"] .ranking-section th:nth-child(5),
+  html[lang="th"] .ranking-section td:nth-child(5),
+  html[lang="id"] .ranking-section th:nth-child(5),
+  html[lang="id"] .ranking-section td:nth-child(5),
+  html[lang="vi"] .ranking-section th:nth-child(5),
+  html[lang="vi"] .ranking-section td:nth-child(5) {
+    width: 20%;
+    min-width: 0;
+  }
+
+  html[lang="en"] .ranking-section .rank-cell,
+  html[lang="th"] .ranking-section .rank-cell,
+  html[lang="id"] .ranking-section .rank-cell,
+  html[lang="vi"] .ranking-section .rank-cell {
+    width: auto;
+    min-width: 0;
+  }
+}
+
+/* =========================================
+   Reduced Motion
+   ========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+/* =========================================
+   Character Equipment Ranking
+   ========================================= */
+
+.character-button {
+  display: inline-flex;
+  min-height: 0;
+  padding: 0;
+  cursor: pointer;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  touch-action: pan-y pinch-zoom;
+  -webkit-tap-highlight-color: transparent;
+  vertical-align: middle;
+}
+
+.character-button:focus-visible {
+  outline: 3px solid rgb(50 213 131 / 55%);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .character-button:hover .character-image {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgb(50 213 131 / 18%);
+    transform: translateY(-2px);
+  }
+}
+
+.character-button:active .character-image {
+  transform: scale(0.96);
+}
+
+.character-image {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
+}
+
+.equipment-dialog {
+  width: min(760px, calc(100% - 1.5rem));
+  max-height: min(88vh, 54rem);
+  padding: 1.25rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.equipment-dialog::backdrop {
+  background: rgb(0 0 0 / 72%);
+  backdrop-filter: blur(2px);
+}
+
+.equipment-dialog h2 {
+  margin: 0 3rem 1rem 0;
+  font-size: clamp(1.25rem, 4vw, 1.6rem);
+}
+
+.equipment-close {
+  float: right;
+  min-height: 2.25rem;
+  padding: 0.2rem 0.75rem;
+  border-color: var(--border);
+  color: var(--muted);
+  background: var(--surface-light);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.equipment-summary {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / 2.5%);
+}
+
+.equipment-character-image {
+  width: 4rem;
+  height: 4rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  object-fit: contain;
+}
+
+.character-image-frame {
+  /* An auto-sized grid row can grow to the image's intrinsic aspect ratio,
+     making height: 100% taller than the fixed thumbnail and cropping it. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  overflow: hidden;
+}
+
+.character-image-frame > img {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* The reviewed promo fallback is stored as a square source image. Clip its
+   outer preparation canvas while leaving normal Handbook sprites untouched. */
+.character-image-frame > img[data-fallback="true"] {
+  clip-path: circle(44%);
+}
+
+.character-image-pending {
+  padding: 0.2rem;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  white-space: pre-line;
+}
+
+.equipment-summary strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.equipment-summary p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.equipment-meta {
+  font-variant-numeric: tabular-nums;
+}
+
+.equipment-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.equipment-tab {
+  min-height: 2.6rem;
+  padding: 0.5rem;
+  border-color: var(--border);
+  color: var(--muted);
+  background: var(--background);
+  font-size: 0.9rem;
+}
+
+.equipment-tab[aria-selected="true"] {
+  border-color: var(--accent);
+  color: #06251a;
+  background: var(--accent);
+}
+
+.equipment-empty {
+  margin: 0;
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  text-align: center;
+}
+
+.equipment-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.equipment-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.equipment-table th:nth-child(1) { width: 14%; }
+.equipment-table th:nth-child(2) { width: 17%; }
+.equipment-table th:nth-child(3) { width: 24%; }
+.equipment-table th:nth-child(4) { width: 24%; }
+.equipment-table th:nth-child(5) { width: 21%; }
+
+.equipment-table th,
+.equipment-table td {
+  padding: 0.55rem 0.4rem;
+  text-align: center;
+}
+
+.equipment-icon-cell {
+  text-align: center;
+}
+
+.equipment-image {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--background);
+  object-fit: contain;
+}
+
+.equipment-rank-cell {
+  width: auto;
+  min-width: 0;
+}
+
+.equipment-rank-cell .rank-period-changes {
+  gap: 0;
+  font-size: 0.42rem;
+}
+
+.equipment-table .number-cell {
+  text-align: center;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 600px) {
+  .equipment-dialog {
+    width: calc(100% - 0.75rem);
+    max-height: 92vh;
+    padding: 0.85rem;
+  }
+
+  .equipment-summary {
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .equipment-character-image {
+    width: 3.4rem;
+    height: 3.4rem;
+  }
+
+  .equipment-tabs {
+    gap: 0.35rem;
+  }
+
+  .equipment-tab {
+    min-height: 2.4rem;
+    font-size: 0.82rem;
+  }
+
+  .equipment-table th,
+  .equipment-table td {
+    padding: 0.5rem 0.2rem;
+    font-size: 0.78rem;
+  }
+
+  .equipment-table th:nth-child(n),
+  .equipment-table td:nth-child(n) {
+    width: auto;
+    min-width: 0;
+  }
+
+  .equipment-image {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .equipment-table .number-cell {
+    font-size: 0.78rem;
+  }
+}

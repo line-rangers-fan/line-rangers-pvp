@@ -1,0 +1,63 @@
+name: apply-community-hardening
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/apply-community-hardening.txt'
+permissions:
+  contents: write
+concurrency:
+  group: apply-community-hardening
+  cancel-in-progress: false
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - name: Apply guarded source patch
+        run: node scripts/apply-community-hardening.mjs
+      - name: Install locked dependencies
+        run: npm run install:ci
+      - name: Audit production dependency vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+      - name: Run full regression suite
+        run: npm test
+      - name: Remove one-shot patch machinery
+        run: |
+          git rm -f scripts/apply-community-hardening.mjs ops/apply-community-hardening.txt .github/workflows/apply-community-hardening.yml
+          git rm -f scripts/apply-community-ui-patch.mjs ops/apply-community-ui-patch.txt .github/workflows/apply-community-ui-patch.yml 2>/dev/null || true
+      - name: Commit hardened community implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            app/community.tsx \
+            app/community.css \
+            app/api/board/route.ts \
+            tests/community.test.mjs \
+            tests/pvp-ranking.test.mjs \
+            tests/upload-safety.test.mjs \
+            tests/pvp-static.test.mjs \
+            tests/rendered-html.test.mjs
+          if git diff --cached --quiet; then
+            echo 'No hardening changes to commit.' >&2
+            exit 1
+          fi
+          git commit -m 'Harden multi-character community operations'
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push attempt ${attempt} failed; rebasing and retrying."
+            sleep $((attempt * 5))
+            git pull --rebase origin main
+          done
+          echo 'Could not publish hardening commit after three attempts.' >&2
+          exit 1

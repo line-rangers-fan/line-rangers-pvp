@@ -1,0 +1,222 @@
+name: verify-live-review
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["deploy-cloudflare-review"]
+    types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-live-review.yml'
+  schedule:
+    - cron: '23 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      BASE: https://line-rangers-pvp-community-review.n-yu1791.workers.dev
+    steps:
+      - name: Inspect live review routes, D1/R2 health and browser assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          pvp_headers="$(mktemp)"; pvp_body="$(mktemp)"
+          board_headers="$(mktemp)"; board_body="$(mktemp)"
+          api_headers="$(mktemp)"; api_body="$(mktemp)"
+          snapshot_body="$(mktemp)"
+          health_body="$(mktemp)"
+
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 -D "$pvp_headers" -o "$pvp_body" "$BASE/pvp/index.html"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 -D "$board_headers" -o "$board_body" "$BASE/boards"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 -D "$api_headers" -o "$api_body" "$BASE/api/board"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 -o "$snapshot_body" "$BASE/pvp/data/character_usage.json"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 -o "$health_body" "$BASE/api/health"
+
+          if ! grep -q 'レジェンド帯 キャラ集計' "$pvp_body"; then
+            echo 'FAIL: PvP marker missing'
+            echo 'PvP response headers:'
+            sed -n '1,50p' "$pvp_headers"
+            echo 'PvP body prefix:'
+            head -c 1200 "$pvp_body"; echo
+            exit 1
+          fi
+          echo 'OK: PvP HTML marker'
+          grep -q '20260916-ui-1' "$pvp_body" || { echo 'FAIL: latest PvP cache-bust marker missing'; exit 1; }
+          echo 'OK: latest PvP UI bundle referenced'
+
+          if ! grep -q '新キャラ情報掲示板' "$board_body"; then
+            echo 'FAIL: board title missing from SSR HTML'
+            echo 'Board response headers:'
+            sed -n '1,50p' "$board_headers"
+            echo 'Board body prefix:'
+            head -c 1200 "$board_body"; echo
+            exit 1
+          fi
+          if grep -q 'PvPランキング' "$board_body"; then
+            echo 'FAIL: board unexpectedly renders the removed PvP ranking card'
+            exit 1
+          fi
+          echo 'OK: board SSR title and no PvP ranking card'
+
+          jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true and (.characters | length > 0)' "$snapshot_body" >/dev/null || { echo 'FAIL: snapshot is not complete 200/200'; exit 1; }
+          echo 'OK: complete 200/200 snapshot'
+          jq -e '.ok == true and .checks.d1 == true and .checks.r2 == true' "$health_body" >/dev/null || { echo 'FAIL: runtime D1/R2 health check failed'; exit 1; }
+          echo 'OK: D1 and R2 runtime bindings'
+          jq -e '.boards | type == "array"' "$api_body" >/dev/null || { echo 'FAIL: board API JSON shape invalid'; exit 1; }
+          echo 'OK: board API JSON shape'
+          grep -qi '^x-content-type-options: nosniff' "$api_headers" || { echo 'FAIL: API security header missing'; sed -n '1,30p' "$api_headers"; exit 1; }
+          grep -qi '^strict-transport-security: max-age=31536000' "$api_headers" || { echo 'FAIL: HSTS header missing'; sed -n '1,30p' "$api_headers"; exit 1; }
+          echo 'OK: API security headers'
+          if grep -qi '^set-cookie: __Host-lr_guest=' "$api_headers"; then echo 'OK: anonymous guest cookie'; else echo 'FAIL: anonymous guest cookie was not set'; exit 1; fi
+
+          echo 'Board asset refs:'
+          refs="$({ grep -oE '(href|src)="[^"]+\.(css|js)(\?[^"]*)?"' "$board_body" | sed -E 's/^(href|src)="([^"]+)"/\2/' | grep '^/' | sort -u; } || true)"
+          printf '%s\n' "$refs"
+          [ -n "$refs" ] || { echo 'FAIL: no same-origin CSS/JS refs found in board HTML'; exit 1; }
+          while IFS= read -r asset; do
+            [ -z "$asset" ] && continue
+            h="$(mktemp)"; b="$(mktemp)"
+            curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 -D "$h" -o "$b" "$BASE$asset" || { echo "FAIL: asset request failed: $asset"; exit 1; }
+            [ -s "$b" ] || { echo "FAIL: empty asset: $asset"; exit 1; }
+            ctype="$(grep -i '^content-type:' "$h" | tail -1 | tr -d '\r' || true)"
+            echo "OK: $asset :: ${ctype:-content-type-missing}"
+            if grep -qi '^content-type:.*text/html' "$h"; then
+              echo "FAIL: browser asset served as HTML: $asset"
+              exit 1
+            fi
+          done <<< "$refs"
+          echo 'OK: live review routes, storage and browser assets verified'
+
+      - name: Exercise anonymous post, idempotency, reactions and cleanup
+        if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar="$(mktemp)"
+          initial="$(mktemp)"
+          response="$(mktemp)"
+          post_id=''
+
+          cleanup() {
+            if [ -n "${post_id:-}" ]; then
+              payload="$(jq -cn --arg id "$post_id" '{action:"moderate",operation:"delete",target:$id}')"
+              curl --location --silent --show-error --connect-timeout 10 --max-time 30 \
+                -b "$jar" -c "$jar" -H "Origin: $BASE" -H 'Content-Type: application/json' \
+                --data "$payload" "$BASE/api/board" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup EXIT
+
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+            -b "$jar" -c "$jar" -o "$initial" "$BASE/api/board"
+          board="$(jq -er '.board // .boards[0].id' "$initial")"
+          request_id="$(cat /proc/sys/kernel/random/uuid)"
+          marker="CI live smoke ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          payload="$(jq -cn --arg board "$board" --arg body "$marker" --arg request "$request_id" '{action:"post",board:$board,body:$body,request:$request}')"
+
+          curl --location --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 \
+            -b "$jar" -c "$jar" -H "Origin: $BASE" -H 'Content-Type: application/json' \
+            --data "$payload" -o "$response" "$BASE/api/board"
+          post_id="$(jq -er '.id' "$response")"
+
+          retry="$(mktemp)"
+          curl --location --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 \
+            -b "$jar" -c "$jar" -H "Origin: $BASE" -H 'Content-Type: application/json' \
+            --data "$payload" -o "$retry" "$BASE/api/board"
+          retry_id="$(jq -er '.id' "$retry")"
+          [ "$retry_id" = "$post_id" ] || { echo 'FAIL: idempotent retry created a different post'; exit 1; }
+          echo 'OK: live post creation and idempotent retry'
+
+          like_payload="$(jq -cn --arg id "$post_id" '{action:"like",post:$id,liked:true}')"
+          helpful_payload="$(jq -cn --arg id "$post_id" '{action:"helpful",post:$id,selected:true}')"
+          curl --location --fail-with-body --silent --show-error -b "$jar" -c "$jar" -H "Origin: $BASE" -H 'Content-Type: application/json' --data "$like_payload" "$BASE/api/board" >/dev/null
+          curl --location --fail-with-body --silent --show-error -b "$jar" -c "$jar" -H "Origin: $BASE" -H 'Content-Type: application/json' --data "$helpful_payload" "$BASE/api/board" >/dev/null
+
+          listed="$(mktemp)"
+          curl --location --fail --silent --show-error -b "$jar" -c "$jar" -G --data-urlencode "board=$board" --data-urlencode 'sort=newest' -o "$listed" "$BASE/api/board"
+          jq -e --arg id "$post_id" 'any(.posts[]; .id==$id and .liked==1 and .helped==true and .likes>=1 and .helpful>=1)' "$listed" >/dev/null || { echo 'FAIL: live reactions were not reflected'; exit 1; }
+          echo 'OK: live like/helpful state reflected'
+
+          delete_payload="$(jq -cn --arg id "$post_id" '{action:"moderate",operation:"delete",target:$id}')"
+          curl --location --fail-with-body --silent --show-error -b "$jar" -c "$jar" -H "Origin: $BASE" -H 'Content-Type: application/json' --data "$delete_payload" "$BASE/api/board" >/dev/null
+
+          after="$(mktemp)"
+          curl --location --fail --silent --show-error -b "$jar" -c "$jar" -G --data-urlencode "board=$board" --data-urlencode 'sort=newest' -o "$after" "$BASE/api/board"
+          jq -e --arg id "$post_id" 'all(.posts[]; .id!=$id)' "$after" >/dev/null || { echo 'FAIL: smoke post remained publicly visible after cleanup'; exit 1; }
+          post_id=''
+          trap - EXIT
+          echo 'OK: live smoke post was removed from public view'
+
+      - name: Exercise one mixed media post through the public Worker
+        if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar="$(mktemp)"
+          image_one="$(mktemp --suffix=.png)"
+          image_two="$(mktemp --suffix=.png)"
+          video="$(mktemp --suffix=.mp4)"
+          post_id=''
+          marker="CI mixed media ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          group="$(cat /proc/sys/kernel/random/uuid)"
+          cleanup() {
+            if [ -n "${post_id:-}" ]; then
+              payload="$(jq -cn --arg id "$post_id" '{action:"moderate",operation:"delete",target:$id}')"
+              curl --location --silent --show-error --connect-timeout 10 --max-time 30 \
+                -b "$jar" -c "$jar" -H "Origin: $BASE" -H 'Content-Type: application/json' \
+                --data "$payload" "$BASE/api/board" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup EXIT
+          python3 - "$image_one" "$image_two" "$video" <<'PY'
+          import sys
+          from pathlib import Path
+          Path(sys.argv[1]).write_bytes(b"\x89PNG\r\n\x1a\n" + b"\0" * 40)
+          Path(sys.argv[2]).write_bytes(b"\x89PNG\r\n\x1a\n" + b"\0" * 40)
+          Path(sys.argv[3]).write_bytes(b"\0\0\0\x18ftypisom" + b"\0" * 40)
+          PY
+          initial="$(mktemp)"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+            -b "$jar" -c "$jar" -o "$initial" "$BASE/api/board"
+          board="$(jq -er '.board // .boards[0].id' "$initial")"
+          upload() {
+            local file="$1" type="$2" request_id
+            request_id="$(cat /proc/sys/kernel/random/uuid)"
+            curl --request PUT --location --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 \
+              -b "$jar" -c "$jar" -H "Origin: $BASE" \
+              -F "board=$board" -F "body=$marker" -F "request=$request_id" -F "group=$group" \
+              -F "file=@$file;type=$type" "$BASE/api/upload"
+          }
+          first="$(upload "$image_one" image/png)"
+          post_id="$(jq -er '.id' <<< "$first")"
+          upload "$image_two" image/png >/dev/null
+          upload "$video" video/mp4 >/dev/null
+          listed="$(mktemp)"
+          curl --location --fail --silent --show-error -b "$jar" -c "$jar" -G \
+            --data-urlencode "board=$board" --data-urlencode 'sort=newest' -o "$listed" "$BASE/api/board"
+          jq -e --arg marker "$marker" '([.posts[] | select(.body==$marker)] | length) == 1 and ([.posts[] | select(.body==$marker)][0].mediaItems | length) == 3' "$listed" >/dev/null || {
+            echo 'FAIL: mixed media did not collapse to one post card with three media items'
+            jq . "$listed"
+            exit 1
+          }
+          echo 'OK: public mixed media post is one logical card with three media items'
+          delete_payload="$(jq -cn --arg id "$post_id" '{action:"moderate",operation:"delete",target:$id}')"
+          curl --location --fail-with-body --silent --show-error -b "$jar" -c "$jar" \
+            -H "Origin: $BASE" -H 'Content-Type: application/json' --data "$delete_payload" "$BASE/api/board" >/dev/null
+          after="$(mktemp)"
+          curl --location --fail --silent --show-error -b "$jar" -c "$jar" -G \
+            --data-urlencode "board=$board" --data-urlencode 'sort=newest' -o "$after" "$BASE/api/board"
+          jq -e --arg marker "$marker" 'all(.posts[]; .body != $marker)' "$after" >/dev/null || {
+            echo 'FAIL: deleted mixed media post remained publicly visible'
+            exit 1
+          }
+          post_id=''
+          trap - EXIT
+          echo 'OK: mixed media post and all three attachments were removed from public view'

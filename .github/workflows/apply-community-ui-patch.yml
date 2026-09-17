@@ -1,0 +1,52 @@
+name: apply-community-ui-patch
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/apply-community-ui-patch.txt'
+permissions:
+  contents: write
+concurrency:
+  group: apply-community-ui-patch
+  cancel-in-progress: false
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - name: Apply exact guarded source edits
+        run: node scripts/apply-community-ui-patch.mjs
+      - name: Reject malformed diff
+        run: git diff --check
+      - name: Install locked dependencies
+        run: npm run install:ci
+      - name: Audit production dependency vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+      - name: Build and run regression tests before commit
+        run: npm test
+      - name: Commit only the verified board language, media and regression changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/community.tsx app/api/translate/route.ts lib/rules.ts lib/labels.ts lib/activity-labels.ts tests/community.test.mjs tests/original-pvp-copy.test.mjs
+          if git diff --cached --quiet; then
+            echo 'Guarded community patch was already applied.'
+            exit 0
+          fi
+          git commit -m 'Limit board to Japanese and English and expand media posts'
+          git pull --rebase origin main
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push attempt ${attempt} failed; retrying."
+            sleep $((attempt * 5))
+            git pull --rebase origin main
+          done
+          echo 'Verified community patch could not be pushed after three attempts.' >&2
+          exit 1

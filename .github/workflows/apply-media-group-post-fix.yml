@@ -1,0 +1,61 @@
+name: apply-media-group-post-fix
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/apply-media-group-post-fix.txt'
+permissions:
+  contents: write
+concurrency:
+  group: apply-media-group-post-fix
+  cancel-in-progress: false
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - name: Apply final grouped-media consistency patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('scripts/apply-media-group-post-fix-v5.mjs')
+          source=path.read_text()
+          old="return source.slice(0,start)+replacement+source.slice(end);"
+          new="return source.slice(0,start)+replacement+source.slice(end+endMarker.length);"
+          if source.count(old)!=1:
+              raise SystemExit('v5 boundary guard did not match exactly once')
+          path.write_text(source.replace(old,new))
+          PY
+          node scripts/apply-media-group-post-fix-v5.mjs
+      - name: Reject malformed diff
+        run: git diff --check
+      - name: Install locked dependencies
+        run: npm run install:ci
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Build and run all regression tests
+        run: npm test
+      - name: Commit only verified grouped-media changes
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/community.tsx app/api/board/route.ts app/api/upload/route.ts app/api/upload/session/route.ts db/schema.ts drizzle/0011_grouped_media_scope_indexes.sql tests/community.test.mjs
+          git restore scripts/apply-media-group-post-fix-v5.mjs
+          if git diff --cached --quiet; then
+            echo 'Final grouped-media consistency patch already applied.'
+            exit 0
+          fi
+          git commit -m 'Harden grouped media as one post'
+          git pull --rebase origin main
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            sleep $((attempt * 5))
+            git pull --rebase origin main
+          done
+          exit 1

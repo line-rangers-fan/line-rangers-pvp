@@ -1,0 +1,107 @@
+/* Mirrored from the original Owner Preview entry styling. */
+
+.community-board-entry-slot[hidden] { display: none !important; }
+.community-board-entry-slot { margin: 1.15rem 0 1rem; }
+.community-board-entry-card {
+  position: relative; overflow: hidden; padding: clamp(1rem, 4vw, 1.35rem);
+  border: 1px solid rgba(67, 211, 142, 0.42); border-left: 4px solid #32d583;
+  border-radius: 1rem;
+  background: radial-gradient(circle at top right, rgba(50,213,131,.12), transparent 16rem), linear-gradient(145deg, rgba(13,42,38,.92), rgba(10,28,43,.96));
+  box-shadow: 0 14px 34px rgba(0,0,0,.2);
+}
+.community-board-entry-heading { display:flex; align-items:flex-start; gap:.75rem; }
+.community-board-entry-marker { flex:0 0 auto; margin-top:.28rem; color:#32d583; font-size:.72rem; filter:drop-shadow(0 0 7px rgba(50,213,131,.45)); }
+.community-board-entry-heading-text { min-width:0; flex:1; }
+.community-board-entry-title-row { display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; }
+.community-board-entry-title { margin:0; color:#f4fbf8; font-size:clamp(1.08rem,4.6vw,1.28rem); line-height:1.35; }
+.community-board-entry-new { display:inline-flex; align-items:center; min-height:1.45rem; padding:.15rem .48rem; border:1px solid rgba(99,235,167,.45); border-radius:999px; background:rgba(50,213,131,.13); color:#77f0b3; font-size:.68rem; font-weight:800; }
+.community-board-entry-description { margin:.42rem 0 0; color:#b9cfca; font-size:.88rem; line-height:1.6; }
+
+.community-board-entry-character-list { display:grid; grid-template-columns:1fr; gap:.7rem; margin-top:1rem; }
+.community-board-entry-character {
+  display:flex; align-items:center; gap:.9rem; margin:0; padding:.72rem;
+  border:1px solid rgba(99,235,167,.24); border-radius:.85rem; background:rgba(5,18,30,.5);
+  color:inherit; text-decoration:none; transition:border-color 150ms ease,background 150ms ease,transform 150ms ease;
+}
+@media (hover:hover) { .community-board-entry-character[href]:hover { border-color:rgba(99,235,167,.55); background:rgba(9,34,42,.72); transform:translateY(-1px); } }
+.community-board-entry-character[href]:focus-visible { outline:3px solid rgba(99,235,167,.3); outline-offset:2px; }
+.community-board-entry-character-image {
+  display:block; flex:0 0 76px; width:76px; height:76px; object-fit:cover; object-position:center;
+  border:1px solid rgba(99,235,167,.35); border-radius:.75rem; background:#07111f;
+  box-shadow:0 8px 20px rgba(0,0,0,.22);
+}
+.community-board-entry-character-copy { min-width:0; display:grid; gap:.28rem; }
+.community-board-entry-character-badge { color:#63eba7; font-size:.68rem; font-weight:800; letter-spacing:.09em; }
+.community-board-entry-character-name { color:#f4fbf8; font-size:1rem; line-height:1.4; overflow-wrap:anywhere; }
+
+.community-board-entry-featured { display:block; margin-top:1rem; padding:.85rem .9rem; border:1px solid rgba(133,169,185,.2); border-radius:.8rem; background:rgba(5,18,30,.48); color:inherit; text-decoration:none; transition:border-color 150ms ease,background 150ms ease; }
+@media (hover:hover) { a.community-board-entry-featured:hover { border-color:rgba(99,235,167,.45); background:rgba(8,31,42,.72); } }
+a.community-board-entry-featured:focus-visible { outline:3px solid rgba(99,235,167,.3); outline-offset:2px; }
+.community-board-entry-featured-label { display:block; color:#f4f7fb; font-size:.88rem; line-height:1.4; }
+.community-board-entry-featured-text { margin:.38rem 0 0; color:#d0dde8; font-size:.9rem; line-height:1.6; overflow-wrap:anywhere; }
+.community-board-entry-featured-reactions { display:flex; align-items:center; gap:.65rem; flex-wrap:wrap; margin-top:.55rem; color:#9eb2c5; font-size:.76rem; }
+.community-board-entry-featured-more { margin-left:auto; color:#63eba7; font-weight:800; }
+.community-board-entry-button {
+  display:inline-flex; align-items:center; justify-content:center; min-height:2.75rem; margin-top:1rem; padding:.6rem 1rem;
+  border:1px solid rgba(99,235,167,.72); border-radius:.72rem; color:#04160d; background:linear-gradient(135deg,#52df99,#32d583);
+  box-shadow:0 8px 24px rgba(50,213,131,.16); font-size:.9rem; font-weight:800; line-height:1.2; text-decoration:none;
+  transition:transform 150ms ease,box-shadow 150ms ease,filter 150ms ease;
+}
+@media (hover:hover) { .community-board-entry-button:hover { transform:translateY(-1px); box-shadow:0 10px 28px rgba(50,213,131,.24); filter:brightness(1.04); } }
+.community-board-entry-button:active { transform:scale(.98); }
+.community-board-entry-button:focus-visible { outline:3px solid rgba(99,235,167,.35); outline-offset:3px; }
+@media (max-width:380px) {
+  .community-board-entry-character { gap:.7rem; padding:.65rem; }
+  .community-board-entry-character-image { flex-basis:68px; width:68px; height:68px; }
+  .community-board-entry-featured-more { width:100%; margin-left:0; }
+}
+@media (min-width: 680px) {
+  .community-board-entry-card { padding:1.35rem 1.45rem; }
+  .community-board-entry-button { min-width:10.5rem; }
+  .community-board-entry-character-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .community-board-entry-character-image { flex-basis:78px; width:78px; height:78px; }
+}
+
+/* The copied Owner Preview uses the inline community entry, not the older floating staging shortcut. */
+.community-bridge-link { display:none !important; }
+
+/* Review UX adjustments requested after the iPad inspection.
+   Keep the original PvP stylesheet byte-exact and layer staging-only changes here. */
+.summary-updated-value {
+  font-size: clamp(1.45rem, 4vw, 2.1rem) !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0 !important;
+}
+
+.ranking-section .character-image {
+  width: 3rem !important;
+  height: 3rem !important;
+}
+
+.ranking-section .rate-track {
+  display: none !important;
+}
+
+.ranking-section .rate-cell {
+  min-width: 0 !important;
+}
+
+.ranking-section .rate-cell > div {
+  justify-content: flex-end !important;
+  gap: 0 !important;
+}
+
+.ranking-section .rate-value {
+  min-width: 0 !important;
+}
+
+@media (max-width: 700px) {
+  .summary-updated-value {
+    font-size: clamp(1.35rem, 5.4vw, 1.85rem) !important;
+  }
+
+  .ranking-section .character-image {
+    width: 2.65rem !important;
+    height: 2.65rem !important;
+  }
+}
