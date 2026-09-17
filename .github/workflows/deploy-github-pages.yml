@@ -30,10 +30,12 @@ jobs:
           test -s docs/assets/community-entry.js
           test -s docs/assets/community-entry.css
           grep -q 'id="community-board-entry-slot"' docs/index.html
-          grep -q 'community-entry.js?v=20260917-i18n-1' docs/index.html
+          grep -q 'community-entry.js?v=20260918-featured-1' docs/index.html
+          grep -q 'community-entry.css?v=20260918-featured-1' docs/index.html
           grep -q 'defaultState: true' docs/assets/community-entry.js
           grep -q 'state: true' docs/assets/community-entry.js
           grep -q 'allowedPath: "/boards"' docs/assets/community-entry.js
+          grep -q 'api/activity?public=1' docs/assets/community-entry.js
           grep -q 'レジェンド帯 キャラ集計' docs/index.html
           jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
           if rg -n 'BOARD_OWNER_ACCESS_TOKEN|BOARD_OWNER_SUBJECT|BOARD_ANON_COOKIE_SECRET|CLOUDFLARE_.*TOKEN' docs; then
