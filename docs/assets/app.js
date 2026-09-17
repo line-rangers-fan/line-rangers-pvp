@@ -2,7 +2,6 @@
 "use strict";
 
 const DATA_PATH = "./data/character_usage.json";
-const HISTORY_PATH = "./data/character_usage_history.json";
 const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
 const REQUEST_TIMEOUT_MS = 12_000;
 const CHARACTER_IMAGE_TIMEOUT_MS = 6_000;
@@ -22,7 +21,6 @@ const DELAYED_AFTER_MS = 2 * 60 * 60 * 1000;
 const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
 // The collector retains recent hourly references plus one verified JST close
 // per day. Keep the browser-side validation aligned with that bounded format.
-const HISTORY_MAX_SNAPSHOTS = 96;
 const RANK_CHANGE_PERIODS = [
   ["hour", "rankHour"],
   ["day", "rankDay"],
@@ -2016,93 +2014,6 @@ async function fetchVerifiedData() {
   }
 
   throw lastError || new Error(t("loadError"));
-}
-
-function validateHistory(history) {
-  if (!history || !Array.isArray(history.snapshots)) {
-    throw new Error("Invalid history data.");
-  }
-  if (history.snapshots.length > HISTORY_MAX_SNAPSHOTS) {
-    throw new Error("History contains too many snapshots.");
-  }
-
-  let previousTimestamp = 0;
-  history.snapshots.forEach((snapshot) => {
-    const snapshotTimestamp = new Date(snapshot?.updated_at || "").getTime();
-    if (
-      !snapshot ||
-      !Number.isFinite(snapshotTimestamp) ||
-      !Array.isArray(snapshot.characters)
-    ) {
-      throw new Error("Invalid history snapshot.");
-    }
-    if (snapshotTimestamp <= previousTimestamp) {
-      throw new Error("History snapshots are not in chronological order.");
-    }
-    previousTimestamp = snapshotTimestamp;
-    if (
-      snapshot.calendar_date !== undefined &&
-      (typeof snapshot.calendar_date !== "string" ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(snapshot.calendar_date))
-    ) {
-      throw new Error("Invalid history calendar date.");
-    }
-    if (snapshot.sampled_players !== PUBLIC_TARGET_PLAYER_COUNT) {
-      throw new Error("Invalid history sample size.");
-    }
-    const unitCodes = new Set();
-    snapshot.characters.forEach((character) => {
-      const unitCode = String(character?.unit_code || "");
-      const rate = Number(character?.adoption_rate);
-      const rank = Number(character?.rank);
-      if (
-        !unitCode ||
-        unitCodes.has(unitCode) ||
-        !Number.isFinite(rate) ||
-        rate < 0 ||
-        rate > 100 ||
-        !Number.isInteger(rank) ||
-        rank < 1 ||
-        !isSafeInteger(character?.occurrence_count, 1, snapshot.sampled_players * 10) ||
-        !isSafeInteger(character?.player_count, 1, snapshot.sampled_players) ||
-        character.player_count > character.occurrence_count
-      ) {
-        throw new Error("Invalid character history.");
-      }
-      unitCodes.add(unitCode);
-
-      const equipmentRankings = character.equipment_rankings;
-      if (equipmentRankings !== undefined) {
-        if (!equipmentRankings || typeof equipmentRankings !== "object") {
-          throw new Error("Invalid equipment history.");
-        }
-        EQUIPMENT_TYPES.forEach(([equipmentType]) => {
-          const category = equipmentRankings[equipmentType];
-          const items = category?.items;
-          if (!category || !Array.isArray(items)) {
-            throw new Error("Invalid equipment history.");
-          }
-          const itemCodes = new Set();
-          items.forEach((item) => {
-            const itemCode = String(item?.item_code || "");
-            const rank = Number(item?.rank);
-            if (
-              !itemCode ||
-              itemCodes.has(itemCode) ||
-              !Number.isInteger(rank) ||
-              rank < 1 ||
-              !isSafeInteger(item?.occurrence_count, 1, character.occurrence_count)
-            ) {
-              throw new Error("Invalid equipment history.");
-            }
-            itemCodes.add(itemCode);
-          });
-        });
-      }
-    });
-  });
-
-  return history;
 }
 
 function showInitialLoadError(error) {
