@@ -11,7 +11,11 @@
 }
 .community-board-entry-heading { display:flex; align-items:flex-start; gap:.75rem; }
 .community-board-entry-marker { flex:0 0 auto; margin-top:.28rem; color:#32d583; font-size:.72rem; filter:drop-shadow(0 0 7px rgba(50,213,131,.45)); }
-.community-board-entry-heading-text { min-width:0; }
+.community-board-entry-heading-text { min-width:0; flex:1; }
+.community-board-entry-title-row { display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; }
+.community-board-entry-stats { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; }
+.community-board-entry-stat { display:inline-flex; align-items:center; padding:.18rem .42rem; border:1px solid rgba(133,169,185,.28); border-radius:999px; color:#b6c7d8; background:rgba(5,18,30,.48); font-size:.68rem; font-weight:800; line-height:1.25; white-space:nowrap; }
+.community-board-entry-stat-unread { border-color:rgba(255,211,92,.62); color:#ffe49a; background:rgba(121,82,5,.32); }
 .community-board-entry-title { margin:0; color:#f4fbf8; font-size:clamp(1.08rem,4.6vw,1.28rem); line-height:1.35; }
 .community-board-entry-description { margin:.42rem 0 0; color:#b9cfca; font-size:.88rem; line-height:1.6; }
 

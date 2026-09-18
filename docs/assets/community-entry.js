@@ -19,13 +19,13 @@ const COMMUNITY_FALLBACK_TOPICS = Object.freeze([
 ]);
 
 const COMMUNITY_ENTRY_I18N = Object.freeze({
-  ja: Object.freeze({title:"新キャラ情報掲示板",description:"投票・コメント・写真・動画で、今月の新キャラについて話そう。",newCharacter:"新キャラクター",imageAlt:"新キャラクターの画像",featuredLabel:"注目コメント",featuredEmpty:"まだ注目コメントはありません。掲示板で最初の感想を投稿できます。",helpful:"役に立った",viewBoard:"掲示板で見る →",openBoard:"掲示板を開く →",openBoardAria:"新キャラ情報掲示板を開く",featuredAria:"注目コメントの掲示板を開く"}),
-  en: Object.freeze({title:"New Character Community Board",description:"Share thoughts about this month's new character through polls, comments, photos, and videos.",newCharacter:"NEW CHARACTER",imageAlt:"New character image",featuredLabel:"Featured comment",featuredEmpty:"No featured comments yet. Share your first thoughts on the board.",helpful:"Helpful",viewBoard:"View on board →",openBoard:"Open board →",openBoardAria:"Open the new character community board",featuredAria:"Open the featured comment board"}),
-  zh: Object.freeze({title:"新角色資訊討論區",description:"透過投票、留言、照片與影片，一起討論本月的新角色。",newCharacter:"新角色",imageAlt:"新角色圖片",featuredLabel:"精選留言",featuredEmpty:"目前還沒有精選留言。歡迎到討論區分享第一則心得。",helpful:"實用",viewBoard:"在討論區查看 →",openBoard:"開啟討論區 →",openBoardAria:"開啟新角色資訊討論區",featuredAria:"開啟精選留言討論區"}),
-  th: Object.freeze({title:"กระดานข้อมูลตัวละครใหม่",description:"มาพูดคุยเกี่ยวกับตัวละครใหม่ประจำเดือนผ่านการโหวต ความคิดเห็น รูปภาพ และวิดีโอ",newCharacter:"ตัวละครใหม่",imageAlt:"รูปตัวละครใหม่",featuredLabel:"ความคิดเห็นเด่น",featuredEmpty:"ยังไม่มีความคิดเห็นเด่น มาแบ่งปันความรู้สึกแรกบนกระดานกันเถอะ",helpful:"มีประโยชน์",viewBoard:"ดูบนกระดาน →",openBoard:"เปิดกระดาน →",openBoardAria:"เปิดกระดานข้อมูลตัวละครใหม่",featuredAria:"เปิดกระดานของความคิดเห็นเด่น"}),
-  id: Object.freeze({title:"Papan Karakter Baru",description:"Bagikan pendapat tentang karakter baru bulan ini melalui jajak pendapat, komentar, foto, dan video.",newCharacter:"KARAKTER BARU",imageAlt:"Gambar karakter baru",featuredLabel:"Komentar unggulan",featuredEmpty:"Belum ada komentar unggulan. Bagikan kesan pertama Anda di papan.",helpful:"Bermanfaat",viewBoard:"Lihat di papan →",openBoard:"Buka papan →",openBoardAria:"Buka papan karakter baru",featuredAria:"Buka papan komentar unggulan"}),
-  vi: Object.freeze({title:"Bảng thông tin nhân vật mới",description:"Hãy cùng thảo luận về nhân vật mới trong tháng qua bình chọn, bình luận, ảnh và video.",newCharacter:"NHÂN VẬT MỚI",imageAlt:"Hình ảnh nhân vật mới",featuredLabel:"Bình luận nổi bật",featuredEmpty:"Chưa có bình luận nổi bật. Hãy chia sẻ cảm nhận đầu tiên trên bảng.",helpful:"Hữu ích",viewBoard:"Xem trên bảng →",openBoard:"Mở bảng →",openBoardAria:"Mở bảng thông tin nhân vật mới",featuredAria:"Mở bảng của bình luận nổi bật"}),
-  ko: Object.freeze({title:"신규 캐릭터 정보 게시판",description:"투표, 댓글, 사진과 동영상으로 이번 달 신규 캐릭터에 대해 이야기해 보세요.",newCharacter:"신규 캐릭터",imageAlt:"신규 캐릭터 이미지",featuredLabel:"주목 댓글",featuredEmpty:"아직 주목 댓글이 없습니다. 게시판에 첫 감상을 남겨 보세요.",helpful:"도움이 됐어요",viewBoard:"게시판에서 보기 →",openBoard:"게시판 열기 →",openBoardAria:"신규 캐릭터 정보 게시판 열기",featuredAria:"주목 댓글 게시판 열기"}),
+  ja: Object.freeze({title:"新キャラ情報掲示板",description:"投票・コメント・写真・動画で、今月の新キャラについて話そう。",newCharacter:"新キャラクター",imageAlt:"新キャラクターの画像",featuredLabel:"注目コメント",featuredEmpty:"まだ注目コメントはありません。掲示板で最初の感想を投稿できます。",helpful:"役に立った",viewBoard:"掲示板で見る →",openBoard:"掲示板を開く →",openBoardAria:"新キャラ情報掲示板を開く",featuredAria:"注目コメントの掲示板を開く",newCount:"NEW {count}件",videos:"動画 {count}本",comments:"コメント {count}件"}),
+  en: Object.freeze({title:"New Character Community Board",description:"Share thoughts about this month's new character through polls, comments, photos, and videos.",newCharacter:"NEW CHARACTER",imageAlt:"New character image",featuredLabel:"Featured comment",featuredEmpty:"No featured comments yet. Share your first thoughts on the board.",helpful:"Helpful",viewBoard:"View on board →",openBoard:"Open board →",openBoardAria:"Open the new character community board",featuredAria:"Open the featured comment board",newCount:"NEW {count}",videos:"Videos {count}",comments:"Comments {count}"}),
+  zh: Object.freeze({title:"新角色資訊討論區",description:"透過投票、留言、照片與影片，一起討論本月的新角色。",newCharacter:"新角色",imageAlt:"新角色圖片",featuredLabel:"精選留言",featuredEmpty:"目前還沒有精選留言。歡迎到討論區分享第一則心得。",helpful:"實用",viewBoard:"在討論區查看 →",openBoard:"開啟討論區 →",openBoardAria:"開啟新角色資訊討論區",featuredAria:"開啟精選留言討論區",newCount:"新 {count}則",videos:"影片 {count}部",comments:"留言 {count}則"}),
+  th: Object.freeze({title:"กระดานข้อมูลตัวละครใหม่",description:"มาพูดคุยเกี่ยวกับตัวละครใหม่ประจำเดือนผ่านการโหวต ความคิดเห็น รูปภาพ และวิดีโอ",newCharacter:"ตัวละครใหม่",imageAlt:"รูปตัวละครใหม่",featuredLabel:"ความคิดเห็นเด่น",featuredEmpty:"ยังไม่มีความคิดเห็นเด่น มาแบ่งปันความรู้สึกแรกบนกระดานกันเถอะ",helpful:"มีประโยชน์",viewBoard:"ดูบนกระดาน →",openBoard:"เปิดกระดาน →",openBoardAria:"เปิดกระดานข้อมูลตัวละครใหม่",featuredAria:"เปิดกระดานของความคิดเห็นเด่น",newCount:"ใหม่ {count}",videos:"วิดีโอ {count}",comments:"ความคิดเห็น {count}"}),
+  id: Object.freeze({title:"Papan Karakter Baru",description:"Bagikan pendapat tentang karakter baru bulan ini melalui jajak pendapat, komentar, foto, dan video.",newCharacter:"KARAKTER BARU",imageAlt:"Gambar karakter baru",featuredLabel:"Komentar unggulan",featuredEmpty:"Belum ada komentar unggulan. Bagikan kesan pertama Anda di papan.",helpful:"Bermanfaat",viewBoard:"Lihat di papan →",openBoard:"Buka papan →",openBoardAria:"Buka papan karakter baru",featuredAria:"Buka papan komentar unggulan",newCount:"BARU {count}",videos:"Video {count}",comments:"Komentar {count}"}),
+  vi: Object.freeze({title:"Bảng thông tin nhân vật mới",description:"Hãy cùng thảo luận về nhân vật mới trong tháng qua bình chọn, bình luận, ảnh và video.",newCharacter:"NHÂN VẬT MỚI",imageAlt:"Hình ảnh nhân vật mới",featuredLabel:"Bình luận nổi bật",featuredEmpty:"Chưa có bình luận nổi bật. Hãy chia sẻ cảm nhận đầu tiên trên bảng.",helpful:"Hữu ích",viewBoard:"Xem trên bảng →",openBoard:"Mở bảng →",openBoardAria:"Mở bảng thông tin nhân vật mới",featuredAria:"Mở bảng của bình luận nổi bật",newCount:"MỚI {count}",videos:"Video {count}",comments:"Bình luận {count}"}),
+  ko: Object.freeze({title:"신규 캐릭터 정보 게시판",description:"투표, 댓글, 사진과 동영상으로 이번 달 신규 캐릭터에 대해 이야기해 보세요.",newCharacter:"신규 캐릭터",imageAlt:"신규 캐릭터 이미지",featuredLabel:"주목 댓글",featuredEmpty:"아직 주목 댓글이 없습니다. 게시판에 첫 감상을 남겨 보세요.",helpful:"도움이 됐어요",viewBoard:"게시판에서 보기 →",openBoard:"게시판 열기 →",openBoardAria:"신규 캐릭터 정보 게시판 열기",featuredAria:"주목 댓글 게시판 열기",newCount:"신규 {count}",videos:"동영상 {count}",comments:"댓글 {count}"}),
 });
 const COMMUNITY_ENTRY_LANGUAGES = Object.freeze(Object.keys(COMMUNITY_ENTRY_I18N));
 let communityEntryLanguage = "ja";
@@ -118,6 +118,15 @@ function normalizeFeatured(value) {
   return {body, board:value.board, likes:Math.max(0, Number(value.likes) || 0), helpful:Math.max(0, Number(value.helpful) || 0)};
 }
 
+function normalizeMetric(value) {
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= 0 ? count : 0;
+}
+
+function metricText(key, value) {
+  return entryText(key).replace("{count}", String(normalizeMetric(value)));
+}
+
 function normalizeUnread(value) {
   const count = Number(value);
   return Number.isSafeInteger(count) && count > 0 ? count : 0;
@@ -144,7 +153,24 @@ function buildCharacter(topic, baseUrl) {
   return element;
 }
 
-function buildFeatured(featured, baseUrl, unread) {
+function buildCommunityStats(state) {
+  const stats = document.createElement("div");
+  stats.className = "community-board-entry-stats";
+  const metricItems = [
+    ["newCount", state.unread, "community-board-entry-stat community-board-entry-stat-unread"],
+    ["videos", state.videos, "community-board-entry-stat"],
+    ["comments", state.comments, "community-board-entry-stat"],
+  ];
+  for (const [key, value, className] of metricItems) {
+    const count = normalizeMetric(value);
+    const item = textElement("span", className, metricText(key, count), key);
+    item.dataset.communityMetricCount = String(count);
+    stats.appendChild(item);
+  }
+  return stats;
+}
+
+function buildFeatured(featured, baseUrl) {
   const href = featuredBoardUrl(featured, baseUrl) || baseUrl.href;
   const wrapper = document.createElement("a");
   wrapper.className = "community-board-entry-featured";
@@ -154,7 +180,6 @@ function buildFeatured(featured, baseUrl, unread) {
   const labelRow = document.createElement("div");
   labelRow.className = "community-board-entry-featured-heading";
   labelRow.append(textElement("strong", "community-board-entry-featured-label", entryText("featuredLabel"), "featuredLabel"));
-  if (unread > 0) labelRow.append(textElement("span", "community-board-entry-unread", `NEW ${unread}`));
   wrapper.append(labelRow);
   if (!featured) {
     wrapper.append(textElement("p", "community-board-entry-featured-text", entryText("featuredEmpty"), "featuredEmpty"));
@@ -181,9 +206,12 @@ function buildCommunityBoardEntry(baseUrl, state) {
   marker.setAttribute("aria-hidden", "true");
   const headingText = document.createElement("div");
   headingText.className = "community-board-entry-heading-text";
+  const titleRow = document.createElement("div");
+  titleRow.className = "community-board-entry-title-row";
   const title = textElement("h2", "community-board-entry-title", entryText("title"), "title");
   title.id = "community-board-entry-title";
-  headingText.append(title, textElement("p", "community-board-entry-description", entryText("description"), "description"));
+  titleRow.append(title, buildCommunityStats(state));
+  headingText.append(titleRow, textElement("p", "community-board-entry-description", entryText("description"), "description"));
   headingRow.append(marker, headingText);
 
   const topics = state.topics.length ? state.topics : COMMUNITY_FALLBACK_TOPICS;
@@ -199,7 +227,7 @@ function buildCommunityBoardEntry(baseUrl, state) {
   button.dataset.communityText = "openBoard";
   button.setAttribute("aria-label", entryText("openBoardAria"));
   button.dataset.communityAria = "openBoardAria";
-  card.append(headingRow, characterList, buildFeatured(state.featured, baseUrl, state.unread), button);
+  card.append(headingRow, characterList, buildFeatured(state.featured, baseUrl), button);
   return card;
 }
 
@@ -208,7 +236,12 @@ function updateCommunityEntryLanguage() {
   if (!slot) return;
   for (const element of slot.querySelectorAll("[data-community-text]")) {
     const key = element.dataset.communityText;
-    if (key) element.textContent = entryText(key);
+    if (!key) continue;
+    if (key === "newCount" || key === "videos" || key === "comments") {
+      element.textContent = metricText(key, element.dataset.communityMetricCount || 0);
+    } else {
+      element.textContent = entryText(key);
+    }
   }
   for (const element of slot.querySelectorAll("[data-community-alt]")) element.alt = entryText(element.dataset.communityAlt || "imageAlt");
   for (const element of slot.querySelectorAll("[data-community-aria]")) element.setAttribute("aria-label", entryText(element.dataset.communityAria || "openBoardAria"));
@@ -250,7 +283,7 @@ async function loadCommunityActivity() {
     const response = await fetch(endpoint, {method:"GET", mode:"cors", credentials:"omit", cache:"no-store", headers:{Accept:"application/json"}});
     if (!response.ok) return;
     const payload = await response.json();
-    const state = {topics:normalizeTopics(payload.topics), featured:normalizeFeatured(payload.featured), unread:normalizeUnread(payload.unread)};
+    const state = {topics:normalizeTopics(payload.topics), featured:normalizeFeatured(payload.featured), unread:normalizeUnread(payload.unread), videos:normalizeMetric(payload.videos), comments:normalizeMetric(payload.comments)};
     renderCommunityBoardEntry(state);
   } catch {
     // The ranking itself must remain usable if the community API is unavailable.
@@ -260,6 +293,6 @@ async function loadCommunityActivity() {
 document.addEventListener("DOMContentLoaded", () => {
   communityEntryLanguage = detectCommunityLanguage();
   installCommunityLanguageSync();
-  renderCommunityBoardEntry({topics:COMMUNITY_FALLBACK_TOPICS, featured:null, unread:0});
+  renderCommunityBoardEntry({topics:COMMUNITY_FALLBACK_TOPICS, featured:null, unread:0, videos:0, comments:0});
   void loadCommunityActivity();
 });

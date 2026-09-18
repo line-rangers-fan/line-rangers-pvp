@@ -72,8 +72,8 @@ def test_urls_are_https_allowlisted_and_activity_feed_is_read_only_public_data()
 
 def test_csp_allows_only_the_production_worker_for_live_teaser_fetch():
     assert f"connect-src 'self' https://{BOARD_HOST}" in INDEX
-    assert 'community-entry.js?v=20260918-featured-2' in INDEX
-    assert 'community-entry.css?v=20260918-featured-2' in INDEX
+    assert 'community-entry.js?v=20260918-stats-1' in INDEX
+    assert 'community-entry.css?v=20260918-stats-1' in INDEX
 
 
 def test_featured_comment_is_live_clickable_and_shows_reaction_counts():
@@ -91,13 +91,18 @@ def test_featured_comment_is_live_clickable_and_shows_reaction_counts():
     assert 'innerHTML' not in ENTRY_JS
 
 
-def test_featured_comment_shows_unread_count_from_activity_feed():
+def test_entry_shows_synchronized_totals_from_activity_feed():
     assert "function normalizeUnread(value)" in ENTRY_JS
     assert "unread:normalizeUnread(payload.unread)" in ENTRY_JS
-    assert "buildFeatured(state.featured, baseUrl, state.unread)" in ENTRY_JS
-    assert "if (unread > 0)" in ENTRY_JS
-    assert '`NEW ${unread}`' in ENTRY_JS
-    assert ".community-board-entry-unread" in ENTRY_CSS
+    assert "videos:normalizeMetric(payload.videos)" in ENTRY_JS
+    assert "comments:normalizeMetric(payload.comments)" in ENTRY_JS
+    assert "buildCommunityStats(state)" in ENTRY_JS
+    assert '["newCount", state.unread' in ENTRY_JS
+    assert '["videos", state.videos' in ENTRY_JS
+    assert '["comments", state.comments' in ENTRY_JS
+    assert "buildFeatured(state.featured, baseUrl)" in ENTRY_JS
+    assert ".community-board-entry-stats" in ENTRY_CSS
+    assert ".community-board-entry-stat" in ENTRY_CSS
 
 
 def test_board_button_navigates_same_tab_without_intermediate_page():
