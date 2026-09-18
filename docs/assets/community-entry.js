@@ -29,6 +29,27 @@ const COMMUNITY_ENTRY_I18N = Object.freeze({
 });
 const COMMUNITY_ENTRY_LANGUAGES = Object.freeze(Object.keys(COMMUNITY_ENTRY_I18N));
 let communityEntryLanguage = "ja";
+const communityViewerStorageKey = "line-rangers-community-viewer-v1";
+let communityViewerToken = "";
+function readCommunityViewerToken() {
+  try {
+    const value = localStorage.getItem(communityViewerStorageKey) || "";
+    return value.length <= 256 ? value : "";
+  } catch { return ""; }
+}
+function saveCommunityViewerToken(value) {
+  communityViewerToken = value;
+  try { localStorage.setItem(communityViewerStorageKey, value); } catch {}
+}
+communityViewerToken = readCommunityViewerToken();
+function withCommunityViewer(rawUrl) {
+  if (!communityViewerToken || typeof rawUrl !== "string") return rawUrl;
+  try {
+    const url = new URL(rawUrl);
+    url.searchParams.set("viewer", communityViewerToken);
+    return url.href;
+  } catch { return rawUrl; }
+}
 
 function readCommunityBoardState(value) { return value === true; }
 function entryText(key) { return COMMUNITY_ENTRY_I18N[communityEntryLanguage][key]; }
@@ -72,7 +93,7 @@ function topicBoardUrl(topic, baseUrl) {
   const url = new URL(baseUrl.href);
   url.searchParams.set("month", topic.month);
   url.searchParams.set("board", topic.id);
-  return url.href;
+  return withCommunityViewer(url.href);
 }
 
 function featuredBoardUrl(featured, baseUrl) {
@@ -171,7 +192,7 @@ function buildCommunityStats(state) {
 }
 
 function buildFeatured(featured, baseUrl) {
-  const href = featuredBoardUrl(featured, baseUrl) || baseUrl.href;
+  const href = featuredBoardUrl(featured, baseUrl) || withCommunityViewer(baseUrl.href);
   const wrapper = document.createElement("a");
   wrapper.className = "community-board-entry-featured";
   wrapper.href = href;
@@ -219,7 +240,7 @@ function buildCommunityBoardEntry(baseUrl, state) {
   characterList.className = "community-board-entry-character-list";
   for (const topic of topics) characterList.append(buildCharacter(topic, baseUrl));
 
-  const firstTopicUrl = topicBoardUrl(topics[0], baseUrl) || baseUrl.href;
+  const firstTopicUrl = topicBoardUrl(topics[0], baseUrl) || withCommunityViewer(baseUrl.href);
   const button = document.createElement("a");
   button.className = "community-board-entry-button";
   button.href = firstTopicUrl;
@@ -280,9 +301,12 @@ async function loadCommunityActivity() {
   const endpoint = getApprovedActivityUrl(COMMUNITY_BOARD_ENTRY_CONFIG.activityUrl, COMMUNITY_BOARD_ENTRY_CONFIG.allowedHosts);
   if (!endpoint) return;
   try {
-    const response = await fetch(endpoint, {method:"GET", mode:"cors", credentials:"omit", cache:"no-store", headers:{Accept:"application/json"}});
+    const headers = {Accept:"application/json"};
+    if (communityViewerToken) headers["X-LR-Viewer"] = communityViewerToken;
+    const response = await fetch(endpoint, {method:"GET", mode:"cors", credentials:"omit", cache:"no-store", headers});
     if (!response.ok) return;
     const payload = await response.json();
+    if (typeof payload.viewerToken === "string" && payload.viewerToken.length <= 256) saveCommunityViewerToken(payload.viewerToken);
     const state = {topics:normalizeTopics(payload.topics), featured:normalizeFeatured(payload.featured), unread:normalizeUnread(payload.unread), videos:normalizeMetric(payload.videos), comments:normalizeMetric(payload.comments)};
     renderCommunityBoardEntry(state);
   } catch {
