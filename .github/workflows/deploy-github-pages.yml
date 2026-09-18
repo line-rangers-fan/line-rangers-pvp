@@ -30,8 +30,8 @@ jobs:
           test -s docs/assets/community-entry.js
           test -s docs/assets/community-entry.css
           grep -q 'id="community-board-entry-slot"' docs/index.html
-          grep -q 'community-entry.js?v=20260918-featured-2' docs/index.html
-          grep -q 'community-entry.css?v=20260918-featured-2' docs/index.html
+          grep -q 'community-entry.js?v=20260918-stats-1' docs/index.html
+          grep -q 'community-entry.css?v=20260918-stats-1' docs/index.html
           grep -q 'defaultState: true' docs/assets/community-entry.js
           grep -q 'state: true' docs/assets/community-entry.js
           grep -q 'allowedPath: "/boards"' docs/assets/community-entry.js
