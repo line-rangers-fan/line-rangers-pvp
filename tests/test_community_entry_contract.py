@@ -98,6 +98,9 @@ def test_entry_shows_synchronized_totals_from_activity_feed():
     assert "comments:normalizeMetric(payload.comments)" in ENTRY_JS
     assert "communityViewerStorageKey" in ENTRY_JS
     assert "X-LR-Viewer" in ENTRY_JS
+    assert 'window.addEventListener("pageshow"' in ENTRY_JS
+    assert 'document.addEventListener("visibilitychange"' in ENTRY_JS
+    assert ENTRY_JS.count("loadCommunityActivity()") >= 3
     assert "payload.viewerToken" in ENTRY_JS
     assert "viewer" in ENTRY_JS
     assert "buildCommunityStats(state)" in ENTRY_JS
