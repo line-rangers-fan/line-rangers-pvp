@@ -1,3 +1,4 @@
+import hashlib
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -197,7 +198,11 @@ def test_static_rank_period_matches_the_javascript_default():
 
     assert 'selectedRankPeriod: "day"' in app
     assert '<span id="rank-period-current">前日締め</span>' in page
-    assert '<script src="./assets/app.js?v=' in page
+    app_bytes = (ROOT / "docs/assets/app.js").read_bytes()
+    app_blob = hashlib.sha1(
+        f"blob {len(app_bytes)}\0".encode() + app_bytes
+    ).hexdigest()[:12]
+    assert f'<script src="./assets/app.js?v={app_blob}" defer></script>' in page
     assert "app.js?v=$GITHUB_SHA" in pages_workflow
     assert "community-entry.js?v=$GITHUB_SHA" in pages_workflow
     assert "path: ./pages-dist" in pages_workflow
