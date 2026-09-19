@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  COPY_SOURCE_SHA: ac4f80f71ec42b4c79fedf85c670618eee5d3af4
+  COPY_SOURCE_SHA: d7b4fe844766a77d3526379f74e6bce8becc425c
   WORKER_NAME: line-rangers-pvp-community-production
   D1_NAME: line-rangers-pvp-production-db
   R2_BUCKET: line-rangers-pvp-production-media
@@ -216,6 +216,18 @@ jobs:
           set -euo pipefail
           npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc
           echo "Production posts, reactions, votes, translations, upload sessions, and R2 media were preserved."
+
+      - name: Refuse stale production promotion
+        env:
+          EXPECTED_COPY_SOURCE_SHA: ${{ env.COPY_SOURCE_SHA }}
+        run: |
+          set -euo pipefail
+          latest_trigger="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 20             "https://raw.githubusercontent.com/line-rangers-fan/line-rangers-pvp/main/.production-promotion-trigger")"
+          latest_sha="$(printf '%s\n' "$latest_trigger" | sed -n 's/^copy_source_sha=//p' | head -n1)"
+          if [ "$latest_sha" != "$EXPECTED_COPY_SOURCE_SHA" ]; then
+            echo "A newer production promotion is queued. Refusing to deploy stale source $EXPECTED_COPY_SOURCE_SHA."
+            exit 78
+          fi
 
       - name: Deploy validated copy to production Worker
         working-directory: copy-source
