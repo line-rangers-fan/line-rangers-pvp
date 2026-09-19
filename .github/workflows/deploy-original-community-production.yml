@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  COPY_SOURCE_SHA: c467f41f0e5f756e81b8afc90e67a9ea5f416845
+  COPY_SOURCE_SHA: 4df7c14786c922457b7633be4d1f585af3ae76d2
   WORKER_NAME: line-rangers-pvp-community-production
   D1_NAME: line-rangers-pvp-production-db
   R2_BUCKET: line-rangers-pvp-production-media
@@ -305,6 +305,7 @@ jobs:
           printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array")' >/dev/null
           printf '%s' "$activity" | jq -e '(.topics | type == "array") and ((.featured == null) or (.featured | type == "object"))' >/dev/null
           grep -qi '^x-content-type-options: nosniff' "$api_headers"
+          grep -qi "^content-security-policy: base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'" "$api_headers"
           grep -qi '^access-control-allow-origin: https://line-rangers-fan.github.io' "$activity_headers"
           echo "Production Worker verified without deleting existing board content: $PRODUCTION_BASE_URL"
 
