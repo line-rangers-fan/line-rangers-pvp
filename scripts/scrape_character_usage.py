@@ -1324,20 +1324,24 @@ def _equipment_period_change(
     }
     reference_character = _find_history_character(reference, unit_code)
     reference_time = _parse_history_time(reference.get("updated_at")) if reference else None
-    if reference_character is None or reference_time is None or current_time is None:
+    if reference_time is None or current_time is None:
         return result
 
-    rankings = reference_character.get("equipment_rankings")
-    category = rankings.get(equipment_type) if isinstance(rankings, dict) else None
-    if not isinstance(category, dict) or not isinstance(category.get("items"), list):
-        # Older character-only snapshots contain no equipment evidence.
-        return result
-
-    old_item = _find_history_equipment(
-        reference_character,
-        equipment_type,
-        str(current_item.get("item_code") or ""),
-    )
+    old_item = None
+    if reference_character is not None:
+        rankings = reference_character.get("equipment_rankings")
+        category = rankings.get(equipment_type) if isinstance(rankings, dict) else None
+        if not isinstance(category, dict) or not isinstance(category.get("items"), list):
+            # Older character-only snapshots contain no equipment evidence.
+            return result
+        old_item = _find_history_equipment(
+            reference_character,
+            equipment_type,
+            str(current_item.get("item_code") or ""),
+        )
+    # If the whole character was absent from an otherwise valid snapshot, its
+    # equipment usage was also exactly zero. This is a real comparison, not a
+    # missing-history state.
     old_rank = _exact_int(old_item.get("rank")) if isinstance(old_item, dict) else None
     current_rank = _exact_int(current_item.get("rank"))
     old_count = old_item.get("occurrence_count") if isinstance(old_item, dict) else 0

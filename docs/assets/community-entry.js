@@ -320,3 +320,13 @@ document.addEventListener("DOMContentLoaded", () => {
   renderCommunityBoardEntry({topics:COMMUNITY_FALLBACK_TOPICS, featured:null, unread:0, videos:0, comments:0});
   void loadCommunityActivity();
 });
+
+// Back/forward cache restores do not fire DOMContentLoaded again. Refresh the
+// signed viewer's activity when the PvP page becomes visible so a board visit
+// clears only that viewer's NEW count immediately after returning.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) void loadCommunityActivity();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void loadCommunityActivity();
+});

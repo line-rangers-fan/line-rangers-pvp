@@ -72,7 +72,7 @@ def test_urls_are_https_allowlisted_and_activity_feed_is_read_only_public_data()
 
 def test_csp_allows_only_the_production_worker_for_live_teaser_fetch():
     assert f"connect-src 'self' https://{BOARD_HOST}" in INDEX
-    assert 'community-entry.js?v=20260918-viewer-1' in INDEX
+    assert 'community-entry.js?v=20260919-viewer-2' in INDEX
     assert 'community-entry.css?v=20260918-stats-1' in INDEX
 
 
@@ -98,6 +98,9 @@ def test_entry_shows_synchronized_totals_from_activity_feed():
     assert "comments:normalizeMetric(payload.comments)" in ENTRY_JS
     assert "communityViewerStorageKey" in ENTRY_JS
     assert "X-LR-Viewer" in ENTRY_JS
+    assert 'window.addEventListener("pageshow"' in ENTRY_JS
+    assert 'document.addEventListener("visibilitychange"' in ENTRY_JS
+    assert ENTRY_JS.count("loadCommunityActivity()") >= 3
     assert "payload.viewerToken" in ENTRY_JS
     assert "viewer" in ENTRY_JS
     assert "buildCommunityStats(state)" in ENTRY_JS

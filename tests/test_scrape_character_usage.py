@@ -779,6 +779,32 @@ def test_equipment_without_prior_item_uses_zero_count_from_valid_snapshot():
     assert day["occurrence_count"] == 3
 
 
+def test_equipment_missing_character_uses_zero_count_from_valid_snapshot():
+    current = {
+        "updated_at": "2026-08-31T07:00:00+09:00",
+        "characters": [{
+            "unit_code": "u-new", "rank": 1, "occurrence_count": 2, "player_count": 2,
+            "adoption_rate": 1.0,
+            "equipment_rankings": {
+                "WEAPON": {"items": [{"item_code": "w-new", "rank": 1, "occurrence_count": 2}]},
+                "ARMOR": {"items": []}, "ACC": {"items": []},
+            },
+        }],
+    }
+    history = {"snapshots": [{
+        "updated_at": "2026-08-30T23:00:00+09:00",
+        "calendar_date": "2026-08-30",
+        "sampled_players": 200,
+        "character_slots": 2000,
+        "characters": [],
+    }]}
+    scraper.add_previous_comparison(current, None, history)
+    day = current["characters"][0]["equipment_rankings"]["WEAPON"]["items"][0]["change"]["periods"]["day"]
+    assert day["comparable"] is True
+    assert day["occurrence_count"] == 2
+    assert day["rank"] is None
+
+
 def test_history_snapshot_keeps_equipment_counts_for_period_deltas():
     data = {
         "updated_at": "2026-08-28T02:00:00+00:00",

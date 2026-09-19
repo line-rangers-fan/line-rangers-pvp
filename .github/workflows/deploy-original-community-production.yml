@@ -280,6 +280,8 @@ jobs:
 
       - name: Verify production Worker end to end
         working-directory: copy-source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
         run: |
           set -euo pipefail
           pvp="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/pvp/index.html")"
@@ -298,4 +300,41 @@ jobs:
           printf '%s' "$activity" | jq -e '(.topics | type == "array") and ((.featured == null) or (.featured | type == "object"))' >/dev/null
           grep -qi '^x-content-type-options: nosniff' "$api_headers"
           grep -qi '^access-control-allow-origin: https://line-rangers-fan.github.io' "$activity_headers"
+
+          # Verify the signed Viewer ID survives the board seen write and clears
+          # only that viewer's NEW counter. This creates no posts, reactions,
+          # votes, uploads, or media.
+          viewer_token="$(printf '%s' "$activity" | jq -er '.viewerToken')"
+          if ! [[ "$viewer_token" =~ ^v1[.][a-f0-9-]{36}[.][0-9]+[.][A-Za-z0-9_-]{43}$ ]]; then
+            echo "Activity API did not issue a valid signed Viewer ID."
+            exit 1
+          fi
+          viewer_subject="$(printf '%s' "$viewer_token" | cut -d. -f2)"
+          if ! [[ "$viewer_subject" =~ ^[a-f0-9-]{36}$ ]]; then
+            echo "Viewer subject format is invalid."
+            exit 1
+          fi
+          cleanup_test_viewer() {
+            npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc               --command "DELETE FROM visits WHERE subject='$viewer_subject'" >/dev/null 2>&1 || true
+          }
+          trap cleanup_test_viewer EXIT
+          old_seen_body='{"action":"seen","until":1}'
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2             -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin'             -H 'Content-Type: application/json'             --data "$old_seen_body" "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_token" >/dev/null
+          activity_before_seen="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2             -H 'Origin: https://line-rangers-fan.github.io' -H "X-LR-Viewer: $viewer_token"             "$PRODUCTION_BASE_URL/api/activity?public=1")"
+          comments_total="$(printf '%s' "$activity_before_seen" | jq -er '.comments')"
+          unread_before="$(printf '%s' "$activity_before_seen" | jq -er '.unread')"
+          if [ "$comments_total" -gt 0 ] && [ "$unread_before" -le 0 ]; then
+            echo "Viewer-specific NEW did not become readable from the old seen cursor."
+            exit 1
+          fi
+          board_for_viewer="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2             "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_token")"
+          view_until="$(printf '%s' "$board_for_viewer" | jq -er '.viewUntil')"
+          seen_body="$(jq -nc --argjson until "$view_until" '{action:"seen",until:$until}')"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2             -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin'             -H 'Content-Type: application/json'             --data "$seen_body" "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_token" >/dev/null
+          activity_after_seen="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2             -H 'Origin: https://line-rangers-fan.github.io' -H "X-LR-Viewer: $viewer_token"             "$PRODUCTION_BASE_URL/api/activity?public=1")"
+          printf '%s' "$activity_after_seen" | jq -e --arg token "$viewer_token" '.unread == 0 and .viewerToken == $token' >/dev/null
+          cleanup_test_viewer
+          trap - EXIT
+          echo "Verified per-viewer NEW/seen synchronization without creating or retaining test board data."
+
           echo "Production Worker verified without deleting existing board content: $PRODUCTION_BASE_URL"

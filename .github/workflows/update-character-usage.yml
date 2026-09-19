@@ -104,15 +104,15 @@ jobs:
         timeout-minutes: 3
         run: python scripts/cache_character_images.py
 
-      - name: Rebuild sample-independent comparisons
-        if: steps.decision.outputs.due == 'true'
-        # A verified 199-player (or other partial) snapshot is a valid baseline.
-        # Keep target collection at 200, but never require equal headcounts just
-        # to calculate hour/day/week/month deltas.
+      - name: Rebuild verified full-sample comparisons
+        if: steps.decision.outputs.due == 'true' || github.event_name == 'push'
+        # Only complete 200/200 snapshots are normal comparison baselines.
+        # A partial collection must fail closed here so the last known-good
+        # public JSON remains intact instead of becoming a future baseline.
         run: python scripts/rebuild_cross_sample_comparisons.py
 
       - name: Save collected data
-        if: steps.decision.outputs.due == 'true'
+        if: steps.decision.outputs.due == 'true' || github.event_name == 'push'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
