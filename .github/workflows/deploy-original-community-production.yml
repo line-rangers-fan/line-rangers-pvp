@@ -298,7 +298,8 @@ jobs:
             .complete_target == true and
             .comparison.reference_mode == "jst_calendar_close_v1" and
             (.comparison.periods | [.hour,.day,.week,.month] | all(.comparable == true)) and
-            ([.characters[] | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all)
+            ([.characters[] | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all) and
+            ([.characters[] | .equipment_rankings[]?.items[]? | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all)
           ' >/dev/null
           printf '%s' "$health" | jq -e '.ok == true and .checks.d1 == true and .checks.r2 == true' >/dev/null
           printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array")' >/dev/null
@@ -327,10 +328,21 @@ jobs:
               --command "DELETE FROM visits WHERE subject='$subject'" >/dev/null 2>&1 || true
           }
           trap cleanup_viewer EXIT
-          before="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            "$PRODUCTION_BASE_URL/api/board?viewer=$viewer")"
-          printf '%s' "$before" | jq -e '.previousSeen == 0 and (.viewUntil | type == "number")' >/dev/null
-          view_until="$(printf '%s' "$before" | jq -er '.viewUntil')"
+
+          # Use only the disposable visits cursor. No post, reaction, vote,
+          # profile, media, or user row is created for this production E2E.
+          npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
+            --command "INSERT INTO visits(subject,seen) VALUES('$subject',1) ON CONFLICT(subject) DO UPDATE SET seen=1" >/dev/null
+
+          activity_before="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer" "$PRODUCTION_BASE_URL/api/activity?public=1")"
+          printf '%s' "$activity_before" | jq -e --arg viewer "$viewer" '.viewerToken == $viewer' >/dev/null
+          comments="$(printf '%s' "$activity_before" | jq -er '.comments')"
+          if [ "$comments" -gt 0 ]; then
+            printf '%s' "$activity_before" | jq -e '.unread > 0' >/dev/null
+          fi
+
+          view_until="$(date +%s%3N)"
           body="$(jq -nc --argjson until "$view_until" '{action:"seen",until:$until}')"
           seen_status="$(curl --location --silent --show-error --output /tmp/seen-response.json --write-out '%{http_code}' \
             --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
@@ -339,11 +351,8 @@ jobs:
             "$PRODUCTION_BASE_URL/api/board?viewer=$viewer")"
           test "$seen_status" = '200'
           jq -e '.ok == true' /tmp/seen-response.json >/dev/null
-          after="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            "$PRODUCTION_BASE_URL/api/board?viewer=$viewer")"
-          after_seen="$(printf '%s' "$after" | jq -er '.previousSeen')"
-          test "$after_seen" -ge "$view_until"
+
           activity_after="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
             -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer" "$PRODUCTION_BASE_URL/api/activity?public=1")"
           printf '%s' "$activity_after" | jq -e --arg viewer "$viewer" '.viewerToken == $viewer and .unread == 0' >/dev/null
-          echo 'Verified production Viewer ID -> board seen -> activity NEW=0 round trip without creating posts.'
+          echo 'Verified production Viewer ID -> seen -> activity NEW=0 with disposable visits-only state.'
