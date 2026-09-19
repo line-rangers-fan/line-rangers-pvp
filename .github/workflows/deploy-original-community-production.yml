@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  COPY_SOURCE_SHA: 5658bb8a762141c2ee0c6ceffd9cc0923cf61ccd
+  COPY_SOURCE_SHA: c467f41f0e5f756e81b8afc90e67a9ea5f416845
   WORKER_NAME: line-rangers-pvp-community-production
   D1_NAME: line-rangers-pvp-production-db
   R2_BUCKET: line-rangers-pvp-production-media
@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Check out original repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Fetch exact validated copy source
         env:
@@ -56,7 +56,7 @@ jobs:
           echo "Original PvP HTML, assets, and data preserved unchanged."
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.13.0
           cache: npm
@@ -201,7 +201,7 @@ jobs:
           test -s "$backup_dir/media-keys.json"
 
       - name: Upload production rollback artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: line-rangers-production-board-backup-${{ github.run_id }}
           path: ${{ runner.temp }}/line-rangers-production-backup
