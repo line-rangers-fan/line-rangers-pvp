@@ -779,6 +779,66 @@ def test_equipment_without_prior_item_uses_zero_count_from_valid_snapshot():
     assert day["occurrence_count"] == 3
 
 
+def test_equipment_period_change_treats_missing_character_as_zero_in_valid_snapshot():
+    current = {
+        "updated_at": "2026-08-28T00:30:00+00:00",
+        "sampled_players": 1,
+        "characters": [
+            {
+                "unit_code": "u-new",
+                "rank": 1,
+                "occurrence_count": 1,
+                "player_count": 1,
+                "adoption_rate": 100.0,
+                "equipment_rankings": {
+                    "WEAPON": {
+                        "items": [
+                            {
+                                "item_code": "new-weapon",
+                                "rank": 1,
+                                "occurrence_count": 3,
+                            }
+                        ]
+                    },
+                    "ARMOR": {"items": []},
+                    "ACC": {"items": []},
+                },
+            }
+        ],
+    }
+    history = {
+        "snapshots": [
+            {
+                "updated_at": "2026-08-27T14:00:00+00:00",
+                "characters": [
+                    {
+                        "unit_code": "u-existing",
+                        "rank": 1,
+                        "occurrence_count": 5,
+                        "equipment_rankings": {
+                            "WEAPON": {"items": []},
+                            "ARMOR": {"items": []},
+                            "ACC": {"items": []},
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+
+    scraper.add_previous_comparison(current, None, history)
+    character_day = current["characters"][0]["change"]["periods"]["day"]
+    item = current["characters"][0]["equipment_rankings"]["WEAPON"]["items"][0]
+    day = item["change"]["periods"]["day"]
+
+    assert character_day["comparable"] is True
+    assert character_day["occurrence_count"] == 1
+    assert day["comparable"] is True
+    assert day["rank"] is None
+    assert day["occurrence_count"] == 3
+    assert day["from_updated_at"] == "2026-08-27T14:00:00+00:00"
+
+
 def test_history_snapshot_keeps_equipment_counts_for_period_deltas():
     data = {
         "updated_at": "2026-08-28T02:00:00+00:00",
