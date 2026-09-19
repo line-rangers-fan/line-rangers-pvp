@@ -280,6 +280,8 @@ jobs:
 
       - name: Verify production Worker end to end
         working-directory: copy-source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
         run: |
           set -euo pipefail
           pvp="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/pvp/index.html")"
@@ -312,6 +314,10 @@ jobs:
             echo "Viewer subject format is invalid."
             exit 1
           fi
+          cleanup_test_viewer() {
+            npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc               --command "DELETE FROM visits WHERE subject='$viewer_subject'" >/dev/null 2>&1 || true
+          }
+          trap cleanup_test_viewer EXIT
           old_seen_body='{"action":"seen","until":1}'
           curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2             -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin'             -H 'Content-Type: application/json'             --data "$old_seen_body" "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_token" >/dev/null
           activity_before_seen="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2             -H 'Origin: https://line-rangers-fan.github.io' -H "X-LR-Viewer: $viewer_token"             "$PRODUCTION_BASE_URL/api/activity?public=1")"
@@ -327,6 +333,8 @@ jobs:
           curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2             -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin'             -H 'Content-Type: application/json'             --data "$seen_body" "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_token" >/dev/null
           activity_after_seen="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2             -H 'Origin: https://line-rangers-fan.github.io' -H "X-LR-Viewer: $viewer_token"             "$PRODUCTION_BASE_URL/api/activity?public=1")"
           printf '%s' "$activity_after_seen" | jq -e --arg token "$viewer_token" '.unread == 0 and .viewerToken == $token' >/dev/null
-          echo "Verified per-viewer NEW/seen synchronization without creating board content."
+          cleanup_test_viewer
+          trap - EXIT
+          echo "Verified per-viewer NEW/seen synchronization without creating or retaining test board data."
 
           echo "Production Worker verified without deleting existing board content: $PRODUCTION_BASE_URL"
