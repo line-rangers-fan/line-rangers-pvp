@@ -292,10 +292,58 @@ jobs:
           activity="$(curl --location --fail --silent --show-error --dump-header "$activity_headers" --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 -H 'Origin: https://line-rangers-fan.github.io' "$PRODUCTION_BASE_URL/api/activity?public=1")"
           grep -q 'レジェンド帯 キャラ集計' <<< "$pvp"
           grep -q '新キャラ情報掲示板' <<< "$board"
-          printf '%s' "$snapshot" | jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' >/dev/null
+          printf '%s' "$snapshot" | jq -e '
+            .target_players == 200 and
+            .sampled_players == 200 and
+            .complete_target == true and
+            .comparison.reference_mode == "jst_calendar_close_v1" and
+            (.comparison.periods | [.hour,.day,.week,.month] | all(.comparable == true)) and
+            ([.characters[] | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all)
+          ' >/dev/null
           printf '%s' "$health" | jq -e '.ok == true and .checks.d1 == true and .checks.r2 == true' >/dev/null
           printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array")' >/dev/null
           printf '%s' "$activity" | jq -e '(.topics | type == "array") and ((.featured == null) or (.featured | type == "object"))' >/dev/null
           grep -qi '^x-content-type-options: nosniff' "$api_headers"
           grep -qi '^access-control-allow-origin: https://line-rangers-fan.github.io' "$activity_headers"
           echo "Production Worker verified without deleting existing board content: $PRODUCTION_BASE_URL"
+
+      - name: Verify per-viewer NEW seen round trip without posts
+        working-directory: copy-source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          ranking_origin='https://line-rangers-fan.github.io'
+          activity="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $ranking_origin" "$PRODUCTION_BASE_URL/api/activity?public=1")"
+          viewer="$(printf '%s' "$activity" | jq -er '.viewerToken')"
+          subject="$(printf '%s' "$viewer" | cut -d. -f2)"
+          [[ "$viewer" =~ ^v1\.[a-f0-9-]{36}\.[0-9]+\.[A-Za-z0-9_-]{43}$ ]]
+          [[ "$subject" =~ ^[a-f0-9-]{36}$ ]]
+          echo "::add-mask::$viewer"
+          echo "::add-mask::$subject"
+          cleanup_viewer() {
+            npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
+              --command "DELETE FROM visits WHERE subject='$subject'" >/dev/null 2>&1 || true
+          }
+          trap cleanup_viewer EXIT
+          before="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            "$PRODUCTION_BASE_URL/api/board?viewer=$viewer")"
+          printf '%s' "$before" | jq -e '.previousSeen == 0 and (.viewUntil | type == "number")' >/dev/null
+          view_until="$(printf '%s' "$before" | jq -er '.viewUntil')"
+          body="$(jq -nc --argjson until "$view_until" '{action:"seen",until:$until}')"
+          seen_status="$(curl --location --silent --show-error --output /tmp/seen-response.json --write-out '%{http_code}' \
+            --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
+            -H 'Content-Type: application/json' --data "$body" \
+            "$PRODUCTION_BASE_URL/api/board?viewer=$viewer")"
+          test "$seen_status" = '200'
+          jq -e '.ok == true' /tmp/seen-response.json >/dev/null
+          after="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            "$PRODUCTION_BASE_URL/api/board?viewer=$viewer")"
+          after_seen="$(printf '%s' "$after" | jq -er '.previousSeen')"
+          test "$after_seen" -ge "$view_until"
+          activity_after="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer" "$PRODUCTION_BASE_URL/api/activity?public=1")"
+          printf '%s' "$activity_after" | jq -e --arg viewer "$viewer" '.viewerToken == $viewer and .unread == 0' >/dev/null
+          echo 'Verified production Viewer ID -> board seen -> activity NEW=0 round trip without creating posts.'
