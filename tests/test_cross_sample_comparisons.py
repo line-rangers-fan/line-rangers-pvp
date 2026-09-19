@@ -44,57 +44,24 @@ def stamped_partial(players: int, timestamp: str) -> dict:
     return data
 
 
-def test_200_to_199_uses_valid_hour_and_close_history():
+def test_partial_current_is_rejected_instead_of_becoming_a_baseline():
     current = stamped_partial(199, "2026-08-31T07:00:00+09:00")
     previous = stamped_complete(200, "2026-08-31T06:00:00+09:00")
-    previous_close = stamped_complete(200, "2026-08-30T23:30:00+09:00")
-    history = {
-        "snapshots": [
-            scraper.history_snapshot(previous_close),
-            scraper.history_snapshot(previous),
-        ]
-    }
+    history = {"snapshots": [scraper.history_snapshot(previous)]}
+
+    import pytest
+    with pytest.raises(ValueError, match="failed to retain the current comparison snapshot"):
+        cross.rebuild_comparisons(deepcopy(current), history)
+
+
+def test_partial_history_is_ignored_for_hour_baseline():
+    current = stamped_complete(200, "2026-08-31T09:00:00+09:00")
+    partial = stamped_partial(199, "2026-08-31T08:00:00+09:00")
+    older_full = stamped_complete(200, "2026-08-31T07:00:00+09:00")
+    history = {"snapshots": [scraper.history_snapshot(older_full), scraper.history_snapshot(partial)]}
 
     rebuilt, next_history = cross.rebuild_comparisons(deepcopy(current), history)
-
-    assert rebuilt["comparison"]["comparable"] is True
-    assert rebuilt["comparison"]["periods"]["hour"]["comparable"] is True
-    assert rebuilt["comparison"]["periods"]["hour"]["updated_at"] == previous["updated_at"]
-    assert rebuilt["comparison"]["periods"]["day"]["comparable"] is True
-    assert rebuilt["comparison"]["periods"]["day"]["updated_at"] == previous_close["updated_at"]
-    assert all(
-        row["change"]["periods"]["hour"]["comparable"] is True
-        for row in rebuilt["characters"]
-    )
-    assert any(
-        snapshot["sampled_players"] == 199
-        and snapshot["updated_at"] == current["updated_at"]
-        for snapshot in next_history["snapshots"]
-    )
+    assert rebuilt["comparison"]["periods"]["hour"]["comparable"] is False
+    assert all(snapshot["sampled_players"] == 200 for snapshot in next_history["snapshots"])
     assert validate_data(rebuilt)
 
-
-def test_partial_history_remains_usable_when_player_count_changes_again():
-    first = stamped_partial(199, "2026-08-31T07:00:00+09:00")
-    base = stamped_complete(200, "2026-08-31T06:00:00+09:00")
-    _, history = cross.rebuild_comparisons(
-        deepcopy(first),
-        {"snapshots": [scraper.history_snapshot(base)]},
-    )
-
-    second = stamped_partial(198, "2026-08-31T08:00:00+09:00")
-    rebuilt_second, history = cross.rebuild_comparisons(deepcopy(second), history)
-    assert rebuilt_second["comparison"]["periods"]["hour"]["comparable"] is True
-    assert (
-        rebuilt_second["comparison"]["periods"]["hour"]["updated_at"]
-        == first["updated_at"]
-    )
-
-    complete = stamped_complete(200, "2026-08-31T09:00:00+09:00")
-    rebuilt_complete, _ = cross.rebuild_comparisons(deepcopy(complete), history)
-    assert rebuilt_complete["comparison"]["periods"]["hour"]["comparable"] is True
-    assert (
-        rebuilt_complete["comparison"]["periods"]["hour"]["updated_at"]
-        == second["updated_at"]
-    )
-    assert validate_data(rebuilt_complete)
