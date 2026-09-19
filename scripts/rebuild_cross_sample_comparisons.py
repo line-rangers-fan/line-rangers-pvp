@@ -1,9 +1,9 @@
-"""Rebuild PvP period comparisons without requiring equal sample sizes.
+"""Rebuild PvP period comparisons from verified full 200-player snapshots.
 
-A verified 199-player snapshot is still a valid comparison baseline when the
-Legend target is 200. This module keeps a separate compact history that may
-contain different verified sample sizes and rebuilds public period deltas from
-that history. The existing browser-facing history remains untouched.
+Only a complete LEGEND top-200 sample is a normal comparison baseline. Partial
+199/200 (or smaller) collections are never retained as baselines and cannot be
+promoted into public comparison data. The last verified full publication stays
+intact until a new complete sample is available.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ PUBLIC_HISTORY_PATH = Path("docs/data/character_usage_history.json")
 CROSS_SAMPLE_HISTORY_PATH = Path("docs/data/character_usage_cross_sample_history.json")
 HEALTH_PATH = Path("docs/data/character_usage_health.json")
 RECENT_GIT_VERSIONS = 24
+REQUIRED_FULL_SAMPLE_PLAYERS = 200
 
 
 def load_dict(path: Path) -> dict | None:
@@ -47,14 +48,14 @@ def _current_time(data: dict) -> datetime:
 
 
 def _usable_snapshot(snapshot: object, current_time: datetime) -> bool:
-    """Validate a compact snapshot against its own sampled-player count."""
+    """Accept only a verified complete 200-player comparison snapshot."""
     if not isinstance(snapshot, dict):
         return False
     sampled = scraper._exact_int(snapshot.get("sampled_players"))
-    if sampled is None or sampled <= 0:
+    if sampled != REQUIRED_FULL_SAMPLE_PLAYERS:
         return False
     try:
-        return scraper._usable_history_snapshot(snapshot, current_time, sampled)
+        return scraper._usable_history_snapshot(snapshot, current_time, REQUIRED_FULL_SAMPLE_PLAYERS)
     except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
         return False
 
@@ -64,7 +65,7 @@ def merge_history_sources(
     *histories: dict | None,
     extra_snapshots: list[dict] | None = None,
 ) -> dict:
-    """Merge verified history without requiring the same player count."""
+    """Merge only verified full-sample history."""
     current_time = _current_time(data)
     verified: dict[datetime, dict] = {}
 
@@ -104,7 +105,7 @@ def compact_snapshot_from_published(payload: object, current_time: datetime) -> 
 
 
 def recent_git_snapshots(data: dict, limit: int = RECENT_GIT_VERSIONS) -> list[dict]:
-    """Recover recent partial publications during first-time bootstrap."""
+    """Recover recent verified full publications during first-time bootstrap."""
     if limit <= 0:
         return []
     current_time = _current_time(data)
@@ -161,7 +162,7 @@ def previous_context(snapshot: dict | None, data: dict) -> dict | None:
 
 
 def rebuild_comparisons(data: dict, history: dict | None) -> tuple[dict, dict]:
-    """Attach period comparisons from valid history regardless of headcount."""
+    """Attach period comparisons using only complete 200-player history."""
     current_time = _current_time(data)
     clean_history = merge_history_sources(data, history)
     snapshots = clean_history["snapshots"]
