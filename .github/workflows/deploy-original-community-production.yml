@@ -338,3 +338,80 @@ jobs:
           echo "Verified per-viewer NEW/seen synchronization without creating or retaining test board data."
 
           echo "Production Worker verified without deleting existing board content: $PRODUCTION_BASE_URL"
+
+      - name: Verify production in real Chromium at phone tablet and desktop sizes
+        working-directory: copy-source
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false @playwright/test@1.55.0
+          npx playwright install chromium
+          cat > .production-browser-smoke.mjs <<'NODE'
+          import { chromium } from '@playwright/test';
+
+          const viewports = [
+            {name:'phone', width:390, height:844},
+            {name:'ipad', width:1024, height:1366},
+            {name:'desktop', width:1440, height:1000},
+          ];
+          const surfaces = [
+            {name:'pvp-ja', url:'https://line-rangers-fan.github.io/line-rangers-pvp/', kind:'pvp'},
+            {name:'pvp-en', url:'https://line-rangers-fan.github.io/line-rangers-pvp/?lang=en', kind:'pvp'},
+            {name:'board-ja', url:'https://line-rangers-pvp-community-production.n-yu1791.workers.dev/boards', kind:'board'},
+            {name:'board-en', url:'https://line-rangers-pvp-community-production.n-yu1791.workers.dev/boards?lang=en', kind:'board'},
+          ];
+          const browser = await chromium.launch({headless:true});
+          try {
+            for (const viewport of viewports) {
+              const context = await browser.newContext({viewport});
+              const page = await context.newPage();
+              for (const surface of surfaces) {
+                const errors = [];
+                page.removeAllListeners('pageerror');
+                page.on('pageerror', error => errors.push(String(error)));
+                const response = await page.goto(surface.url, {waitUntil:'domcontentloaded', timeout:60000});
+                if (!response || !response.ok()) throw new Error(`${viewport.name} ${surface.name}: HTTP ${response?.status()}`);
+                if (surface.kind === 'pvp') {
+                  await page.waitForSelector('#ranking-body tr', {timeout:60000});
+                  await page.waitForSelector('#community-board-entry-slot .community-board-entry-stat', {timeout:30000});
+                  const statCount = await page.locator('#community-board-entry-slot .community-board-entry-stat').count();
+                  if (statCount !== 3) throw new Error(`${viewport.name} ${surface.name}: expected exactly 3 community stats, got ${statCount}`);
+                  const comparisonText = (await page.locator('#rank-period-current').textContent() || '').trim();
+                  if (!comparisonText) throw new Error(`${viewport.name} ${surface.name}: comparison selector is empty`);
+                } else {
+                  await page.waitForSelector('main', {timeout:60000});
+                  if ((await page.locator('video[autoplay]').count()) !== 0) throw new Error(`${viewport.name} ${surface.name}: autoplay video found`);
+                }
+                const geometry = await page.evaluate(() => {
+                  const root = document.documentElement;
+                  const visibleButtons = [...document.querySelectorAll('button,a')].filter(el => {
+                    const r = el.getBoundingClientRect();
+                    const style = getComputedStyle(el);
+                    return style.visibility !== 'hidden' && style.display !== 'none' && r.width > 0 && r.height > 0;
+                  });
+                  const clipped = visibleButtons.filter(el => {
+                    const r = el.getBoundingClientRect();
+                    return r.left < -2 || r.right > innerWidth + 2;
+                  }).slice(0,5).map(el => (el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0,80));
+                  return {
+                    viewportWidth: innerWidth,
+                    rootWidth: root.scrollWidth,
+                    clipped,
+                  };
+                });
+                if (geometry.rootWidth > geometry.viewportWidth + 2) {
+                  throw new Error(`${viewport.name} ${surface.name}: page horizontal overflow ${geometry.rootWidth} > ${geometry.viewportWidth}`);
+                }
+                if (geometry.clipped.length) {
+                  throw new Error(`${viewport.name} ${surface.name}: clipped controls ${geometry.clipped.join(' | ')}`);
+                }
+                if (errors.length) throw new Error(`${viewport.name} ${surface.name}: page errors: ${errors.join(' | ')}`);
+                console.log(`browser-ok ${viewport.name} ${surface.name}`);
+              }
+              await context.close();
+            }
+          } finally {
+            await browser.close();
+          }
+          NODE
+          node .production-browser-smoke.mjs
+          rm -f .production-browser-smoke.mjs
