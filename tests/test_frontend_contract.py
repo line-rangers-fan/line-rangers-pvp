@@ -191,9 +191,15 @@ def test_queued_collection_checks_out_latest_main():
 def test_static_rank_period_matches_the_javascript_default():
     app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
     page = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+    pages_workflow = (
+        ROOT / ".github/workflows/deploy-github-pages.yml"
+    ).read_text(encoding="utf-8")
 
     assert 'selectedRankPeriod: "day"' in app
     assert '<span id="rank-period-current">前日締め</span>' in page
-    assert 'app.js?v=20260906-34' in page
+    assert '<script src="./assets/app.js?v=' in page
+    assert "app.js?v=$GITHUB_SHA" in pages_workflow
+    assert "community-entry.js?v=$GITHUB_SHA" in pages_workflow
+    assert "path: ./pages-dist" in pages_workflow
     assert 'data.publication_mode === "partial_after_stale"' in app
     assert "PARTIAL_FALLBACK_AFTER_MINUTES = 180" in app
