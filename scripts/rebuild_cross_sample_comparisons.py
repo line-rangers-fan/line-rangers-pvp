@@ -166,24 +166,27 @@ def rebuild_comparisons(data: dict, history: dict | None) -> tuple[dict, dict]:
     current_time = _current_time(data)
     clean_history = merge_history_sources(data, history)
     snapshots = clean_history["snapshots"]
-    previous = previous_context(snapshots[-1] if snapshots else None, data)
 
+    # Current partial collections are never comparable. Even with a valid
+    # earlier 200/200 snapshot available, publishing a delta from 199/200 or
+    # smaller would mix different populations and can mislead the ranking.
+    if (
+        data.get("sampled_players") != scraper.TARGET_PLAYER_COUNT
+        or data.get("complete_target") is not True
+    ):
+        scraper.add_previous_comparison(data, None, {"snapshots": []})
+        if isinstance(data.get("comparison"), dict):
+            data["comparison"]["comparable"] = False
+        validate_data(data)
+        return data, clean_history
+
+    previous = previous_context(snapshots[-1] if snapshots else None, data)
     scraper.add_previous_comparison(data, previous, clean_history)
     if isinstance(data.get("comparison"), dict):
         data["comparison"]["comparable"] = previous is not None
 
     # Keep all current-sample quality and fixed-JST comparison checks strict.
     validate_data(data)
-
-    # A partial publication must never become comparison history. It can be
-    # displayed as partial elsewhere, but comparisons stay unavailable until
-    # the next complete 200/200 collection.
-    if (
-        data.get("sampled_players") != scraper.TARGET_PLAYER_COUNT
-        or data.get("complete_target") is not True
-    ):
-        return data, clean_history
-
     next_history = scraper.update_history(data, clean_history)
     added = next(
         (
