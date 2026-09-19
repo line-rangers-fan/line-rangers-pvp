@@ -1,9 +1,8 @@
-"""Rebuild PvP period comparisons without requiring equal sample sizes.
+"""Rebuild PvP period comparisons from verified complete Legend snapshots.
 
-A verified 199-player snapshot is still a valid comparison baseline when the
-Legend target is 200. This module keeps a separate compact history that may
-contain different verified sample sizes and rebuilds public period deltas from
-that history. The existing browser-facing history remains untouched.
+Public comparison baselines must remain 200/200. Partial collections may be
+diagnostic evidence elsewhere, but they are never retained or reused as
+one-hour/day/week/month comparison references.
 """
 
 from __future__ import annotations
@@ -51,10 +50,12 @@ def _usable_snapshot(snapshot: object, current_time: datetime) -> bool:
     if not isinstance(snapshot, dict):
         return False
     sampled = scraper._exact_int(snapshot.get("sampled_players"))
-    if sampled is None or sampled <= 0:
+    if sampled != scraper.TARGET_PLAYER_COUNT:
         return False
     try:
-        return scraper._usable_history_snapshot(snapshot, current_time, sampled)
+        return scraper._usable_history_snapshot(
+            snapshot, current_time, scraper.TARGET_PLAYER_COUNT
+        )
     except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
         return False
 
@@ -173,8 +174,17 @@ def rebuild_comparisons(data: dict, history: dict | None) -> tuple[dict, dict]:
 
     # Keep all current-sample quality and fixed-JST comparison checks strict.
     validate_data(data)
-    next_history = scraper.update_history(data, clean_history)
 
+    # A partial publication must never become comparison history. It can be
+    # displayed as partial elsewhere, but comparisons stay unavailable until
+    # the next complete 200/200 collection.
+    if (
+        data.get("sampled_players") != scraper.TARGET_PLAYER_COUNT
+        or data.get("complete_target") is not True
+    ):
+        return data, clean_history
+
+    next_history = scraper.update_history(data, clean_history)
     added = next(
         (
             snapshot
