@@ -1,5 +1,7 @@
 from copy import deepcopy
 from datetime import datetime, timedelta
+import json
+from pathlib import Path
 
 from scripts import rebuild_cross_sample_comparisons as cross
 from scripts import scrape_character_usage as scraper
@@ -101,3 +103,70 @@ def test_complete_run_ignores_newer_partial_baseline():
         for snapshot in next_history["snapshots"]
     )
     assert validate_data(rebuilt)
+
+
+def test_published_comparison_values_match_selected_history_baselines():
+    data = json.loads(Path("docs/data/character_usage.json").read_text(encoding="utf-8"))
+    history = json.loads(Path("docs/data/character_usage_history.json").read_text(encoding="utf-8"))
+    snapshots = {
+        snapshot["updated_at"]: snapshot
+        for snapshot in history.get("snapshots", [])
+        if isinstance(snapshot, dict) and isinstance(snapshot.get("updated_at"), str)
+    }
+
+    for period in ("hour", "day", "week", "month"):
+        summary = data["comparison"]["periods"][period]
+        assert summary["comparable"] is True
+        baseline = snapshots.get(summary["updated_at"])
+        assert baseline is not None, f"{period} baseline is not retained in public history"
+        assert baseline["sampled_players"] == scraper.TARGET_PLAYER_COUNT
+        baseline_characters = {
+            row["unit_code"]: row for row in baseline.get("characters", [])
+        }
+
+        for current in data["characters"]:
+            old = baseline_characters.get(current["unit_code"])
+            change = current["change"]["periods"][period]
+            expected_count = current["occurrence_count"] - (
+                old["occurrence_count"] if old else 0
+            )
+            assert change["comparable"] is True
+            assert change["from_updated_at"] == summary["updated_at"]
+            assert change["occurrence_count"] == expected_count, (
+                period,
+                current["unit_code"],
+                expected_count,
+                change["occurrence_count"],
+            )
+            if old:
+                assert change["rank"] == old["rank"] - current["rank"]
+
+            for equipment_type, category in current["equipment_rankings"].items():
+                old_items = {
+                    item["item_code"]: item
+                    for item in (
+                        old.get("equipment_rankings", {})
+                        .get(equipment_type, {})
+                        .get("items", [])
+                        if old
+                        else []
+                    )
+                }
+                for item in category["items"]:
+                    old_item = old_items.get(item["item_code"])
+                    item_change = item["change"]["periods"][period]
+                    expected_item_count = item["occurrence_count"] - (
+                        old_item["occurrence_count"] if old_item else 0
+                    )
+                    assert item_change["comparable"] is True
+                    assert item_change["from_updated_at"] == summary["updated_at"]
+                    assert item_change["occurrence_count"] == expected_item_count, (
+                        period,
+                        current["unit_code"],
+                        equipment_type,
+                        item["item_code"],
+                        expected_item_count,
+                        item_change["occurrence_count"],
+                    )
+                    if old_item:
+                        assert item_change["rank"] == old_item["rank"] - item["rank"]
