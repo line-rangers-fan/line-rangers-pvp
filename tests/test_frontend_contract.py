@@ -283,13 +283,20 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert '.equipment-skill-effects {' in style
     assert 'margin-top: 0.85rem;' in style
     mobile = style.split('@media (max-width: 600px) {', 1)[1]
+    assert '.equipment-summary {' in mobile
+    assert 'display: grid;' in mobile
+    assert 'grid-template-columns: 3.2rem minmax(0, 1fr);' in mobile
+    assert '.equipment-character-details {' in mobile
+    assert 'display: contents;' in mobile
+    assert '.equipment-skill-title {' in mobile
+    assert 'grid-column: 1 / -1;' in mobile
     assert '.equipment-skill-list {' in mobile
+    assert 'grid-column: 1 / -1;' in mobile
     assert 'grid-template-columns: none;' in mobile
     assert 'grid-auto-flow: column;' in mobile
     assert 'grid-auto-columns: minmax(15.5rem, 92%);' in mobile
     assert 'overflow-x: auto;' in mobile
     assert 'scroll-snap-type: x mandatory;' in mobile
-    assert 'grid-template-columns: 1fr;' not in mobile.split('.equipment-skill-item {', 1)[0]
     assert 'scroll-snap-align: start;' in mobile
 
 
