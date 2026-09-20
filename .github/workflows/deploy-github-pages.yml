@@ -20,8 +20,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out site source
+      - name: Check out current site source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A queued Pages run must deploy the newest canonical comparison
+          # snapshot, never the older push SHA that originally queued it.
+          ref: main
 
       - name: Validate public static entry
         run: |
