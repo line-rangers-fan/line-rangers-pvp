@@ -136,10 +136,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Commits pushed by this workflow use GITHUB_TOKEN, so GitHub does
+          # not recursively trigger other push workflows. Explicitly publish
+          # the verified snapshot to both public surfaces.
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-github-pages.yml/dispatches" \
+            -f ref=main >/dev/null
           gh api --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-production-pvp.yml/dispatches" \
             -f ref=main >/dev/null
-          echo "Dispatched production PvP synchronization for the verified data commit."
+          echo "Dispatched GitHub Pages and production Worker synchronization for the verified data commit."
 
       - name: Upload debug artifacts
         if: always()
