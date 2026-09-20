@@ -547,33 +547,48 @@ def extract_ranked_players(
     target_players: int,
     player_details: dict[str, dict] | None = None,
 ) -> tuple[list[dict], dict]:
-    """Extract all visible defence groups for the first ranked players.
+    """Extract current defence teams and enrich them with detail equipment.
 
-    When player_details is supplied it is used instead of the compact
-    playerInfo payload, so the returned slot records include equipment. The
-    compact payload remains supported for deterministic unit tests.
+    The ranking payload is authoritative for the current Legend membership and
+    defence-team unit codes. /api/getPlayer is used only to enrich matching
+    character occurrences with equipment, because that detail endpoint can lag
+    behind the live ranking payload. If the ranking payload is unavailable in a
+    deterministic test/legacy fixture, details remain a compatibility fallback.
     """
     rankings = payload.get("top100")
     if not isinstance(rankings, list):
         raise RuntimeError("PvP API response is missing top100.")
 
-    if player_details is None:
-        player_info = payload.get("playerInfo")
-        if not isinstance(player_info, list):
-            raise RuntimeError("PvP API response is missing playerInfo.")
-        info_by_mid = {
-            str(record.get("mid")): record
-            for record in player_info
-            if isinstance(record, dict) and str(record.get("mid") or "").strip()
-        }
+    ranking_info = payload.get("playerInfo")
+    ranking_info_by_mid = {
+        str(record.get("mid")): record
+        for record in ranking_info
+        if isinstance(record, dict) and str(record.get("mid") or "").strip()
+    } if isinstance(ranking_info, list) else {}
+
+    if ranking_info_by_mid:
+        current_info_by_mid = ranking_info_by_mid
+    elif isinstance(player_details, dict):
+        # Compatibility for tests/legacy fixtures that omit playerInfo.
+        current_info_by_mid = player_details
     else:
-        info_by_mid = player_details
+        raise RuntimeError("PvP API response is missing playerInfo.")
+
+    detail_by_mid = (
+        player_details
+        if isinstance(player_details, dict)
+        else current_info_by_mid
+    )
 
     players: list[dict] = []
     seen_mids: set[str] = set()
     diagnostics: dict = {
         "ranked_players_available": len(rankings),
-        "player_info_available": len(info_by_mid),
+        "player_info_available": len(current_info_by_mid),
+        "ranking_player_info_available": len(ranking_info_by_mid),
+        "detail_player_info_available": len(detail_by_mid),
+        "detail_team_mismatch_players": 0,
+        "_detail_recheck_mids": [],
         "missing_player_info": [],
         "invalid_players": [],
         "invalid_unit_codes": [],
@@ -599,22 +614,60 @@ def extract_ranked_players(
             continue
         seen_mids.add(mid)
 
-        info = info_by_mid.get(mid)
-        if not isinstance(info, dict):
+        current_info = current_info_by_mid.get(mid)
+        if not isinstance(current_info, dict):
             diagnostics["missing_player_info"].append(mid)
+            diagnostics["_detail_recheck_mids"].append(mid)
             continue
 
-        team_map = info.get("playerUnitTeamGroupMap")
-        team_map = team_map if isinstance(team_map, dict) else {}
-        team_groups = team_map.get("pvpteam")
-        if not isinstance(team_groups, dict):
+        current_team_map = current_info.get("playerUnitTeamGroupMap")
+        current_team_map = current_team_map if isinstance(current_team_map, dict) else {}
+        current_groups = current_team_map.get("pvpteam")
+        if not isinstance(current_groups, dict):
             diagnostics["invalid_players"].append(f"{mid}: no pvpteam map")
+            diagnostics["_detail_recheck_mids"].append(mid)
             continue
+
+        # Build equipment queues by unit code from the detail endpoint. Matching
+        # by code instead of raw slot position tolerates harmless group ordering
+        # differences while refusing to attach equipment from a stale character.
+        detail_queues: dict[str, list[dict]] = defaultdict(list)
+        detail_codes: list[str] = []
+        detail_complete = True
+        detail_info = detail_by_mid.get(mid)
+        detail_team_map = (
+            detail_info.get("playerUnitTeamGroupMap")
+            if isinstance(detail_info, dict)
+            else None
+        )
+        detail_groups = (
+            detail_team_map.get("pvpteam")
+            if isinstance(detail_team_map, dict)
+            else None
+        )
+        if isinstance(detail_groups, dict):
+            for _, detail_group in sorted(detail_groups.items(), key=team_group_sort_key):
+                if not isinstance(detail_group, list):
+                    detail_complete = False
+                    continue
+                for detail_unit in detail_group:
+                    detail_code = (
+                        str(detail_unit.get("unitCode") or "").strip()
+                        if isinstance(detail_unit, dict)
+                        else ""
+                    )
+                    if not UNIT_CODE_PATTERN.fullmatch(detail_code):
+                        detail_complete = False
+                        continue
+                    detail_codes.append(detail_code)
+                    detail_queues[detail_code].append(detail_unit)
+        else:
+            detail_complete = False
 
         units: list[str] = []
         unit_records: list[dict] = []
         invalid_player = False
-        for _, group in sorted(team_groups.items(), key=team_group_sort_key):
+        for _, group in sorted(current_groups.items(), key=team_group_sort_key):
             if not isinstance(group, list):
                 invalid_player = True
                 break
@@ -626,12 +679,21 @@ def extract_ranked_players(
                     )
                     invalid_player = True
                     break
+
+                matching_details = detail_queues.get(code)
+                equipment_source = (
+                    matching_details.pop(0)
+                    if matching_details
+                    else unit if player_details is None else {}
+                )
                 try:
-                    equipment = extract_unit_equipment(unit, mid, diagnostics)
+                    equipment = extract_unit_equipment(
+                        equipment_source, mid, diagnostics
+                    )
                 except ValueError as error:
                     diagnostics["invalid_equipment"].append(str(error))
-                    invalid_player = True
-                    break
+                    equipment = {}
+                    detail_complete = False
 
                 units.append(code)
                 unit_records.append({"unit_code": code, "equipment": equipment})
@@ -642,12 +704,23 @@ def extract_ranked_players(
             MIN_CHARACTERS_PER_PLAYER <= len(units) <= MAX_CHARACTERS_PER_PLAYER
         ):
             diagnostics["invalid_players"].append(f"{mid}: character count={len(units)}")
+            diagnostics["_detail_recheck_mids"].append(mid)
             continue
+
+        if isinstance(player_details, dict) and (
+            not detail_complete or Counter(detail_codes) != Counter(units)
+        ):
+            diagnostics["detail_team_mismatch_players"] += 1
+            diagnostics["_detail_recheck_mids"].append(mid)
+
         players.append({"mid": mid, "units": units, "unit_records": unit_records})
 
     diagnostics["valid_players"] = len(players)
     diagnostics["team_size_distribution"] = dict(
         sorted(Counter(len(player["units"]) for player in players).items())
+    )
+    diagnostics["_detail_recheck_mids"] = list(
+        dict.fromkeys(diagnostics["_detail_recheck_mids"])
     )
     return players, diagnostics
 
@@ -1014,7 +1087,12 @@ def scrape() -> dict:
     content_rechecks = 0
     content_recheck_failures: list[dict] = []
     valid_mids = {str(player.get("mid")) for player in players}
-    pending_content_recheck = [mid for mid in mids if mid not in valid_mids]
+    pending_content_recheck = list(
+        dict.fromkeys(
+            [mid for mid in mids if mid not in valid_mids]
+            + list(diagnostics.pop("_detail_recheck_mids", []))
+        )
+    )
     while pending_content_recheck and content_rechecks < DETAIL_CONTENT_RECHECKS:
         content_rechecks += 1
         sleep(1.5 * content_rechecks)
@@ -1031,7 +1109,13 @@ def scrape() -> dict:
         diagnostics["detail_fetches_requested"] = len(mids)
         diagnostics["detail_fetch_failures"] = []
         valid_mids = {str(player.get("mid")) for player in players}
-        pending_content_recheck = [mid for mid in mids if mid not in valid_mids]
+        pending_content_recheck = list(
+            dict.fromkeys(
+                [mid for mid in mids if mid not in valid_mids]
+                + list(diagnostics.pop("_detail_recheck_mids", []))
+            )
+        )
+    diagnostics.pop("_detail_recheck_mids", None)
     diagnostics["detail_content_rechecks"] = content_rechecks
 
     expected_players = len(mids)

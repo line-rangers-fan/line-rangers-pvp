@@ -86,6 +86,88 @@ def test_new_character_without_source_image_or_name_does_not_block_collection(mo
         assert item["player_count"] == 200
 
 
+
+def test_ranking_payload_units_override_stale_detail_team():
+    payload = {
+        "top100": [{"mid": "player-1"}],
+        "playerInfo": [{
+            "mid": "player-1",
+            "playerUnitTeamGroupMap": {
+                "pvpteam": {"1": [{"unitCode": "u-current"}]}
+            },
+        }],
+    }
+    stale_detail = {
+        "player-1": {
+            "mid": "player-1",
+            "playerUnitTeamGroupMap": {
+                "pvpteam": {
+                    "1": [{
+                        "unitCode": "u-old",
+                        "equipMap": {
+                            "WEAPON": {"itemCode": "old-weapon"},
+                            "ARMOR": {"itemCode": "old-armor"},
+                            "ACC": {"itemCode": "old-accessory"},
+                        },
+                    }]
+                }
+            },
+        }
+    }
+
+    players, diagnostics = scraper.extract_ranked_players(
+        payload, 1, player_details=stale_detail
+    )
+
+    assert players[0]["units"] == ["u-current"]
+    assert players[0]["unit_records"][0]["unit_code"] == "u-current"
+    assert players[0]["unit_records"][0]["equipment"] == {}
+    assert diagnostics["detail_team_mismatch_players"] == 1
+    assert diagnostics["_detail_recheck_mids"] == ["player-1"]
+
+
+def test_ranking_payload_units_are_enriched_from_matching_detail_equipment():
+    payload = {
+        "top100": [{"mid": "player-1"}],
+        "playerInfo": [{
+            "mid": "player-1",
+            "playerUnitTeamGroupMap": {
+                "pvpteam": {"1": [{"unitCode": "u-current"}]}
+            },
+        }],
+    }
+    detail = {
+        "player-1": {
+            "mid": "player-1",
+            "playerUnitTeamGroupMap": {
+                "pvpteam": {
+                    "2": [{
+                        "unitCode": "u-current",
+                        "equipMap": {
+                            "WEAPON": {"itemCode": "weapon-current"},
+                            "ARMOR": {"itemCode": "armor-current"},
+                            "ACC": {"itemCode": "acc-current"},
+                        },
+                    }]
+                }
+            },
+        }
+    }
+
+    players, diagnostics = scraper.extract_ranked_players(
+        payload, 1, player_details=detail
+    )
+
+    assert players[0]["units"] == ["u-current"]
+    assert players[0]["unit_records"][0]["equipment"] == {
+        "WEAPON": "weapon-current",
+        "ARMOR": "armor-current",
+        "ACC": "acc-current",
+    }
+    assert diagnostics["detail_team_mismatch_players"] == 0
+
+
+
 def test_duplicate_characters_count_each_equipment_but_not_each_player():
     players = [
         {
