@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 PERIODS = ("hour", "day", "week", "month")
+STALE_PERIODS = {"hour", "day"}
 
 
 def _timestamp(value: object) -> bool:
@@ -19,11 +20,35 @@ def _timestamp(value: object) -> bool:
         return False
 
 
-def _complete_period(value: object) -> bool:
-    if not isinstance(value, dict) or value.get("comparable") is not True:
+def _summary_ok(value: object, *, allow_source_stale: bool) -> bool:
+    if not isinstance(value, dict):
         return False
-    delta = value.get("occurrence_count")
-    return isinstance(delta, int) and not isinstance(delta, bool)
+    if value.get("comparable") is True:
+        return _timestamp(value.get("updated_at"))
+    return (
+        allow_source_stale
+        and value.get("comparable") is False
+        and value.get("reason") == "source_stale"
+        and value.get("updated_at") is None
+        and value.get("calendar_date") is None
+    )
+
+
+def _row_period_ok(value: object, *, allow_source_stale: bool) -> bool:
+    if not isinstance(value, dict):
+        return False
+    if value.get("comparable") is True:
+        delta = value.get("occurrence_count")
+        return isinstance(delta, int) and not isinstance(delta, bool)
+    return (
+        allow_source_stale
+        and value.get("comparable") is False
+        and value.get("reason") == "source_stale"
+        and all(
+            value.get(key) is None
+            for key in ("rank", "occurrence_count", "from_updated_at", "interval_minutes")
+        )
+    )
 
 
 def validate_payload(data: object) -> None:
@@ -48,21 +73,22 @@ def validate_payload(data: object) -> None:
     if not isinstance(comparison, dict) or comparison.get("reference_mode") != "jst_calendar_close_v1":
         raise ValueError("Unexpected comparison reference mode")
 
-    # Partial-after-stale publications are intentionally not written into
-    # comparison history. Complete 200/200 publications, however, must always
-    # expose all four comparison periods; unchanged values are valid ±0 deltas.
+    # Partial-after-stale publications intentionally do not create comparison
+    # history. Their public validity is checked by the sample/publication gate.
     if not complete:
         return
+
+    source_stale = comparison.get("source_stale") is True
+    if source_stale and not _timestamp(comparison.get("source_unchanged_since")):
+        raise ValueError("Stale source has no valid unchanged-since timestamp")
 
     summaries = comparison.get("periods")
     if not isinstance(summaries, dict):
         raise ValueError("Missing comparison summaries")
     for period in PERIODS:
-        summary = summaries.get(period)
-        if (
-            not isinstance(summary, dict)
-            or summary.get("comparable") is not True
-            or not _timestamp(summary.get("updated_at"))
+        if not _summary_ok(
+            summaries.get(period),
+            allow_source_stale=source_stale and period in STALE_PERIODS,
         ):
             raise ValueError(f"Invalid comparison summary: {period}")
 
@@ -73,7 +99,10 @@ def validate_payload(data: object) -> None:
         code = character.get("unit_code", "?") if isinstance(character, dict) else "?"
         periods = ((character.get("change") or {}).get("periods") or {}) if isinstance(character, dict) else {}
         for period in PERIODS:
-            if not _complete_period(periods.get(period)):
+            if not _row_period_ok(
+                periods.get(period),
+                allow_source_stale=source_stale and period in STALE_PERIODS,
+            ):
                 raise ValueError(f"Invalid character comparison: {code} {period}")
 
         for equipment_type, category in (character.get("equipment_rankings") or {}).items():
@@ -81,7 +110,10 @@ def validate_payload(data: object) -> None:
                 item_code = item.get("item_code", "?")
                 item_periods = ((item.get("change") or {}).get("periods") or {})
                 for period in PERIODS:
-                    if not _complete_period(item_periods.get(period)):
+                    if not _row_period_ok(
+                        item_periods.get(period),
+                        allow_source_stale=source_stale and period in STALE_PERIODS,
+                    ):
                         raise ValueError(
                             f"Invalid equipment comparison: {code} {equipment_type} {item_code} {period}"
                         )
