@@ -561,3 +561,17 @@ test("Python microsecond timestamps do not cause a false rounding alarm", () => 
   }
   assert.equal(inspectDataHealth(data, Date.parse(data.updated_at)).status, "ok");
 });
+
+
+test("source-stale data requests a repair even when the collection is recent", () => {
+  const data = healthyData("2026-08-27T03:55:00Z");
+  data.source_freshness = {
+    stale: true,
+    unchanged_since: "2026-08-27T00:00:00Z",
+    unchanged_minutes: 235,
+  };
+  const now = Date.parse("2026-08-27T04:00:00Z");
+  const health = inspectDataHealth(data, now);
+  assert.equal(health.status, "source_stale");
+  assert.equal(dataNeedsCollection(data, now), true);
+});

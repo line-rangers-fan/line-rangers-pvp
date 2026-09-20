@@ -272,6 +272,9 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
   const schemaVersion = Number(compactHealth ? data?.source_schema_version : data?.schema_version);
   const referenceMode = data?.comparison?.reference_mode;
   const comparisonPeriods = data?.comparison?.periods;
+  const sourceStale =
+    data?.source_freshness?.stale === true ||
+    data?.comparison?.source_stale === true;
   const metrics = {
     sampled_players: Number.isFinite(sampledPlayers) ? sampledPlayers : null,
     target_players: Number.isFinite(targetPlayers) ? targetPlayers : null,
@@ -348,6 +351,14 @@ export function inspectDataHealth(data, nowMs = Date.now()) {
   if (!completeSample) {
     return {
       status: "invalid_data",
+      updated_at: updatedAt,
+      age_minutes: ageMinutes,
+      ...metrics,
+    };
+  }
+  if (sourceStale) {
+    return {
+      status: "source_stale",
       updated_at: updatedAt,
       age_minutes: ageMinutes,
       ...metrics,
