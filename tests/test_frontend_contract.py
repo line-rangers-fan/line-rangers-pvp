@@ -241,3 +241,21 @@ def test_mobile_heading_wraps_inside_the_viewport():
     word-break: normal;
     text-wrap: pretty;
   }""" in style
+
+
+def test_character_modal_shows_name_skill_information_and_handbook_link():
+    app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
+    style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
+
+    assert 'skillInfo: "スキル情報"' in app
+    assert 'function rangerDetailUrl(character)' in app
+    assert 'https://rangers.lerico.net/ja/ranger/' in app
+    assert 'RANGER_INFO_WORKER_URL' in app
+    assert 'function loadRangerInfo(character)' in app
+    assert 'renderCharacterSkillSummary(character)' in app
+    assert 'equipment-character-name' in app
+    assert 'equipment-skill-list' in app
+    assert 'description.textContent = et("dialogDescription")' not in app
+    assert 'et("characterPlayers") +' not in app
+    assert '.equipment-character-name' in style
+    assert '.equipment-skill-item' in style
