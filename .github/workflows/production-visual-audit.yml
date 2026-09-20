@@ -150,10 +150,13 @@ jobs:
                   }, { timeout: 20000 });
                   const rangerDetailState = await page.evaluate(() => {
                     const link = document.querySelector('#equipment-dialog[open] .equipment-character-name');
+                    const skillList = document.querySelector('#equipment-dialog[open] .equipment-skill-list');
                     const firstSkill = document.querySelector('#equipment-dialog[open] .equipment-skill-item');
                     const items = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-item')];
                     const images = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-image')];
                     const effects = document.querySelectorAll('#equipment-dialog[open] .equipment-skill-effects');
+                    const firstRect = items[0]?.getBoundingClientRect();
+                    const secondRect = items[1]?.getBoundingClientRect();
                     return {
                       name: link?.textContent?.trim() || '',
                       href: link instanceof HTMLAnchorElement ? link.href : '',
@@ -172,6 +175,11 @@ jobs:
                         return effectsRect.top > descriptionRect.bottom && marginTop >= 8;
                       }),
                       skillGridColumns: firstSkill ? getComputedStyle(firstSkill).gridTemplateColumns : '',
+                      skillListGridAutoFlow: skillList ? getComputedStyle(skillList).gridAutoFlow : '',
+                      skillListOverflowX: skillList ? getComputedStyle(skillList).overflowX : '',
+                      skillItemsHorizontal: !secondRect || !firstRect
+                        ? true
+                        : Math.abs(secondRect.top - firstRect.top) < 4 && secondRect.left > firstRect.left,
                       legacyMeta: document.querySelectorAll('#equipment-dialog[open] .equipment-meta').length,
                     };
                   });
@@ -190,6 +198,9 @@ jobs:
                     !rangerDetailState.separatedEffects ||
                     !rangerDetailState.skillGridColumns ||
                     rangerDetailState.skillGridColumns === 'none' ||
+                    (viewport.width <= 600 && rangerDetailState.skillListGridAutoFlow !== 'column') ||
+                    (viewport.width <= 600 && !['auto', 'scroll'].includes(rangerDetailState.skillListOverflowX)) ||
+                    (viewport.width <= 600 && !rangerDetailState.skillItemsHorizontal) ||
                     rangerDetailState.legacyMeta !== 0
                   ) {
                     throw new Error(
