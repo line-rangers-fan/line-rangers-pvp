@@ -31,6 +31,11 @@ jobs:
     steps:
       - name: Check out current PvP source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Sync runs share a serialized production queue. Always deploy the
+          # newest canonical data available when this run actually starts,
+          # rather than a potentially stale event SHA retained while queued.
+          ref: main
 
       - name: Resolve currently promoted community source
         run: |
@@ -156,8 +161,21 @@ jobs:
         run: |
           set -euo pipefail
           live="$RUNNER_TEMP/live-character-usage.json"
-          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3             "$PRODUCTION_BASE_URL/pvp/data/character_usage.json" -o "$live"
-          cmp docs/data/character_usage.json "$live"
+          matched=false
+          for attempt in $(seq 1 18); do
+            nonce="$(git rev-parse HEAD)-$attempt"
+            if curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1 \
+                "$PRODUCTION_BASE_URL/pvp/data/character_usage.json?deploy=$nonce" -o "$live" \
+              && cmp -s docs/data/character_usage.json "$live"; then
+              matched=true
+              break
+            fi
+            sleep 5
+          done
+          if [ "$matched" != true ]; then
+            echo "Production Worker PvP did not converge to the canonical snapshot."
+            exit 1
+          fi
           jq -e '
             if (.sampled_players == 200 and .complete_target == true) then
               (.comparison.periods | [.hour,.day,.week,.month] | all(.comparable == true)) and
