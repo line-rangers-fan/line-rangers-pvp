@@ -151,10 +151,13 @@ jobs:
                   const rangerDetailState = await page.evaluate(() => {
                     const link = document.querySelector('#equipment-dialog[open] .equipment-character-name');
                     const skillList = document.querySelector('#equipment-dialog[open] .equipment-skill-list');
+                    const summary = document.querySelector('#equipment-dialog[open] .equipment-summary');
                     const firstSkill = document.querySelector('#equipment-dialog[open] .equipment-skill-item');
                     const items = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-item')];
                     const images = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-image')];
                     const effects = document.querySelectorAll('#equipment-dialog[open] .equipment-skill-effects');
+                    const summaryRect = summary?.getBoundingClientRect();
+                    const skillListRect = skillList?.getBoundingClientRect();
                     const firstRect = items[0]?.getBoundingClientRect();
                     const secondRect = items[1]?.getBoundingClientRect();
                     return {
@@ -177,6 +180,9 @@ jobs:
                       skillGridColumns: firstSkill ? getComputedStyle(firstSkill).gridTemplateColumns : '',
                       skillListGridAutoFlow: skillList ? getComputedStyle(skillList).gridAutoFlow : '',
                       skillListOverflowX: skillList ? getComputedStyle(skillList).overflowX : '',
+                      mobileSkillListLeftGap: summaryRect && skillListRect
+                        ? Math.round((skillListRect.left - summaryRect.left) * 10) / 10
+                        : null,
                       skillItemsHorizontal: !secondRect || !firstRect
                         ? true
                         : Math.abs(secondRect.top - firstRect.top) < 4 && secondRect.left > firstRect.left,
@@ -200,6 +206,7 @@ jobs:
                     rangerDetailState.skillGridColumns === 'none' ||
                     (viewport.width <= 600 && rangerDetailState.skillListGridAutoFlow !== 'column') ||
                     (viewport.width <= 600 && !['auto', 'scroll'].includes(rangerDetailState.skillListOverflowX)) ||
+                    (viewport.width <= 600 && (rangerDetailState.mobileSkillListLeftGap == null || rangerDetailState.mobileSkillListLeftGap > 12)) ||
                     (viewport.width <= 600 && !rangerDetailState.skillItemsHorizontal) ||
                     rangerDetailState.legacyMeta !== 0
                   ) {
