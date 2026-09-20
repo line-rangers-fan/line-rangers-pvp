@@ -136,6 +136,37 @@ jobs:
                       );
                     }
                   }
+
+                  await page.locator('#ranking-body .character-button').first().click();
+                  await page.waitForSelector('#equipment-dialog[open] .equipment-table tbody tr', { timeout: 15000 });
+                  const equipmentComparisonStates = {};
+                  for (const period of ['hour', 'day', 'week', 'month']) {
+                    await page.evaluate((selected) => {
+                      const option = document.querySelector(`[data-rank-period="${selected}"]`);
+                      if (!(option instanceof HTMLButtonElement)) {
+                        throw new Error(`Missing comparison period button: ${selected}`);
+                      }
+                      option.click();
+                    }, period);
+                    await page.waitForTimeout(100);
+                    const equipmentState = await page.evaluate(() => ({
+                      rows: document.querySelectorAll('#equipment-dialog[open] .equipment-table tbody tr').length,
+                      badges: document.querySelectorAll('#equipment-dialog[open] .equipment-table .rank-period-change').length,
+                      pending: document.querySelectorAll('#equipment-dialog[open] .equipment-table .rank-period-pending').length,
+                    }));
+                    equipmentComparisonStates[period] = equipmentState;
+                    if (
+                      equipmentState.rows === 0 ||
+                      equipmentState.badges !== equipmentState.rows ||
+                      equipmentState.pending !== 0
+                    ) {
+                      throw new Error(
+                        `${target.name} rendered invalid equipment ${period} comparison badges at ${viewport.name}: ${JSON.stringify(equipmentState)}`,
+                      );
+                    }
+                  }
+                  await page.locator('#equipment-close').click();
+                  comparisonStates.equipment = equipmentComparisonStates;
                 }
 
                 const state = await page.evaluate(() => {
