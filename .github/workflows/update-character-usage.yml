@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 # A collection must never be cancelled by a UI deployment or a later timer.
 # Queue overlapping runs so the last known-good JSON always remains publishable.
@@ -128,6 +129,17 @@ jobs:
           # data-only commit first so the push cannot overwrite that fix.
           git pull --rebase origin main
           git push
+
+      - name: Dispatch synchronized PvP publication
+        if: steps.decision.outputs.due == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-production-pvp.yml/dispatches" \
+            -f ref=main >/dev/null
+          echo "Dispatched production PvP synchronization for the verified data commit."
 
       - name: Upload debug artifacts
         if: always()
