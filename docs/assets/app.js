@@ -240,16 +240,6 @@ const TAP_HINT = {
   ko: "캐릭터를 탭하면 장비 순위를 볼 수 있습니다.",
 };
 
-const WEEKLY_NOTICE = {
-  ja: "土曜のPVPランキング初期化直後は、200人分が揃うまで前回データを表示します。3時間以上揃わない場合は、取得できた人数を明記して更新し、200人への再取得を続けます。",
-  en: "After Saturday's PVP reset, the previous data remains until all 200 players are available. After three hours, a verified partial count may be shown while retries continue.",
-  zh: "週六 PVP 排名重置後，系統會先保留上一筆資料。若三小時後仍未滿 200 人，將標明實際人數並持續重試。",
-  th: "หลังรีเซ็ตอันดับ PVP ระบบจะเก็บข้อมูลเดิมไว้ก่อน หากยังไม่ครบ 200 คนหลัง 3 ชั่วโมง จะแสดงจำนวนจริงและลองใหม่ต่อไป",
-  id: "Setelah reset PVP, data sebelumnya dipertahankan. Jika belum mencapai 200 pemain setelah 3 jam, jumlah aktual ditampilkan dan percobaan dilanjutkan.",
-  vi: "Sau khi đặt lại PVP, dữ liệu trước đó được giữ lại. Nếu sau 3 giờ vẫn chưa đủ 200 người, số thực tế sẽ được hiển thị và hệ thống tiếp tục thử lại.",
-  ko: "토요일 PVP 초기화 후에는 이전 데이터를 유지합니다. 3시간 뒤에도 200명이 안 되면 실제 인원을 표시하고 재수집을 계속합니다.",
-};
-
 const STATUS_TEXT = {
   ja: {
     healthy: "正常更新",
@@ -924,18 +914,6 @@ function getDisplayTimeZone() {
   return browserTimeZone || TIMEZONES[state.language] || "UTC";
 }
 
-function updateWeeklyNotice() {
-  const notice = document.querySelector("#sunday-notice");
-  if (!notice) return;
-
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    timeZone: "Asia/Tokyo",
-  }).format(new Date());
-  notice.textContent = WEEKLY_NOTICE[state.language] || WEEKLY_NOTICE.en;
-  notice.hidden = weekday !== "Sun";
-}
-
 function formatInteger(value) {
   return new Intl.NumberFormat(getLocale()).format(Number(value) || 0);
 }
@@ -1030,7 +1008,6 @@ function applyTranslations() {
   setText("#source-status-title", sourceStatus.title);
   setText("#source-status-message", sourceStatus.message);
   updateSourceStatusNotice();
-  updateWeeklyNotice();
 
   setText("#label-league", tr.league);
   setText("#label-slots", tr.slots);
