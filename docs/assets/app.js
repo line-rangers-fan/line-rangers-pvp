@@ -7,6 +7,8 @@ const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
 const REQUEST_TIMEOUT_MS = 12_000;
 const CHARACTER_IMAGE_TIMEOUT_MS = 6_000;
 const RANGER_INFO_TIMEOUT_MS = 8_000;
+const RANGER_INFO_RETRY_COOLDOWN_MS = 15_000;
+const RANGER_INFO_SCHEMA_VERSION = "2";
 const RANGER_INFO_WORKER_URL = "https://line-rangers-pvp-community-production.n-yu1791.workers.dev/api/ranger-info";
 const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
 // Match the collector, freshness gate, and watchdog. A result that exceeded
@@ -108,7 +110,7 @@ const equipmentTranslations = {
     skillInfo: "スキル情報",
     skillEffects: "スキル効果",
     skillLoading: "スキル情報を読み込んでいます…",
-    skillUnavailable: "スキル情報を取得できませんでした。キャラ名をタップすると詳細を確認できます。",
+    skillUnavailable: "スキル情報を取得できませんでした。少し待ってから、もう一度キャラを開いてください。",
     characterDetailHint: "キャラ名をタップすると詳細情報を開きます",
     weapon: "武器",
     armor: "防具",
@@ -129,7 +131,7 @@ const equipmentTranslations = {
     skillInfo: "Skills",
     skillEffects: "Skill effects",
     skillLoading: "Loading skill information…",
-    skillUnavailable: "Skill information is unavailable. Tap the character name for full details.",
+    skillUnavailable: "Skill information is unavailable. Please wait a moment and open the character again.",
     characterDetailHint: "Tap the character name to open full details",
     weapon: "Weapon",
     armor: "Armor",
@@ -866,7 +868,7 @@ const state = {
   selectedCharacter: null,
   rangerInfo: new Map(),
   rangerInfoPending: new Set(),
-  rangerInfoFailed: new Set(),
+  rangerInfoFailed: new Map(),
   selectedEquipmentType: "WEAPON",
   selectedRankPeriod: "day",
   rankingScrollTop: 0,
@@ -2402,7 +2404,7 @@ function createSkillIcon(skill) {
 function rangerInfoEndpoint(character) {
   const unitCode = String(character?.unit_code || "");
   if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return "";
-  const params = new URLSearchParams({ unit: unitCode });
+  const params = new URLSearchParams({ unit: unitCode, schema: RANGER_INFO_SCHEMA_VERSION });
   if (window.location.hostname === "line-rangers-fan.github.io") {
     return `${RANGER_INFO_WORKER_URL}?${params.toString()}`;
   }
@@ -2432,13 +2434,16 @@ function isValidRangerInfo(payload, unitCode) {
 async function loadRangerInfo(character) {
   const unitCode = String(character?.unit_code || "");
   if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return;
-  if (
-    state.rangerInfo.has(unitCode) ||
-    state.rangerInfoPending.has(unitCode) ||
-    state.rangerInfoFailed.has(unitCode)
-  ) {
+
+  const failedAt = state.rangerInfoFailed.get(unitCode);
+  if (failedAt && Date.now() - failedAt < RANGER_INFO_RETRY_COOLDOWN_MS) {
     return;
   }
+  if (failedAt) state.rangerInfoFailed.delete(unitCode);
+  if (state.rangerInfo.has(unitCode) || state.rangerInfoPending.has(unitCode)) {
+    return;
+  }
+
   const endpoint = rangerInfoEndpoint(character);
   if (!endpoint) return;
 
@@ -2447,7 +2452,7 @@ async function loadRangerInfo(character) {
     const response = await fetch(endpoint, {
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(RANGER_INFO_TIMEOUT_MS),
-      cache: "force-cache",
+      cache: "no-store",
     });
     if (!response.ok) throw new Error("Ranger skill information is unavailable.");
     const payload = await response.json();
@@ -2455,9 +2460,10 @@ async function loadRangerInfo(character) {
       throw new Error("Invalid Ranger skill information.");
     }
     state.rangerInfo.set(unitCode, payload);
+    state.rangerInfoFailed.delete(unitCode);
   } catch (error) {
     console.warn("Ranger skill information is unavailable.", error);
-    state.rangerInfoFailed.add(unitCode);
+    state.rangerInfoFailed.set(unitCode, Date.now());
   } finally {
     state.rangerInfoPending.delete(unitCode);
     if (
@@ -2508,6 +2514,7 @@ function renderCharacterSkillSummary(character) {
     info.skills.forEach((skill) => {
       const item = document.createElement("article");
       item.className = "equipment-skill-item";
+      item.dataset.hasEffects = String(skill.effects.length > 0);
       item.appendChild(createSkillIcon(skill));
 
       const body = document.createElement("div");
