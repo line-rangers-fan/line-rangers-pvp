@@ -1,0 +1,98 @@
+name: diagnose-production-board-delivery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-production-board-delivery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      D1_NAME: line-rangers-pvp-production-db
+      PRODUCTION_BASE_URL: https://line-rangers-pvp-community-production.n-yu1791.workers.dev
+    steps:
+      - name: Resolve production D1 read-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          accounts="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+          account_id="$(printf '%s' "$accounts" | jq -er '.result | if length == 1 then .[0].id else error("expected exactly one Cloudflare account") end')"
+          echo "::add-mask::$account_id"
+          databases="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "https://api.cloudflare.com/client/v4/accounts/$account_id/d1/database?per_page=100")"
+          db_id="$(printf '%s' "$databases" | jq -er --arg name "$D1_NAME" '[.result[] | select(.name == $name) | .uuid][0]')"
+          echo "::add-mask::$db_id"
+          echo "ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
+          echo "DB_ID=$db_id" >> "$GITHUB_ENV"
+
+      - name: Inspect recent posts and upload sessions
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          query() {
+            local sql="$1"
+            local body
+            body="$(jq -nc --arg sql "$sql" '{sql:$sql}')"
+            curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               -H "Content-Type: application/json"               --data "$body"               "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/d1/database/$DB_ID/query"
+          }
+
+          echo "=== BOARD_COUNTS ==="
+          query "SELECT status,COUNT(*) count FROM posts GROUP BY status ORDER BY status" | jq -c '.result[0].results'
+
+          echo "=== LOGICAL_VISIBLE_COUNTS_BY_BOARD ==="
+          query "SELECT p.board,COUNT(*) count FROM posts p WHERE p.status='visible' AND (p.parent IS NULL OR EXISTS(SELECT 1 FROM posts parent WHERE parent.id=p.parent AND parent.status='visible')) AND (p.media_group IS NULL OR p.id=COALESCE((SELECT g.id FROM posts g WHERE g.board=p.board AND g.author=p.author AND g.parent IS p.parent AND g.status='visible' AND g.media_group=p.media_group AND (g.video IS NOT NULL OR g.media_type LIKE 'video/%') ORDER BY g.created ASC,g.id ASC LIMIT 1),(SELECT g.id FROM posts g WHERE g.board=p.board AND g.author=p.author AND g.parent IS p.parent AND g.status='visible' AND g.media_group=p.media_group ORDER BY g.created ASC,g.id ASC LIMIT 1))) GROUP BY p.board ORDER BY p.board" | jq -c '.result[0].results'
+
+          echo "=== BRUSH2_USERS ==="
+          query "SELECT id,name,role,created FROM users WHERE name='ブラシ2' OR name LIKE '%ブラシ2%' ORDER BY created DESC" | jq -c '.result[0].results'
+
+          echo "=== BRUSH2_POSTS ==="
+          query "SELECT p.id,u.name,u.role,p.board,p.parent,p.status,p.created,p.media_group mediaGroup,p.media_type mediaType,CASE WHEN p.media_key IS NULL THEN 0 ELSE 1 END hasMedia FROM posts p JOIN users u ON u.id=p.author WHERE u.name='ブラシ2' OR u.name LIKE '%ブラシ2%' ORDER BY p.created DESC LIMIT 100" | jq -c '.result[0].results'
+
+          echo "=== RECENT_POSTS ==="
+          query "SELECT p.id,u.name,u.role,p.board,p.parent,p.status,p.created,p.media_group mediaGroup,p.media_type mediaType,CASE WHEN p.media_key IS NULL THEN 0 ELSE 1 END hasMedia FROM posts p JOIN users u ON u.id=p.author ORDER BY p.created DESC LIMIT 80" | jq -c '.result[0].results'
+
+          echo "=== UPLOAD_SESSION_COUNTS ==="
+          query "SELECT status,COUNT(*) count FROM upload_sessions GROUP BY status ORDER BY status" | jq -c '.result[0].results'
+
+          echo "=== STALE_UPLOAD_SESSIONS ==="
+          query "SELECT s.id,u.name,s.status,s.created,s.updated,s.post,s.media_group mediaGroup,s.media_type mediaType FROM upload_sessions s JOIN users u ON u.id=s.user WHERE s.status<>'completed' AND s.updated < (CAST(strftime('%s','now') AS INTEGER)*1000 - 900000) ORDER BY s.updated ASC LIMIT 100" | jq -c '.result[0].results'
+
+          echo "=== RECENT_UPLOAD_SESSIONS ==="
+          query "SELECT s.id,u.name,s.status,s.created,s.updated,s.post,s.media_group mediaGroup,s.media_type mediaType FROM upload_sessions s JOIN users u ON u.id=s.user ORDER BY s.updated DESC LIMIT 50" | jq -c '.result[0].results'
+
+      - name: Compare live board API with D1-visible posts
+        run: |
+          set -euo pipefail
+          health="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 "$PRODUCTION_BASE_URL/api/health")"
+          printf '%s' "$health" | jq -e '.ok == true and .checks.d1 == true and .checks.r2 == true' >/dev/null
+          first="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 "$PRODUCTION_BASE_URL/api/board")"
+          board="$(printf '%s' "$first" | jq -er '.board')"
+          echo "LIVE_BOARD=$board"
+          echo "=== LIVE_FIRST_PAGE ==="
+          printf '%s' "$first" | jq -c '{stats,posts:[.posts[]|{id,name,role,parent,created,mediaGroup,mine}],nextCursor}'
+          total=0
+          cursor=""
+          for page in $(seq 1 50); do
+            if [ "$page" -eq 1 ]; then
+              data="$first"
+            else
+              data="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2                 "$PRODUCTION_BASE_URL/api/board?board=$(python -c 'import urllib.parse,os; print(urllib.parse.quote(os.environ["BOARD"]))')&cursor=$(python -c 'import urllib.parse,os; print(urllib.parse.quote(os.environ["CURSOR"]))')")"
+            fi
+            count="$(printf '%s' "$data" | jq '.posts|length')"
+            total=$((total+count))
+            cursor="$(printf '%s' "$data" | jq -r '.nextCursor // empty')"
+            [ -z "$cursor" ] && break
+            export BOARD="$board" CURSOR="$cursor"
+          done
+          echo "LIVE_TOP_LEVEL_PAGED_TOTAL=$total"
+          echo "=== LIVE_BRUSH2_ON_FIRST_PAGE ==="
+          printf '%s' "$first" | jq -c '[.posts[] | select(.name=="ブラシ2" or (.name|contains("ブラシ2"))) | {id,name,parent,created,mediaGroup}]'
