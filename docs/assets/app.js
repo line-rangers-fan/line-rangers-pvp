@@ -106,6 +106,7 @@ const equipmentTranslations = {
       "装備数は同じキャラを複数編成した分も数え、使用率は同じプレイヤーを1人として計算します。",
     characterPlayers: "キャラ使用人数",
     skillInfo: "スキル情報",
+    skillEffects: "スキル効果",
     skillLoading: "スキル情報を読み込んでいます…",
     skillUnavailable: "スキル情報を取得できませんでした。キャラ名をタップすると詳細を確認できます。",
     characterDetailHint: "キャラ名をタップすると詳細情報を開きます",
@@ -126,6 +127,7 @@ const equipmentTranslations = {
       "Every character copy counts toward equipment count; each player counts once for usage rate.",
     characterPlayers: "Character players",
     skillInfo: "Skills",
+    skillEffects: "Skill effects",
     skillLoading: "Loading skill information…",
     skillUnavailable: "Skill information is unavailable. Tap the character name for full details.",
     characterDetailHint: "Tap the character name to open full details",
@@ -2347,6 +2349,56 @@ function rangerDetailUrl(character) {
   return `https://rangers.lerico.net/ja/ranger/${encodeURIComponent(unitCode)}`;
 }
 
+function isTrustedSkillIconUrl(value) {
+  if (typeof value !== "string" || value.length > 320) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "rangers.lerico.net" &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      !url.search &&
+      !url.hash &&
+      url.pathname.startsWith("/res/skill_icon/") &&
+      url.pathname.length > "/res/skill_icon/".length
+    );
+  } catch {
+    return false;
+  }
+}
+
+function createSkillIcon(skill) {
+  const visual = document.createElement("div");
+  visual.className = "equipment-skill-visual";
+
+  const fallback = document.createElement("span");
+  fallback.className = "equipment-skill-image-fallback";
+  fallback.textContent = "SKILL";
+  fallback.setAttribute("aria-hidden", "true");
+  visual.appendChild(fallback);
+
+  if (!isTrustedSkillIconUrl(skill?.iconUrl)) return visual;
+
+  const image = document.createElement("img");
+  image.className = "equipment-skill-image";
+  image.src = skill.iconUrl;
+  image.alt = skill.name || et("skillInfo");
+  image.loading = "lazy";
+  image.decoding = "async";
+  image.referrerPolicy = "no-referrer";
+  image.addEventListener("load", () => {
+    visual.classList.add("has-image");
+  }, { once: true });
+  image.addEventListener("error", () => {
+    image.remove();
+    visual.classList.remove("has-image");
+  }, { once: true });
+  visual.prepend(image);
+  return visual;
+}
+
 function rangerInfoEndpoint(character) {
   const unitCode = String(character?.unit_code || "");
   if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return "";
@@ -2359,6 +2411,7 @@ function rangerInfoEndpoint(character) {
 
 function isValidRangerInfo(payload, unitCode) {
   if (!payload || typeof payload !== "object" || payload.unitCode !== unitCode) return false;
+  if (typeof payload.name !== "string" || payload.name.trim().length < 1 || payload.name.length > 180) return false;
   if (typeof payload.sourceUrl !== "string" || payload.sourceUrl !== `https://rangers.lerico.net/ja/ranger/${encodeURIComponent(unitCode)}`) return false;
   if (!Array.isArray(payload.skills) || payload.skills.length < 1 || payload.skills.length > 3) return false;
   return payload.skills.every((skill) =>
@@ -2368,7 +2421,11 @@ function isValidRangerInfo(payload, unitCode) {
     skill.name.trim().length > 0 &&
     skill.name.length <= 120 &&
     typeof skill.description === "string" &&
-    skill.description.length <= 500
+    skill.description.length <= 500 &&
+    Array.isArray(skill.effects) &&
+    skill.effects.length <= 12 &&
+    skill.effects.every((effect) => typeof effect === "string" && effect.length > 0 && effect.length <= 220) &&
+    (skill.iconUrl === null || isTrustedSkillIconUrl(skill.iconUrl))
   );
 }
 
@@ -2449,16 +2506,45 @@ function renderCharacterSkillSummary(character) {
     const list = document.createElement("div");
     list.className = "equipment-skill-list";
     info.skills.forEach((skill) => {
-      const item = document.createElement("div");
+      const item = document.createElement("article");
       item.className = "equipment-skill-item";
+      item.appendChild(createSkillIcon(skill));
+
+      const body = document.createElement("div");
+      body.className = "equipment-skill-body";
+
       const skillName = document.createElement("strong");
+      skillName.className = "equipment-skill-name";
       skillName.textContent = skill.name;
-      item.appendChild(skillName);
+      body.appendChild(skillName);
+
       if (skill.description) {
         const description = document.createElement("p");
+        description.className = "equipment-skill-description";
         description.textContent = skill.description;
-        item.appendChild(description);
+        body.appendChild(description);
       }
+
+      if (skill.effects.length) {
+        const effects = document.createElement("div");
+        effects.className = "equipment-skill-effects";
+
+        const effectsLabel = document.createElement("span");
+        effectsLabel.className = "equipment-skill-effects-label";
+        effectsLabel.textContent = et("skillEffects");
+        effects.appendChild(effectsLabel);
+
+        const effectList = document.createElement("ul");
+        skill.effects.forEach((effect) => {
+          const row = document.createElement("li");
+          row.textContent = effect;
+          effectList.appendChild(row);
+        });
+        effects.appendChild(effectList);
+        body.appendChild(effects);
+      }
+
+      item.appendChild(body);
       list.appendChild(item);
     });
     details.appendChild(list);
