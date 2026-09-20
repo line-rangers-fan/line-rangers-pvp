@@ -272,6 +272,9 @@ def test_dynamic_source_requests_use_unique_query_cache_busters(monkeypatch):
             chunk, self.body = self.body[:size], self.body[size:]
             return chunk
 
+        def read(self, size=-1):
+            return self.read1(len(self.body) if size < 0 else size)
+
         def __enter__(self):
             return self
 
