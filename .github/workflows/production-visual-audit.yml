@@ -36,7 +36,7 @@ jobs:
           mkdir -p /tmp/lr-visual-audit
           cd /tmp/lr-visual-audit
           npm init -y >/dev/null
-          npm install --no-audit --no-fund --save-exact playwright@1.55.0
+          npm install --no-audit --no-fund --save-exact playwright@1.63.0
           npm audit --omit=dev --audit-level=high
           npx playwright install --with-deps chromium
 
