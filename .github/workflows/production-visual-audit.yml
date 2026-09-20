@@ -184,6 +184,7 @@ jobs:
                     rangerDetailState.skillItems < 1 ||
                     rangerDetailState.skillImages !== rangerDetailState.skillItems ||
                     rangerDetailState.loadedSkillImages !== rangerDetailState.skillImages ||
+                    rangerDetailState.effectGroups !== rangerDetailState.skillItems ||
                     !rangerDetailState.separatedEffects ||
                     !rangerDetailState.skillGridColumns ||
                     rangerDetailState.skillGridColumns === 'none' ||
