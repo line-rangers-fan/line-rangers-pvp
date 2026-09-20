@@ -63,6 +63,7 @@ PLAYER_API_URL_TEMPLATE = "https://rangers.lerico.net/api/getPlayer/{mid}"
 TRANSLATE_API_URL = "https://rangers.lerico.net/api/v2/translate"
 UNIT_TRANSLATE_KEY = "ja:UNIT"
 SOURCE_HOST = "rangers.lerico.net"
+SOURCE_STALE_AFTER_MINUTES = 180
 
 
 def read_bounded_env_int(
