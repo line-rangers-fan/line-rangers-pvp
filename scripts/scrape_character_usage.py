@@ -1750,11 +1750,14 @@ def update_history(
     # Deduplicate by timestamp before retention.  A later value with the same
     # timestamp is equivalent for comparisons, so retaining one avoids a
     # corrupt history growing without bound after a retry.
-    parsed_snapshots: dict[str, tuple[datetime, dict]] = {}
+    parsed_snapshots: dict[datetime, tuple[datetime, dict]] = {}
     for item in snapshots:
         timestamp = _parse_history_time(item.get("updated_at"))
         if timestamp is not None:
-            parsed_snapshots[str(item["updated_at"])] = (timestamp, item)
+            # Key by the parsed instant rather than the original spelling.
+            # A UTC timestamp written as Z and the same instant written as
+            # +00:00 must consume only one history slot.
+            parsed_snapshots[timestamp] = (timestamp, item)
 
     close_by_date: dict[object, tuple[datetime, dict]] = {}
     recent: list[tuple[datetime, dict]] = []
