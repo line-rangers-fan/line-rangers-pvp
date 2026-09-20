@@ -13,10 +13,10 @@ on:
   repository_dispatch:
     types: [collect-pvp-data]
   schedule:
-    # Independent hourly fallback for the Worker baseline.  A single slot and
-    # a 50-minute gate avoid the old 90+ minute cadence caused by checking at
-    # two slots while allowing a full 60-minute freshness window.
-    - cron: "17 * * * *"
+    # Two independent opportunities per hour make a dropped GitHub cron event
+    # recoverable. The 50-minute freshness gate still permits at most one
+    # successful normal collection per hour.
+    - cron: "17,47 * * * *"
 
 permissions:
   contents: write
@@ -104,11 +104,10 @@ jobs:
         timeout-minutes: 3
         run: python scripts/cache_character_images.py
 
-      - name: Rebuild sample-independent comparisons
+      - name: Rebuild verified comparisons
         if: steps.decision.outputs.due == 'true'
-        # A verified 199-player (or other partial) snapshot is a valid baseline.
-        # Keep target collection at 200, but never require equal headcounts just
-        # to calculate hour/day/week/month deltas.
+        # Public hour/day/week/month baselines stay complete-only (200/200).
+        # Partial publications never become comparison references.
         run: python scripts/rebuild_cross_sample_comparisons.py
 
       - name: Save collected data
