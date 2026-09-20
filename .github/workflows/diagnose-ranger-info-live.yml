@@ -24,14 +24,12 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t units < <(jq -r '.characters[:40][]?.unit_code // empty' docs/data/character_usage.json | awk 'NF && !seen[$0]++')
-          echo "UNIT_COUNT=\${#units[@]}"
+          echo "UNIT_COUNT=${#units[@]}"
           failures=0
-          for unit in "\${units[@]}"; do
+          for unit in "${units[@]}"; do
             body="$(mktemp)"
             headers="$(mktemp)"
-            status="$(curl --location --silent --show-error --output "$body" --dump-header "$headers" --write-out '%{http_code}' \
-              --connect-timeout 10 --max-time 30 -H 'Origin: https://line-rangers-fan.github.io' \
-              "$BASE/api/ranger-info?unit=$unit&diag=\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}" || true)"
+            status="$(curl --location --silent --show-error --output "$body" --dump-header "$headers" --write-out '%{http_code}'               --connect-timeout 10 --max-time 30 -H 'Origin: https://line-rangers-fan.github.io'               "$BASE/api/ranger-info?unit=$unit&diag=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" || true)"
             cors="$(awk 'BEGIN{IGNORECASE=1}/^access-control-allow-origin:/{gsub("\r","");print $2}' "$headers" | tail -1)"
             valid=false
             if [ "$status" = "200" ] && jq -e --arg unit "$unit" '
