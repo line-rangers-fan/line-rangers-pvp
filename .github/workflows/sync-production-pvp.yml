@@ -1,0 +1,170 @@
+name: sync-production-pvp
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/sync-production-pvp.yml"
+
+permissions:
+  contents: read
+
+# Serialize with full community promotions so a PvP-only refresh can never race
+# a board deployment or overwrite a newer validated community build.
+concurrency:
+  group: line-rangers-original-community-production
+  cancel-in-progress: false
+
+env:
+  MINIMUM_COMMUNITY_SOURCE_SHA: d7b4fe844766a77d3526379f74e6bce8becc425c
+  WORKER_NAME: line-rangers-pvp-community-production
+  D1_NAME: line-rangers-pvp-production-db
+  R2_BUCKET: line-rangers-pvp-production-media
+  PRODUCTION_BASE_URL: https://line-rangers-pvp-community-production.n-yu1791.workers.dev
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out current PvP source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve currently promoted community source
+        run: |
+          set -euo pipefail
+          source_sha="$(sed -n 's/^copy_source_sha=//p' .production-promotion-trigger | head -n1)"
+          if ! [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "Production promotion marker does not contain a valid copy source SHA."
+            exit 78
+          fi
+          echo "COPY_SOURCE_SHA=$source_sha" >> "$GITHUB_ENV"
+
+      - name: Fetch exact promoted community source
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout --no-tags https://github.com/nyu1791-collab/copy-LINE-.git copy-source
+          git -C copy-source fetch --depth=256 origin "$COPY_SOURCE_SHA" "$MINIMUM_COMMUNITY_SOURCE_SHA"
+          git -C copy-source checkout --detach "$COPY_SOURCE_SHA"
+          test "$(git -C copy-source rev-parse HEAD)" = "$COPY_SOURCE_SHA"
+          if ! git -C copy-source merge-base --is-ancestor "$MINIMUM_COMMUNITY_SOURCE_SHA" "$COPY_SOURCE_SHA"; then
+            echo "Promoted community source predates the minimum validated unread/Owner identity fix."
+            exit 78
+          fi
+
+      - name: Overlay current canonical PvP
+        run: |
+          set -euo pipefail
+          rm -rf copy-source/public/pvp
+          mkdir -p copy-source/public/pvp
+          rsync -a --delete --exclude 'OWNER_PREVIEW_NOTE.md' docs/ copy-source/public/pvp/
+          cmp docs/index.html copy-source/public/pvp/index.html
+          diff -qr docs/assets copy-source/public/pvp/assets
+          diff -qr docs/data copy-source/public/pvp/data
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: copy-source/package-lock.json
+
+      - name: Install dependencies
+        working-directory: copy-source
+        run: npm run install:ci
+
+      - name: Resolve existing Cloudflare bindings only
+        working-directory: copy-source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "CLOUDFLARE_BOARD_API_TOKEN is required."
+            exit 78
+          fi
+          response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+          account_id="$(printf '%s' "$response" | jq -er '.result | if length == 1 then .[0].id else error("Token must access exactly one Cloudflare account") end')"
+          if ! [[ "$account_id" =~ ^[A-Fa-f0-9]{32}$ ]]; then
+            echo "Cloudflare returned an invalid account ID."
+            exit 1
+          fi
+          echo "::add-mask::$account_id"
+          echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
+
+          db_list="$(npx wrangler d1 list --json)"
+          db_id="$(printf '%s' "$db_list" | jq -r --arg name "$D1_NAME" '[.[] | select(.name == $name) | (.uuid // .database_id // .id)][0] // empty')"
+          if ! [[ "$db_id" =~ ^[A-Fa-f0-9-]{36}$ ]]; then
+            echo "Existing production D1 could not be resolved."
+            exit 78
+          fi
+          if ! npx wrangler r2 bucket info "$R2_BUCKET" --json >/dev/null 2>&1; then
+            echo "Existing production R2 bucket could not be resolved."
+            exit 78
+          fi
+          echo "::add-mask::$db_id"
+          tmp="$(mktemp)"
+          jq --arg id "$db_id" --arg db "$D1_NAME" --arg bucket "$R2_BUCKET" --arg worker "$WORKER_NAME" '
+            .name = $worker
+            | (.d1_databases[] | select(.binding == "DB") | .database_name) = $db
+            | (.d1_databases[] | select(.binding == "DB") | .database_id) = $id
+            | (.r2_buckets[] | select(.binding == "BUCKET") | .bucket_name) = $bucket
+          ' wrangler.jsonc > "$tmp"
+          mv "$tmp" wrangler.jsonc
+
+      - name: Validate PvP snapshot and build composite
+        working-directory: copy-source
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --audit-level=high
+          jq -e '
+            .target_players == 200 and
+            (
+              (.sampled_players == 200 and .complete_target == true and .publication_mode == "complete")
+              or
+              (.sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale")
+            )
+          ' public/pvp/data/character_usage.json >/dev/null
+          jq -e '
+            if (.sampled_players == 200 and .complete_target == true) then
+              .comparison.reference_mode == "jst_calendar_close_v1" and
+              (.comparison.periods | [.hour,.day,.week,.month] | all(.comparable == true)) and
+              ([.characters[] | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all) and
+              ([.characters[] | .equipment_rankings[]?.items[]? | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all)
+            else
+              true
+            end
+          ' public/pvp/data/character_usage.json >/dev/null
+          npm run build
+
+      - name: Deploy PvP refresh without mutating board data
+        working-directory: copy-source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          output_config="$(find dist -type f -name wrangler.json -print -quit)"
+          if [ -z "$output_config" ]; then
+            echo "Cloudflare Vite output config was not generated."
+            exit 1
+          fi
+          npx wrangler deploy --config "$output_config"
+
+      - name: Verify live PvP matches canonical snapshot
+        run: |
+          set -euo pipefail
+          live="$RUNNER_TEMP/live-character-usage.json"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3             "$PRODUCTION_BASE_URL/pvp/data/character_usage.json" -o "$live"
+          cmp docs/data/character_usage.json "$live"
+          jq -e '
+            if (.sampled_players == 200 and .complete_target == true) then
+              (.comparison.periods | [.hour,.day,.week,.month] | all(.comparable == true)) and
+              ([.characters[] | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all)
+            else
+              true
+            end
+          ' "$live" >/dev/null
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3             "$PRODUCTION_BASE_URL/pvp/index.html" | grep -q 'レジェンド帯 キャラ集計'
+          echo "Production Worker PvP is synchronized with canonical docs data."
