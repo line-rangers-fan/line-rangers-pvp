@@ -1772,6 +1772,170 @@ def _usable_history_snapshot(snapshot: object, current_time: datetime, sampled: 
     return total == slots
 
 
+
+def _character_comparison_signature(value: object) -> tuple | None:
+    """Return aggregate team fields used by public character comparisons."""
+    if not isinstance(value, dict):
+        return None
+    rows = value.get("characters")
+    if not isinstance(rows, list) or not rows:
+        return None
+    signature = []
+    for row in rows:
+        if not isinstance(row, dict):
+            return None
+        code = row.get("unit_code")
+        rank = _exact_int(row.get("rank"))
+        occurrence = _exact_int(row.get("occurrence_count"))
+        players = _exact_int(row.get("player_count"))
+        if (
+            not isinstance(code, str)
+            or rank is None
+            or occurrence is None
+            or players is None
+        ):
+            return None
+        signature.append((code, rank, occurrence, players))
+    return tuple(signature)
+
+
+def repeated_source_context(
+    data: dict,
+    history: dict | None,
+    threshold_minutes: int = SOURCE_STALE_AFTER_MINUTES,
+) -> dict:
+    """Detect a long consecutive suffix of identical aggregate team snapshots."""
+    current_time = _parse_history_time(data.get("updated_at"))
+    current_signature = _character_comparison_signature(data)
+    result = {
+        "stale": False,
+        "unchanged_since": None,
+        "unchanged_minutes": 0.0,
+        "matching_snapshots": 0,
+    }
+    if (
+        current_time is None
+        or current_time.tzinfo is None
+        or current_signature is None
+        or threshold_minutes < 1
+    ):
+        return result
+
+    snapshots = history.get("snapshots") if isinstance(history, dict) else None
+    if not isinstance(snapshots, list):
+        return result
+
+    candidates = []
+    for snapshot in snapshots:
+        timestamp = _parse_history_time(
+            snapshot.get("updated_at") if isinstance(snapshot, dict) else None
+        )
+        if timestamp is None or timestamp.tzinfo is None or timestamp >= current_time:
+            continue
+        try:
+            usable = _usable_history_snapshot(
+                snapshot, current_time, data["sampled_players"]
+            )
+        except (KeyError, TypeError, ValueError, OverflowError):
+            usable = False
+        if usable:
+            candidates.append((timestamp, snapshot))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+
+    earliest = None
+    matches = 0
+    for timestamp, snapshot in candidates:
+        if _character_comparison_signature(snapshot) != current_signature:
+            break
+        earliest = timestamp
+        matches += 1
+
+    if earliest is None:
+        return result
+
+    unchanged_minutes = max(0.0, (current_time - earliest).total_seconds() / 60)
+    result.update(
+        {
+            "stale": unchanged_minutes >= threshold_minutes,
+            "unchanged_since": earliest.isoformat(),
+            "unchanged_minutes": round(unchanged_minutes, 1),
+            "matching_snapshots": matches,
+        }
+    )
+    return result
+
+
+def quarantine_repeated_source_history(
+    data: dict,
+    history: dict | None,
+    threshold_minutes: int = SOURCE_STALE_AFTER_MINUTES,
+) -> tuple[dict, dict]:
+    """Drop later synthetic timestamps from a detected frozen-source suffix."""
+    clean = dict(history) if isinstance(history, dict) else {}
+    snapshots = clean.get("snapshots")
+    snapshots = list(snapshots) if isinstance(snapshots, list) else []
+    clean["snapshots"] = snapshots
+    context = repeated_source_context(data, clean, threshold_minutes)
+    if not context["stale"]:
+        return clean, context
+
+    stale_since = _parse_history_time(context["unchanged_since"])
+    signature = _character_comparison_signature(data)
+    retained = []
+    for snapshot in snapshots:
+        timestamp = _parse_history_time(
+            snapshot.get("updated_at") if isinstance(snapshot, dict) else None
+        )
+        if (
+            stale_since is not None
+            and timestamp is not None
+            and timestamp > stale_since
+            and _character_comparison_signature(snapshot) == signature
+        ):
+            continue
+        retained.append(snapshot)
+    clean["snapshots"] = retained
+    return clean, context
+
+
+def mark_source_stale_comparison(data: dict, context: dict) -> None:
+    """Expose source freshness uncertainty instead of fabricated zero deltas."""
+    if context.get("stale") is not True:
+        return
+    comparison = data.get("comparison")
+    if not isinstance(comparison, dict):
+        return
+    comparison["source_stale"] = True
+    comparison["source_unchanged_since"] = context.get("unchanged_since")
+    comparison["source_unchanged_minutes"] = context.get("unchanged_minutes")
+
+    for period in ("hour", "day"):
+        summary = comparison.get("periods", {}).get(period)
+        if isinstance(summary, dict) and summary.get("comparable") is False:
+            summary["reason"] = "source_stale"
+
+    def annotate(row: object) -> None:
+        if not isinstance(row, dict):
+            return
+        periods = row.get("change", {}).get("periods")
+        if not isinstance(periods, dict):
+            return
+        for period in ("hour", "day"):
+            value = periods.get(period)
+            if isinstance(value, dict) and value.get("comparable") is False:
+                value["reason"] = "source_stale"
+
+    for row in data.get("characters", []):
+        annotate(row)
+        if not isinstance(row, dict):
+            continue
+        for category in row.get("equipment_rankings", {}).values():
+            if not isinstance(category, dict):
+                continue
+            for item in category.get("items", []):
+                annotate(item)
+
+
 def prepare_comparison_context(data: dict, previous: dict | None, history: dict | None):
     """Quarantine bad past context; never relax validation of the new sample.
 
@@ -1928,6 +2092,11 @@ def health_summary(data: dict) -> dict:
             },
         },
     }
+    summary["source_freshness"] = {
+        "stale": comparison.get("source_stale") is True,
+        "unchanged_since": comparison.get("source_unchanged_since"),
+        "unchanged_minutes": comparison.get("source_unchanged_minutes", 0.0),
+    }
     metadata = data.get("diagnostics", {}).get("character_name_metadata")
     if isinstance(metadata, dict):
         summary["character_metadata"] = {
@@ -2046,18 +2215,25 @@ def main() -> None:
             LAST_COMPLETE_FOR_RUN = None
         stage = "comparison"
         previous, previous_history = prepare_comparison_context(data, previous, previous_history)
+        previous_history, source_context = quarantine_repeated_source_history(
+            data, previous_history
+        )
         if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE:
             # A changing set of fewer than 200 players is not a trustworthy
             # hour/day/week/month baseline. Keep the last complete history and
             # show comparison as unavailable until a full sample returns.
             previous_history = {"snapshots": []}
         add_previous_comparison(data, previous, previous_history)
+        if source_context.get("stale") is True:
+            mark_source_stale_comparison(data, source_context)
         stage = "validation"
         validate_data(data, previous)
         stage = "history"
         history = (
             stored_history
             if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE
+            else previous_history
+            if source_context.get("stale") is True
             else update_history(data, previous_history)
         )
         stage = "publication"

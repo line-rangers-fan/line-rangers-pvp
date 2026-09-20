@@ -1191,3 +1191,71 @@ def test_history_retains_calendar_closes_before_recent_snapshots():
     timestamps = [row["updated_at"] for row in result["snapshots"]]
     assert durable_close["updated_at"] in timestamps
     assert data["updated_at"] in timestamps
+
+
+def test_long_identical_source_suffix_is_quarantined():
+    def data_at(updated_at: str, count: int) -> dict:
+        return {
+            "updated_at": updated_at,
+            "sampled_players": 200,
+            "character_slots": count,
+            "unique_characters": 1,
+            "characters": [{
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": count,
+                "player_count": 200,
+                "adoption_rate": 100.0,
+                "equipment_rankings": {
+                    "WEAPON": {"items": []},
+                    "ARMOR": {"items": []},
+                    "ACC": {"items": []},
+                },
+            }],
+        }
+
+    current = data_at("2026-09-20T05:00:00+00:00", 200)
+    changed = scraper.history_snapshot(data_at("2026-09-20T00:00:00+00:00", 201))
+    frozen_start = scraper.history_snapshot(data_at("2026-09-20T01:00:00+00:00", 200))
+    frozen_later = scraper.history_snapshot(data_at("2026-09-20T04:00:00+00:00", 200))
+    history = {"snapshots": [changed, frozen_start, frozen_later]}
+
+    clean, context = scraper.quarantine_repeated_source_history(current, history)
+
+    assert context["stale"] is True
+    assert context["unchanged_since"] == "2026-09-20T01:00:00+00:00"
+    assert [row["updated_at"] for row in clean["snapshots"]] == [
+        "2026-09-20T00:00:00+00:00",
+        "2026-09-20T01:00:00+00:00",
+    ]
+
+
+def test_short_identical_source_suffix_keeps_valid_zero_history():
+    data = {
+        "updated_at": "2026-09-20T02:00:00+00:00",
+        "sampled_players": 200,
+        "character_slots": 200,
+        "unique_characters": 1,
+        "characters": [{
+            "unit_code": "u-alpha",
+            "rank": 1,
+            "occurrence_count": 200,
+            "player_count": 200,
+            "adoption_rate": 100.0,
+            "equipment_rankings": {
+                "WEAPON": {"items": []},
+                "ARMOR": {"items": []},
+                "ACC": {"items": []},
+            },
+        }],
+    }
+    previous = scraper.history_snapshot(data)
+    previous["updated_at"] = "2026-09-20T01:00:00+00:00"
+    previous["calendar_date"] = "2026-09-20"
+
+    clean, context = scraper.quarantine_repeated_source_history(
+        data, {"snapshots": [previous]}
+    )
+
+    assert context["stale"] is False
+    assert len(clean["snapshots"]) == 1
