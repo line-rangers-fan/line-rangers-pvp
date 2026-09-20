@@ -6,12 +6,9 @@ on:
     branches: [main]
     paths:
       - .github/workflows/production-visual-audit.yml
-      - docs/index.html
-      - docs/assets/app.js
-      - docs/assets/style.css
-      - docs/assets/community-entry.js
-      - docs/assets/community-entry.css
-      - docs/assets/characters/**
+  workflow_run:
+    workflows: ["deploy-github-pages"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -22,6 +19,7 @@ concurrency:
 
 jobs:
   audit:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
