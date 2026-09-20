@@ -144,12 +144,24 @@ jobs:
                   await page.waitForSelector('#equipment-dialog[open] .equipment-table tbody tr', { timeout: 15000 });
                   await page.waitForSelector('#equipment-dialog[open] .equipment-character-name', { timeout: 15000 });
                   await page.waitForSelector('#equipment-dialog[open] .equipment-skill-item', { timeout: 20000 });
+                  await page.waitForFunction(() => {
+                    const images = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-image')];
+                    return images.length > 0 && images.every((image) => image.complete);
+                  }, { timeout: 20000 });
                   const rangerDetailState = await page.evaluate(() => {
                     const link = document.querySelector('#equipment-dialog[open] .equipment-character-name');
+                    const firstSkill = document.querySelector('#equipment-dialog[open] .equipment-skill-item');
+                    const images = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-image')];
+                    const effects = document.querySelectorAll('#equipment-dialog[open] .equipment-skill-effects');
                     return {
                       name: link?.textContent?.trim() || '',
                       href: link instanceof HTMLAnchorElement ? link.href : '',
+                      linkColor: link ? getComputedStyle(link).color : '',
                       skillItems: document.querySelectorAll('#equipment-dialog[open] .equipment-skill-item').length,
+                      skillImages: images.length,
+                      loadedSkillImages: images.filter((image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0).length,
+                      effectGroups: effects.length,
+                      skillGridColumns: firstSkill ? getComputedStyle(firstSkill).gridTemplateColumns : '',
                       legacyMeta: document.querySelectorAll('#equipment-dialog[open] .equipment-meta').length,
                     };
                   });
@@ -160,7 +172,12 @@ jobs:
                     !firstCharacterUnit ||
                     !rangerDetailState.name ||
                     rangerDetailState.href !== expectedRangerHref ||
+                    rangerDetailState.linkColor !== 'rgb(96, 165, 250)' ||
                     rangerDetailState.skillItems < 1 ||
+                    rangerDetailState.skillImages !== rangerDetailState.skillItems ||
+                    rangerDetailState.loadedSkillImages !== rangerDetailState.skillImages ||
+                    !rangerDetailState.skillGridColumns ||
+                    rangerDetailState.skillGridColumns === 'none' ||
                     rangerDetailState.legacyMeta !== 0
                   ) {
                     throw new Error(
