@@ -1,0 +1,186 @@
+name: production-visual-audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/production-visual-audit.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: line-rangers-production-visual-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.13.0
+
+      - name: Install pinned Chromium harness
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/lr-visual-audit
+          cd /tmp/lr-visual-audit
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund --save-exact playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Audit production at mobile, iPad, and desktop viewports
+        env:
+          BOARD_OWNER_ACCESS_TOKEN: ${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd /tmp/lr-visual-audit
+          if [ -z "${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
+            echo "BOARD_OWNER_ACCESS_TOKEN is required for Owner visual verification."
+            exit 78
+          fi
+          cat > audit.mjs <<'EOF'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs/promises';
+          import path from 'node:path';
+
+          const worker = 'https://line-rangers-pvp-community-production.n-yu1791.workers.dev';
+          const pvp = 'https://line-rangers-fan.github.io/line-rangers-pvp/';
+          const ownerKey = process.env.BOARD_OWNER_ACCESS_TOKEN;
+          const viewports = [
+            { name: 'mobile-390x844', width: 390, height: 844 },
+            { name: 'ipad-1024x1366', width: 1024, height: 1366 },
+            { name: 'desktop-1440x1000', width: 1440, height: 1000 },
+          ];
+          const targets = [
+            { name: 'pvp', url: pvp, mustInclude: ['レジェンド帯 キャラ集計'] },
+            { name: 'boards', url: worker + '/boards', mustInclude: ['新キャラ情報掲示板', '運営'] },
+          ];
+          const artifactDir = path.resolve('artifacts');
+          await fs.mkdir(artifactDir, { recursive: true });
+          const browser = await chromium.launch({ headless: true });
+          const results = [];
+          let failed = false;
+
+          try {
+            for (const viewport of viewports) {
+              const context = await browser.newContext({
+                viewport: { width: viewport.width, height: viewport.height },
+                deviceScaleFactor: 1,
+                reducedMotion: 'reduce',
+                locale: 'ja-JP',
+              });
+
+              const ownerResponse = await context.request.post(worker + '/api/owner', {
+                headers: {
+                  Origin: worker,
+                  'Sec-Fetch-Site': 'same-origin',
+                  'Content-Type': 'application/json',
+                },
+                data: { key: ownerKey },
+              });
+              if (ownerResponse.status() !== 200) {
+                throw new Error(`Owner activation failed at ${viewport.name}: HTTP ${ownerResponse.status()}`);
+              }
+
+              for (const target of targets) {
+                const page = await context.newPage();
+                const pageErrors = [];
+                const consoleErrors = [];
+                page.on('pageerror', error => pageErrors.push(String(error)));
+                page.on('console', msg => {
+                  if (msg.type() === 'error') consoleErrors.push(msg.text());
+                });
+
+                const response = await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+                if (!response || !response.ok()) {
+                  throw new Error(`${target.name} navigation failed at ${viewport.name}: HTTP ${response?.status() ?? 'no-response'}`);
+                }
+                await page.waitForTimeout(2500);
+
+                const state = await page.evaluate(() => {
+                  const root = document.documentElement;
+                  const body = document.body;
+                  const interactive = [...document.querySelectorAll('a,button,input,textarea,select')];
+                  const clipped = interactive.flatMap((element) => {
+                    const style = getComputedStyle(element);
+                    const rect = element.getBoundingClientRect();
+                    const hidden =
+                      style.display === 'none' ||
+                      style.visibility === 'hidden' ||
+                      Number(style.opacity || '1') === 0 ||
+                      rect.width === 0 ||
+                      rect.height === 0;
+                    if (hidden) return [];
+                    if (rect.left < -2 || rect.right > window.innerWidth + 2) {
+                      return [{
+                        tag: element.tagName,
+                        text: (element.textContent || element.getAttribute('aria-label') || '').trim().slice(0, 80),
+                        left: Math.round(rect.left),
+                        right: Math.round(rect.right),
+                        width: Math.round(rect.width),
+                      }];
+                    }
+                    return [];
+                  });
+                  return {
+                    title: document.title,
+                    text: body?.innerText || '',
+                    innerWidth: window.innerWidth,
+                    rootScrollWidth: root.scrollWidth,
+                    bodyScrollWidth: body?.scrollWidth || 0,
+                    clipped,
+                  };
+                });
+
+                const horizontalOverflow = Math.max(state.rootScrollWidth, state.bodyScrollWidth) > state.innerWidth + 2;
+                const missing = target.mustInclude.filter(text => !state.text.includes(text));
+                const shieldFound = target.name === 'boards' && state.text.includes('🛡');
+                const screenshot = path.join(artifactDir, `${target.name}-${viewport.name}.png`);
+                await page.screenshot({ path: screenshot, fullPage: true });
+
+                const result = {
+                  target: target.name,
+                  viewport,
+                  httpStatus: response.status(),
+                  horizontalOverflow,
+                  rootScrollWidth: state.rootScrollWidth,
+                  bodyScrollWidth: state.bodyScrollWidth,
+                  clipped: state.clipped,
+                  missing,
+                  shieldFound,
+                  pageErrors,
+                  consoleErrors,
+                  screenshot,
+                };
+                results.push(result);
+
+                if (horizontalOverflow || state.clipped.length || missing.length || shieldFound || pageErrors.length) {
+                  failed = true;
+                }
+                await page.close();
+              }
+              await context.close();
+            }
+          } finally {
+            await browser.close();
+          }
+
+          await fs.writeFile(path.join(artifactDir, 'results.json'), JSON.stringify(results, null, 2));
+          console.log(JSON.stringify(results, null, 2));
+          if (failed) process.exit(1);
+          EOF
+          node audit.mjs
+
+      - name: Upload production visual audit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: line-rangers-production-visual-audit-${{ github.run_id }}
+          path: /tmp/lr-visual-audit/artifacts
+          retention-days: 14
+          if-no-files-found: error
