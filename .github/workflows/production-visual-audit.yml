@@ -151,13 +151,15 @@ jobs:
                   const rangerDetailState = await page.evaluate(() => {
                     const link = document.querySelector('#equipment-dialog[open] .equipment-character-name');
                     const firstSkill = document.querySelector('#equipment-dialog[open] .equipment-skill-item');
+                    const items = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-item')];
                     const images = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-image')];
                     const effects = document.querySelectorAll('#equipment-dialog[open] .equipment-skill-effects');
                     return {
                       name: link?.textContent?.trim() || '',
                       href: link instanceof HTMLAnchorElement ? link.href : '',
                       linkColor: link ? getComputedStyle(link).color : '',
-                      skillItems: document.querySelectorAll('#equipment-dialog[open] .equipment-skill-item').length,
+                      skillItems: items.length,
+                      skillItemsExpectingEffects: items.filter((item) => item.dataset.hasEffects === 'true').length,
                       skillImages: images.length,
                       loadedSkillImages: images.filter((image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0).length,
                       effectGroups: effects.length,
@@ -184,7 +186,7 @@ jobs:
                     rangerDetailState.skillItems < 1 ||
                     rangerDetailState.skillImages !== rangerDetailState.skillItems ||
                     rangerDetailState.loadedSkillImages !== rangerDetailState.skillImages ||
-                    rangerDetailState.effectGroups !== rangerDetailState.skillItems ||
+                    rangerDetailState.effectGroups !== rangerDetailState.skillItemsExpectingEffects ||
                     !rangerDetailState.separatedEffects ||
                     !rangerDetailState.skillGridColumns ||
                     rangerDetailState.skillGridColumns === 'none' ||
