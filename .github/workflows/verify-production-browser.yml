@@ -142,22 +142,19 @@ jobs:
             await sleep(2500);
 
             const evaluated=await send('Runtime.evaluate',{
-              expression:`(()=>{const d=document.documentElement,b=document.body;const allWidth=Math.max(d?.scrollWidth||0,b?.scrollWidth||0);const controls=[...document.querySelectorAll('button,a,input,select,textarea,[role="button"]')];const offenders=controls.map(el=>{const r=el.getBoundingClientRect();return {tag:el.tagName,text:(el.textContent||el.getAttribute('aria-label')||'').trim().slice(0,80),left:r.left,right:r.right,width:r.width};}).filter(x=>x.width>0&&(x.left<-2||x.right>window.innerWidth+2)).slice(0,20);return {title:document.title,href:location.href,innerWidth:window.innerWidth,innerHeight:window.innerHeight,scrollWidth:allWidth,clientWidth:d?.clientWidth||0,text:(b?.innerText||'').slice(0,12000),offenders};})()`,
+              expression:`(()=>{const d=document.documentElement,b=document.body;const text=b?.innerText||'';const allWidth=Math.max(d?.scrollWidth||0,b?.scrollWidth||0);const controls=[...document.querySelectorAll('button,a,input,select,textarea,[role="button"]')];const offenders=controls.map(el=>{const r=el.getBoundingClientRect();return {tag:el.tagName,text:(el.textContent||el.getAttribute('aria-label')||'').trim().slice(0,80),left:r.left,right:r.right,width:r.width};}).filter(x=>x.width>0&&(x.left<-2||x.right>window.innerWidth+2)).slice(0,20);return {title:document.title,href:location.href,innerWidth:window.innerWidth,innerHeight:window.innerHeight,scrollWidth:allWidth,clientWidth:d?.clientWidth||0,pvpReady:document.title.includes('LINEレンジャー')&&!!document.querySelector('#summary')&&!!document.querySelector('#community-board-entry-slot'),boardReady:text.includes('新キャラ情報掲示板'),textSample:text.slice(0,2000),offenders};})()`,
               returnByValue:true
             });
             const metrics=evaluated?.result?.value;
             if(!metrics) throw new Error('browser metrics unavailable');
-            const marker=kind==='pvp'?'レジェンド帯 キャラ集計':'新キャラ情報掲示板';
-            const report={url,width,height,kind,markerPresent:metrics.text.includes(marker),horizontalOverflow:metrics.scrollWidth>metrics.innerWidth+2,...metrics};
-            delete report.text;
-            writeFileSync(jsonPath,JSON.stringify(report,null,2));
-            if(!report.markerPresent) throw new Error(`required UI marker missing: ${marker}`);
-            if(report.horizontalOverflow) throw new Error(`horizontal overflow: scrollWidth=${metrics.scrollWidth}, innerWidth=${metrics.innerWidth}`);
-            if(metrics.offenders.length) throw new Error(`interactive elements outside viewport: ${JSON.stringify(metrics.offenders)}`);
-
+            const report={url,width,height,kind,markerPresent:kind==='pvp'?metrics.pvpReady:metrics.boardReady,horizontalOverflow:metrics.scrollWidth>metrics.innerWidth+2,...metrics};
             const shot=await send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});
             writeFileSync(pngPath,Buffer.from(shot.data,'base64'));
+            writeFileSync(jsonPath,JSON.stringify(report,null,2));
             console.log(JSON.stringify(report));
+            if(!report.markerPresent) throw new Error(`required rendered surface missing for ${kind}; sample=${metrics.textSample}`);
+            if(report.horizontalOverflow) throw new Error(`horizontal overflow: scrollWidth=${metrics.scrollWidth}, innerWidth=${metrics.innerWidth}`);
+            if(metrics.offenders.length) throw new Error(`interactive elements outside viewport: ${JSON.stringify(metrics.offenders)}`);
           } finally {
             try{ws?.close();}catch{}
             try{chrome.kill('SIGTERM');}catch{}
@@ -175,13 +172,19 @@ jobs:
             test -s "$base.json"
           }
 
+          failures=0
           for viewport in "390 844" "1024 1366" "1440 1000"; do
             read -r width height <<< "$viewport"
-            run_case pvp "$PVP_URL" "$width" "$height"
-            run_case board "$BOARD_URL" "$width" "$height"
+            run_case pvp "$PVP_URL" "$width" "$height" || failures=$((failures+1))
+            run_case board "$BOARD_URL" "$width" "$height" || failures=$((failures+1))
           done
+          if [ "$failures" -ne 0 ]; then
+            echo "$failures browser viewport case(s) failed."
+            exit 1
+          fi
 
       - name: Upload browser verification artifacts
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: line-rangers-production-browser-${{ github.run_id }}
