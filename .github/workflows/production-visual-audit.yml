@@ -139,8 +139,34 @@ jobs:
                     }
                   }
 
+                  const firstCharacterUnit = await page.locator('#ranking-body .character-button').first().getAttribute('data-unit-code');
                   await page.locator('#ranking-body .character-button').first().click();
                   await page.waitForSelector('#equipment-dialog[open] .equipment-table tbody tr', { timeout: 15000 });
+                  await page.waitForSelector('#equipment-dialog[open] .equipment-character-name', { timeout: 15000 });
+                  await page.waitForSelector('#equipment-dialog[open] .equipment-skill-item', { timeout: 20000 });
+                  const rangerDetailState = await page.evaluate(() => {
+                    const link = document.querySelector('#equipment-dialog[open] .equipment-character-name');
+                    return {
+                      name: link?.textContent?.trim() || '',
+                      href: link instanceof HTMLAnchorElement ? link.href : '',
+                      skillItems: document.querySelectorAll('#equipment-dialog[open] .equipment-skill-item').length,
+                      legacyMeta: document.querySelectorAll('#equipment-dialog[open] .equipment-meta').length,
+                    };
+                  });
+                  const expectedRangerHref = firstCharacterUnit
+                    ? `https://rangers.lerico.net/ja/ranger/${encodeURIComponent(firstCharacterUnit)}`
+                    : '';
+                  if (
+                    !firstCharacterUnit ||
+                    !rangerDetailState.name ||
+                    rangerDetailState.href !== expectedRangerHref ||
+                    rangerDetailState.skillItems < 1 ||
+                    rangerDetailState.legacyMeta !== 0
+                  ) {
+                    throw new Error(
+                      `${target.name} rendered invalid Ranger detail at ${viewport.name}: ${JSON.stringify({ firstCharacterUnit, ...rangerDetailState })}`,
+                    );
+                  }
                   const equipmentComparisonStates = {};
                   for (const period of ['hour', 'day', 'week', 'month']) {
                     await page.evaluate((selected) => {
