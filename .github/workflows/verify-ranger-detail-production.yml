@@ -19,17 +19,34 @@ jobs:
       PAGES_BASE: https://line-rangers-fan.github.io/line-rangers-pvp
       UNIT_CODE: u1556e-af
     steps:
-      - name: Verify Ranger detail API and modal assets
+      - name: Diagnose and verify Ranger detail API
         run: |
           set -euo pipefail
           headers="$(mktemp)"
           body="$(mktemp)"
-          status=0
-          for attempt in $(seq 1 8); do
-            status="$(curl --location --silent --show-error --output "$body" --dump-header "$headers" --write-out '%{http_code}'               --connect-timeout 10 --max-time 30 -H 'Origin: https://line-rangers-fan.github.io'               "$WORKER_BASE/api/ranger-info?unit=$UNIT_CODE" || true)"
-            [ "$status" = "200" ] && break
-            sleep 3
-          done
+          status="$(curl --location --silent --show-error --output "$body" --dump-header "$headers" --write-out '%{http_code}'             --connect-timeout 10 --max-time 30 -H 'Origin: https://line-rangers-fan.github.io'             "$WORKER_BASE/api/ranger-info?unit=$UNIT_CODE" || true)"
+          echo "WORKER_STATUS=$status"
+          echo "WORKER_BODY=$(head -c 800 "$body" | tr '\n' ' ')"
+
+          upstream="$(mktemp)"
+          upstream_headers="$(mktemp)"
+          upstream_status="$(curl --location --silent --show-error --output "$upstream" --dump-header "$upstream_headers" --write-out '%{http_code}'             --connect-timeout 10 --max-time 30             -H 'Accept: text/html,application/xhtml+xml'             -H 'User-Agent: line-rangers-pvp-character-detail/1.0'             "https://rangers.lerico.net/ja/ranger/$UNIT_CODE" || true)"
+          echo "UPSTREAM_STATUS=$upstream_status"
+          echo "UPSTREAM_BYTES=$(wc -c < "$upstream")"
+          echo "UPSTREAM_CONTENT_TYPE=$(grep -i '^content-type:' "$upstream_headers" | tail -1 | tr -d '\r')"
+          python - "$upstream" <<'PY'
+          import re,sys,html
+          text=open(sys.argv[1],encoding='utf-8',errors='replace').read()
+          headings=[]
+          for m in re.finditer(r'<h([1-6])\b[^>]*>([\s\S]*?)</h\1>',text,re.I):
+              value=re.sub(r'<[^>]+>',' ',m.group(2))
+              value=' '.join(html.unescape(value).split())
+              if value:
+                  headings.append((m.group(1),value[:180]))
+          print('UPSTREAM_HEADINGS='+repr(headings[:40]))
+          print('HAS_SKILL_TEXT='+str('スキル' in text))
+          PY
+
           test "$status" = "200"
           jq -e --arg unit "$UNIT_CODE" '
             .unitCode == $unit and
