@@ -44,41 +44,7 @@ jobs:
           grep -q 'api/activity?public=1' docs/assets/community-entry.js
           grep -q 'レジェンド帯 キャラ集計' docs/index.html
           jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          data = json.loads(Path("docs/data/character_usage.json").read_text(encoding="utf-8"))
-          periods = ("hour", "day", "week", "month")
-          comparison = data.get("comparison") or {}
-          if comparison.get("reference_mode") != "jst_calendar_close_v1":
-              raise SystemExit("Unexpected comparison reference mode")
-          for period in periods:
-              summary = (comparison.get("periods") or {}).get(period) or {}
-              if summary.get("comparable") is not True or not summary.get("updated_at"):
-                  raise SystemExit(f"Top-level comparison is not ready: {period}")
-
-          for character in data.get("characters") or []:
-              code = character.get("unit_code", "?")
-              char_periods = ((character.get("change") or {}).get("periods") or {})
-              for period in periods:
-                  value = char_periods.get(period) or {}
-                  delta = value.get("occurrence_count")
-                  if value.get("comparable") is not True or not isinstance(delta, int) or isinstance(delta, bool):
-                      raise SystemExit(f"Character comparison is not ready: {code} {period}")
-              for equipment_type, category in (character.get("equipment_rankings") or {}).items():
-                  for item in (category or {}).get("items") or []:
-                      item_code = item.get("item_code", "?")
-                      item_periods = ((item.get("change") or {}).get("periods") or {})
-                      for period in periods:
-                          value = item_periods.get(period) or {}
-                          delta = value.get("occurrence_count")
-                          if value.get("comparable") is not True or not isinstance(delta, int) or isinstance(delta, bool):
-                              raise SystemExit(
-                                  f"Equipment comparison is not ready: {code} {equipment_type} {item_code} {period}"
-                              )
-          print("All public comparison periods are populated.")
-          PY
+          python scripts/validate_public_comparisons.py docs/data/character_usage.json
           if rg -n 'BOARD_OWNER_ACCESS_TOKEN|BOARD_OWNER_SUBJECT|BOARD_ANON_COOKIE_SECRET|CLOUDFLARE_.*TOKEN' docs; then
             echo "A secret-like value was found in the Pages artifact source."
             exit 1
@@ -163,22 +129,7 @@ jobs:
               && grep -q 'data-language="en"' /tmp/index.html \
               && ! grep -q 'data-language="zh"' /tmp/index.html \
               && [ "$(sha256sum /tmp/data.json | awk '{print $1}')" = "$EXPECTED_DATA_SHA256" ] \
-              && jq -e '
-                .target_players == 200
-                and .sampled_players == 200
-                and .complete_target == true
-                and .comparison.reference_mode == "jst_calendar_close_v1"
-                and ([.comparison.periods.hour, .comparison.periods.day, .comparison.periods.week, .comparison.periods.month]
-                  | all(.comparable == true and (.updated_at | type == "string" and length > 0)))
-                and ([.characters[] |
-                  [.change.periods.hour, .change.periods.day, .change.periods.week, .change.periods.month]
-                  | all(.comparable == true and (.occurrence_count | type == "number"))]
-                  | all(. == true))
-                and ([.characters[] | .equipment_rankings[]?.items[]? |
-                  [.change.periods.hour, .change.periods.day, .change.periods.week, .change.periods.month]
-                  | all(.comparable == true and (.occurrence_count | type == "number"))]
-                  | all(. == true))
-              ' /tmp/data.json >/dev/null; then
+              && python scripts/validate_public_comparisons.py /tmp/data.json >/dev/null; then
               success=true
               break
             fi

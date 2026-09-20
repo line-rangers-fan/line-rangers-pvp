@@ -124,14 +124,7 @@ jobs:
         run: |
           set -euo pipefail
           npm audit --omit=dev --audit-level=high
-          jq -e '
-            .target_players == 200 and
-            (
-              (.sampled_players == 200 and .complete_target == true and .publication_mode == "complete")
-              or
-              (.sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale")
-            )
-          ' public/pvp/data/character_usage.json >/dev/null
+          python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" public/pvp/data/character_usage.json
           jq -e '
             if (.sampled_players == 200 and .complete_target == true) then
               .comparison.reference_mode == "jst_calendar_close_v1" and
@@ -176,14 +169,6 @@ jobs:
             echo "Production Worker PvP did not converge to the canonical snapshot."
             exit 1
           fi
-          jq -e '
-            if (.sampled_players == 200 and .complete_target == true) then
-              (.comparison.periods | [.hour,.day,.week,.month] | all(.comparable == true)) and
-              ([.characters[] | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all) and
-              ([.characters[] | .equipment_rankings[]?.items[]? | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all)
-            else
-              true
-            end
-          ' "$live" >/dev/null
+          python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" "$live"
           curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3             "$PRODUCTION_BASE_URL/pvp/index.html" | grep -q 'レジェンド帯 キャラ集計'
           echo "Production Worker PvP is synchronized with canonical docs data."
