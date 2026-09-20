@@ -2425,15 +2425,18 @@ function renderCharacterSkillSummary(character) {
   const details = document.createElement("div");
   details.className = "equipment-character-details";
 
+  const unitCode = String(character?.unit_code || "");
+  const info = state.rangerInfo.get(unitCode);
+  const displayName = info?.name || characterLabel(character);
   const detailUrl = rangerDetailUrl(character);
   const name = document.createElement(detailUrl ? "a" : "strong");
   name.className = "equipment-character-name";
-  name.textContent = characterLabel(character);
+  name.textContent = displayName;
   if (detailUrl) {
     name.href = detailUrl;
     name.rel = "external";
     name.title = et("characterDetailHint");
-    name.setAttribute("aria-label", `${characterLabel(character)} — ${et("characterDetailHint")}`);
+    name.setAttribute("aria-label", `${displayName} — ${et("characterDetailHint")}`);
   }
   details.appendChild(name);
 
@@ -2442,8 +2445,6 @@ function renderCharacterSkillSummary(character) {
   skillTitle.textContent = et("skillInfo");
   details.appendChild(skillTitle);
 
-  const unitCode = String(character?.unit_code || "");
-  const info = state.rangerInfo.get(unitCode);
   if (info?.skills?.length) {
     const list = document.createElement("div");
     list.className = "equipment-skill-list";
