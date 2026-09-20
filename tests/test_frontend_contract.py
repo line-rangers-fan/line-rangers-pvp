@@ -282,6 +282,15 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert '.equipment-skill-image' in style
     assert '.equipment-skill-effects {' in style
     assert 'margin-top: 0.85rem;' in style
+    mobile = style.split('@media (max-width: 600px) {', 1)[1]
+    assert '.equipment-skill-list {' in mobile
+    assert 'grid-template-columns: none;' in mobile
+    assert 'grid-auto-flow: column;' in mobile
+    assert 'grid-auto-columns: minmax(15.5rem, 92%);' in mobile
+    assert 'overflow-x: auto;' in mobile
+    assert 'scroll-snap-type: x mandatory;' in mobile
+    assert 'grid-template-columns: 1fr;' not in mobile.split('.equipment-skill-item {', 1)[0]
+    assert 'scroll-snap-align: start;' in mobile
 
 
 def test_saturday_pvp_reset_notice_is_fully_removed():
