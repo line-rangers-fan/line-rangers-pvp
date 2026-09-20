@@ -1,0 +1,52 @@
+name: verify-ranger-detail-production
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-ranger-detail-production.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      WORKER_BASE: https://line-rangers-pvp-community-production.n-yu1791.workers.dev
+      PAGES_BASE: https://line-rangers-fan.github.io/line-rangers-pvp
+      UNIT_CODE: u1556e-af
+    steps:
+      - name: Verify Ranger detail API and modal assets
+        run: |
+          set -euo pipefail
+          headers="$(mktemp)"
+          body="$(mktemp)"
+          status=0
+          for attempt in $(seq 1 8); do
+            status="$(curl --location --silent --show-error --output "$body" --dump-header "$headers" --write-out '%{http_code}'               --connect-timeout 10 --max-time 30 -H 'Origin: https://line-rangers-fan.github.io'               "$WORKER_BASE/api/ranger-info?unit=$UNIT_CODE" || true)"
+            [ "$status" = "200" ] && break
+            sleep 3
+          done
+          test "$status" = "200"
+          jq -e --arg unit "$UNIT_CODE" '
+            .unitCode == $unit and
+            (.name | type == "string" and length > 0) and
+            (.sourceUrl == ("https://rangers.lerico.net/ja/ranger/" + $unit)) and
+            (.skills | type == "array" and length >= 1 and length <= 3) and
+            ([.skills[] | (.name | type == "string" and length > 0) and (.description | type == "string")] | all)
+          ' "$body" >/dev/null
+          grep -qi '^access-control-allow-origin: https://line-rangers-fan.github.io' "$headers"
+          echo "RANGER_INFO_SKILL_COUNT=$(jq '.skills | length' "$body")"
+
+          pages_js="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 "$PAGES_BASE/assets/app.js")"
+          worker_js="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 "$WORKER_BASE/pvp/assets/app.js")"
+          for js in "$pages_js" "$worker_js"; do
+            grep -q 'equipment-character-name' <<< "$js"
+            grep -q 'equipment-skill-list' <<< "$js"
+            grep -q 'rangers.lerico.net/ja/ranger/' <<< "$js"
+            grep -q 'RANGER_INFO_WORKER_URL' <<< "$js"
+          done
+          echo "Ranger detail production verification passed."
