@@ -203,6 +203,11 @@ def test_static_rank_period_matches_the_javascript_default():
         f"blob {len(app_bytes)}\0".encode() + app_bytes
     ).hexdigest()[:12]
     assert f'<script src="./assets/app.js?v={app_blob}" defer></script>' in page
+    style_bytes = (ROOT / "docs/assets/style.css").read_bytes()
+    style_blob = hashlib.sha1(
+        f"blob {len(style_bytes)}\0".encode() + style_bytes
+    ).hexdigest()[:12]
+    assert f'<link rel="stylesheet" href="./assets/style.css?v={style_blob}">' in page
     assert "app.js?v=$GITHUB_SHA" in pages_workflow
     assert "community-entry.js?v=$GITHUB_SHA" in pages_workflow
     assert "path: ./pages-dist" in pages_workflow
@@ -222,3 +227,13 @@ def test_public_language_switcher_is_strictly_japanese_and_english():
     assert 'if (browser.startsWith("ja")) return "ja";' in app
     for unsupported_prefix in ("th", "zh", "id", "vi", "ko"):
         assert f'if (browser.startsWith("{unsupported_prefix}"))' not in app
+
+
+def test_mobile_heading_wraps_inside_the_viewport():
+    style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
+    assert """  h1 {
+    font-size: clamp(1.9rem, 8.6vw, 2.35rem);
+    overflow-wrap: anywhere;
+    word-break: normal;
+    text-wrap: pretty;
+  }""" in style

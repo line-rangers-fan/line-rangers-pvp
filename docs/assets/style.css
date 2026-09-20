@@ -962,6 +962,9 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 
   h1 {
     font-size: clamp(1.9rem, 8.6vw, 2.35rem);
+    overflow-wrap: anywhere;
+    word-break: normal;
+    text-wrap: pretty;
   }
 
   .language-switcher button {

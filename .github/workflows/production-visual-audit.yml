@@ -6,6 +6,12 @@ on:
     branches: [main]
     paths:
       - .github/workflows/production-visual-audit.yml
+      - docs/index.html
+      - docs/assets/app.js
+      - docs/assets/style.css
+      - docs/assets/community-entry.js
+      - docs/assets/community-entry.css
+      - docs/assets/characters/**
 
 permissions:
   contents: read
@@ -31,6 +37,7 @@ jobs:
           cd /tmp/lr-visual-audit
           npm init -y >/dev/null
           npm install --no-audit --no-fund --save-exact playwright@1.55.0
+          npm audit --omit=dev --audit-level=high
           npx playwright install --with-deps chromium
 
       - name: Audit production at mobile, iPad, and desktop viewports
