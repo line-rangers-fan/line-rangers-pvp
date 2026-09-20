@@ -336,6 +336,11 @@ def fetch_json(
         headers={
             "Accept": "application/json",
             "User-Agent": "line-rangers-pvp-stats/1.1",
+            # Dynamic PvP/player endpoints must be revalidated on every
+            # collection.  A stale CDN response can otherwise look like a
+            # healthy 200/200 sample while making every comparison falsely ±0.
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
         },
     )
     request_attempts = REQUEST_ATTEMPTS if attempts is None else max(1, attempts)
