@@ -15,52 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      WORKER_BASE: https://line-rangers-pvp-community-production.n-yu1791.workers.dev
-      PAGES_BASE: https://line-rangers-fan.github.io/line-rangers-pvp
       UNIT_CODE: u1556e-af
     steps:
-      - name: Inspect Handbook client data routes
+      - name: Inspect Lerico Ranger data APIs
         run: |
           set -euo pipefail
-          upstream="$(mktemp)"
-          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             -H 'Accept: text/html,application/xhtml+xml'             -H 'User-Agent: line-rangers-pvp-character-detail/1.0'             "https://rangers.lerico.net/ja/ranger/$UNIT_CODE" > "$upstream"
-          python - "$upstream" <<'PY'
-          import html as htmlmod
-          import re
-          import sys
-          import urllib.parse
-          import urllib.request
-
-          page_url = "https://rangers.lerico.net/ja/ranger/u1556e-af"
-          text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
-          scripts = re.findall(r"<script[^>]+src=[\"']([^\"']+)[\"']", text, re.I)
-          print("SCRIPT_SRCS=" + repr(scripts))
-          attrs = re.findall(r"(?:src|href|ng-include)\s*=\s*[\"']([^\"']+)[\"']", text, re.I)
-          print("RESOURCE_ATTRS=" + repr(attrs[:160]))
-          inline = sorted(set(re.findall(r"[\"']([^\"']*(?:/api/|api/v[0-9]/)[^\"']*)[\"']", text, re.I)))
-          print("INLINE_API_REFS=" + repr(inline[:120]))
-
-          api_refs = set()
-          route_hints = set()
-          for src in scripts[:40]:
-              url = urllib.parse.urljoin(page_url, htmlmod.unescape(src))
-              parsed = urllib.parse.urlparse(url)
-              if parsed.scheme != "https" or parsed.hostname != "rangers.lerico.net":
-                  continue
-              try:
-                  req = urllib.request.Request(url, headers={"User-Agent":"line-rangers-pvp-character-detail/1.0"})
-                  with urllib.request.urlopen(req, timeout=15) as resp:
-                      data = resp.read(4_000_000).decode("utf-8", "replace")
-              except Exception as exc:
-                  print("SCRIPT_FETCH_FAILED=" + url + ":" + type(exc).__name__)
-                  continue
-              print("SCRIPT_FETCHED=" + url + " bytes=" + str(len(data)))
-              for match in re.findall(r"[\"']([^\"']*(?:/api/|api/v[0-9]/)[^\"']*)[\"']", data, re.I):
-                  if len(match) <= 300:
-                      api_refs.add(match)
-              for match in re.findall(r"[\"']([^\"']*(?:ranger|skill|unit)[^\"']*)[\"']", data, re.I):
-                  if len(match) <= 240:
-                      route_hints.add(match)
-          print("SCRIPT_API_REFS=" + repr(sorted(api_refs)[:240]))
-          print("SCRIPT_ROUTE_HINTS=" + repr(sorted(route_hints)[:240]))
-          PY
+          fetch() {
+            label="$1"
+            url="$2"
+            out="$(mktemp)"
+            code="$(curl --location --silent --show-error --output "$out" --write-out '%{http_code}' --connect-timeout 10 --max-time 30 "$url" || true)"
+            echo "=== $label STATUS=$code BYTES=$(wc -c < "$out") ==="
+            head -c 4000 "$out" | tr '\n' ' '
+            echo
+          }
+          fetch GET_RANGER "https://rangers.lerico.net/api/getRanger/$UNIT_CODE"
+          fetch GET_SKILLS "https://rangers.lerico.net/api/getSkills"
+          fetch GET_RANGERS_BASICS "https://rangers.lerico.net/api/getRangersBasics"
+          fetch TRANSLATE "https://rangers.lerico.net/api/v2/translate?keys=ja%3AUNIT%2Cja%3ASKILL"
