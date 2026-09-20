@@ -180,17 +180,6 @@ def rebuild_comparisons(data: dict, history: dict | None) -> tuple[dict, dict]:
         validate_data(data)
         return data, clean_history
 
-    clean_history, source_context = scraper.quarantine_repeated_source_history(
-        data, clean_history
-    )
-    snapshots = clean_history["snapshots"]
-    if source_context.get("stale") is True:
-        previous = previous_context(snapshots[-1] if snapshots else None, data)
-        scraper.add_previous_comparison(data, previous, clean_history)
-        scraper.mark_source_stale_comparison(data, source_context)
-        validate_data(data)
-        return data, clean_history
-
     previous = previous_context(snapshots[-1] if snapshots else None, data)
     scraper.add_previous_comparison(data, previous, clean_history)
     if isinstance(data.get("comparison"), dict):

@@ -2216,25 +2216,18 @@ def main() -> None:
             LAST_COMPLETE_FOR_RUN = None
         stage = "comparison"
         previous, previous_history = prepare_comparison_context(data, previous, previous_history)
-        previous_history, source_context = quarantine_repeated_source_history(
-            data, previous_history
-        )
         if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE:
             # A changing set of fewer than 200 players is not a trustworthy
             # hour/day/week/month baseline. Keep the last complete history and
             # show comparison as unavailable until a full sample returns.
             previous_history = {"snapshots": []}
         add_previous_comparison(data, previous, previous_history)
-        if source_context.get("stale") is True:
-            mark_source_stale_comparison(data, source_context)
         stage = "validation"
         validate_data(data, previous)
         stage = "history"
         history = (
             stored_history
             if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE
-            else previous_history
-            if source_context.get("stale") is True
             else update_history(data, previous_history)
         )
         stage = "publication"
