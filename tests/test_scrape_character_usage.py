@@ -965,3 +965,87 @@ def test_history_is_compact_deduplicated_and_bounded():
         "ARMOR": {"items": []},
         "ACC": {"items": []},
     }
+
+
+def test_history_deduplicates_equivalent_timestamp_spellings():
+    data = {
+        "updated_at": "2026-09-20T03:00:00+00:00",
+        "sampled_players": 200,
+        "character_slots": 200,
+        "unique_characters": 1,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": 200,
+                "player_count": 200,
+                "adoption_rate": 100.0,
+                "equipment_rankings": {
+                    "WEAPON": {"items": []},
+                    "ARMOR": {"items": []},
+                    "ACC": {"items": []},
+                },
+            }
+        ],
+    }
+    legacy_snapshot = scraper.history_snapshot(data)
+    legacy_snapshot["updated_at"] = "2026-09-20T02:00:00Z"
+    equivalent_snapshot = dict(legacy_snapshot)
+    equivalent_snapshot["updated_at"] = "2026-09-20T02:00:00+00:00"
+    history = {"snapshots": [legacy_snapshot, equivalent_snapshot]}
+
+    result = scraper.update_history(data, history)
+
+    matching = [
+        row
+        for row in result["snapshots"]
+        if scraper._parse_history_time(row["updated_at"])
+        == datetime(2026, 9, 20, 2, 0, tzinfo=timezone.utc)
+    ]
+    assert len(matching) == 1
+
+
+def test_history_retains_calendar_closes_before_recent_snapshots():
+    data = {
+        "updated_at": "2026-10-20T03:00:00+00:00",
+        "sampled_players": 200,
+        "character_slots": 200,
+        "unique_characters": 1,
+        "characters": [
+            {
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": 200,
+                "player_count": 200,
+                "adoption_rate": 100.0,
+                "equipment_rankings": {
+                    "WEAPON": {"items": []},
+                    "ARMOR": {"items": []},
+                    "ACC": {"items": []},
+                },
+            }
+        ],
+    }
+
+    def snapshot(updated_at: str) -> dict:
+        row = scraper.history_snapshot(data)
+        row["updated_at"] = updated_at
+        row["calendar_date"] = scraper._history_date_key(
+            scraper._parse_history_time(updated_at)
+        )
+        return row
+
+    durable_close = snapshot("2026-09-30T14:30:00+00:00")
+    recent = [
+        snapshot(f"2026-10-20T0{hour}:0{minute}:00+00:00")
+        for hour, minute in [(0, 0), (0, 5), (0, 10), (0, 15), (0, 20), (0, 25)]
+    ]
+    result = scraper.update_history(
+        data,
+        {"snapshots": [durable_close, *recent]},
+        limit=4,
+    )
+
+    timestamps = [row["updated_at"] for row in result["snapshots"]]
+    assert durable_close["updated_at"] in timestamps
+    assert data["updated_at"] in timestamps
