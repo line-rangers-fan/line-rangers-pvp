@@ -142,7 +142,7 @@ jobs:
             await sleep(2500);
 
             const evaluated=await send('Runtime.evaluate',{
-              expression:`(()=>{const d=document.documentElement,b=document.body;const text=b?.innerText||'';const allWidth=Math.max(d?.scrollWidth||0,b?.scrollWidth||0);const controls=[...document.querySelectorAll('button,a,input,select,textarea,[role="button"]')];const offenders=controls.map(el=>{const r=el.getBoundingClientRect();return {tag:el.tagName,text:(el.textContent||el.getAttribute('aria-label')||'').trim().slice(0,80),left:r.left,right:r.right,width:r.width};}).filter(x=>x.width>0&&(x.left<-2||x.right>window.innerWidth+2)).slice(0,20);return {title:document.title,href:location.href,innerWidth:window.innerWidth,innerHeight:window.innerHeight,scrollWidth:allWidth,clientWidth:d?.clientWidth||0,pvpReady:document.title.includes('LINEレンジャー')&&!!document.querySelector('#summary')&&!!document.querySelector('#community-board-entry-slot'),boardReady:text.includes('新キャラ情報掲示板'),textSample:text.slice(0,2000),offenders};})()`,
+              expression:`(()=>{const d=document.documentElement,b=document.body;const text=b?.innerText||'';const allWidth=Math.max(d?.scrollWidth||0,b?.scrollWidth||0);const inHorizontalScroller=el=>{for(let p=el.parentElement;p;p=p.parentElement){const s=getComputedStyle(p);if((s.overflowX==='auto'||s.overflowX==='scroll')&&p.scrollWidth>p.clientWidth+2)return true;}return false;};const controls=[...document.querySelectorAll('button,a,input,select,textarea,[role="button"]')];const offenders=controls.map(el=>{const r=el.getBoundingClientRect();return {tag:el.tagName,text:(el.textContent||el.getAttribute('aria-label')||'').trim().slice(0,80),left:r.left,right:r.right,width:r.width,inHorizontalScroller:inHorizontalScroller(el)};}).filter(x=>x.width>0&&(x.left<-2||x.right>window.innerWidth+2)&&!x.inHorizontalScroller).slice(0,20);const pvpReady=!!document.querySelector('#summary')&&!!document.querySelector('#community-board-entry-slot')&&(text.includes('Character Ranking')||text.includes('キャラクターランキング'));const boardReady=text.includes('新キャラ情報掲示板')||text.includes('New Character');return {title:document.title,href:location.href,innerWidth:window.innerWidth,innerHeight:window.innerHeight,scrollWidth:allWidth,clientWidth:d?.clientWidth||0,pvpReady,boardReady,textSample:text.slice(0,2000),offenders};})()`,
               returnByValue:true
             });
             const metrics=evaluated?.result?.value;
@@ -167,7 +167,9 @@ jobs:
           run_case() {
             local kind="$1" url="$2" width="$3" height="$4"
             local base="browser-artifacts/${kind}-${width}x${height}"
-            node /tmp/lr-browser-check.mjs "$url" "$width" "$height" "$kind" "$base.png" "$base.json"
+            if ! node /tmp/lr-browser-check.mjs "$url" "$width" "$height" "$kind" "$base.png" "$base.json"; then
+              return 1
+            fi
             test -s "$base.png"
             test -s "$base.json"
           }
