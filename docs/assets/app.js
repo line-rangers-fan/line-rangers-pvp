@@ -6,6 +6,8 @@ const HISTORY_PATH = "./data/character_usage_history.json";
 const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
 const REQUEST_TIMEOUT_MS = 12_000;
 const CHARACTER_IMAGE_TIMEOUT_MS = 6_000;
+const RANGER_INFO_TIMEOUT_MS = 8_000;
+const RANGER_INFO_WORKER_URL = "https://line-rangers-pvp-community-production.n-yu1791.workers.dev/api/ranger-info";
 const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
 // Match the collector, freshness gate, and watchdog. A result that exceeded
 // this bound was never a valid complete snapshot, so the browser must reject
@@ -103,6 +105,10 @@ const equipmentTranslations = {
     dialogDescription:
       "装備数は同じキャラを複数編成した分も数え、使用率は同じプレイヤーを1人として計算します。",
     characterPlayers: "キャラ使用人数",
+    skillInfo: "スキル情報",
+    skillLoading: "スキル情報を読み込んでいます…",
+    skillUnavailable: "スキル情報を取得できませんでした。キャラ名をタップすると詳細を確認できます。",
+    characterDetailHint: "キャラ名をタップすると詳細情報を開きます",
     weapon: "武器",
     armor: "防具",
     accessory: "アクセサリー",
@@ -119,6 +125,10 @@ const equipmentTranslations = {
     dialogDescription:
       "Every character copy counts toward equipment count; each player counts once for usage rate.",
     characterPlayers: "Character players",
+    skillInfo: "Skills",
+    skillLoading: "Loading skill information…",
+    skillUnavailable: "Skill information is unavailable. Tap the character name for full details.",
+    characterDetailHint: "Tap the character name to open full details",
     weapon: "Weapon",
     armor: "Armor",
     accessory: "Accessory",
@@ -852,6 +862,9 @@ const state = {
   characters: [],
   language: "ja",
   selectedCharacter: null,
+  rangerInfo: new Map(),
+  rangerInfoPending: new Set(),
+  rangerInfoFailed: new Set(),
   selectedEquipmentType: "WEAPON",
   selectedRankPeriod: "day",
   rankingScrollTop: 0,
@@ -880,7 +893,7 @@ function t(key) {
 }
 
 function et(key) {
-  return equipmentTranslations[state.language][key];
+  return equipmentTranslations[state.language]?.[key] ?? equipmentTranslations.en[key] ?? key;
 }
 
 function st(key) {
@@ -2326,6 +2339,141 @@ function createEquipmentTab(type, label, isSelected, character) {
   return button;
 }
 
+const SAFE_RANGER_UNIT_CODE = /^[A-Za-z0-9_-]{1,80}$/;
+
+function rangerDetailUrl(character) {
+  const unitCode = String(character?.unit_code || "");
+  if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return "";
+  return `https://rangers.lerico.net/ja/ranger/${encodeURIComponent(unitCode)}`;
+}
+
+function rangerInfoEndpoint(character) {
+  const unitCode = String(character?.unit_code || "");
+  if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return "";
+  const params = new URLSearchParams({ unit: unitCode });
+  if (window.location.hostname === "line-rangers-fan.github.io") {
+    return `${RANGER_INFO_WORKER_URL}?${params.toString()}`;
+  }
+  return `/api/ranger-info?${params.toString()}`;
+}
+
+function isValidRangerInfo(payload, unitCode) {
+  if (!payload || typeof payload !== "object" || payload.unitCode !== unitCode) return false;
+  if (typeof payload.sourceUrl !== "string" || payload.sourceUrl !== `https://rangers.lerico.net/ja/ranger/${encodeURIComponent(unitCode)}`) return false;
+  if (!Array.isArray(payload.skills) || payload.skills.length < 1 || payload.skills.length > 3) return false;
+  return payload.skills.every((skill) =>
+    skill &&
+    typeof skill === "object" &&
+    typeof skill.name === "string" &&
+    skill.name.trim().length > 0 &&
+    skill.name.length <= 120 &&
+    typeof skill.description === "string" &&
+    skill.description.length <= 500
+  );
+}
+
+async function loadRangerInfo(character) {
+  const unitCode = String(character?.unit_code || "");
+  if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return;
+  if (
+    state.rangerInfo.has(unitCode) ||
+    state.rangerInfoPending.has(unitCode) ||
+    state.rangerInfoFailed.has(unitCode)
+  ) {
+    return;
+  }
+  const endpoint = rangerInfoEndpoint(character);
+  if (!endpoint) return;
+
+  state.rangerInfoPending.add(unitCode);
+  try {
+    const response = await fetch(endpoint, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(RANGER_INFO_TIMEOUT_MS),
+      cache: "force-cache",
+    });
+    if (!response.ok) throw new Error("Ranger skill information is unavailable.");
+    const payload = await response.json();
+    if (!isValidRangerInfo(payload, unitCode)) {
+      throw new Error("Invalid Ranger skill information.");
+    }
+    state.rangerInfo.set(unitCode, payload);
+  } catch (error) {
+    console.warn("Ranger skill information is unavailable.", error);
+    state.rangerInfoFailed.add(unitCode);
+  } finally {
+    state.rangerInfoPending.delete(unitCode);
+    if (
+      state.selectedCharacter?.unit_code === unitCode &&
+      document.querySelector("#equipment-dialog")?.open
+    ) {
+      renderEquipment(state.selectedCharacter);
+    }
+  }
+}
+
+function renderCharacterSkillSummary(character) {
+  const summary = document.createElement("div");
+  summary.className = "equipment-summary equipment-character-summary";
+
+  const characterImage = createCharacterImage(character, {
+    className: "equipment-character-image",
+    alt: characterLabel(character),
+  });
+  summary.appendChild(characterImage);
+
+  const details = document.createElement("div");
+  details.className = "equipment-character-details";
+
+  const detailUrl = rangerDetailUrl(character);
+  const name = document.createElement(detailUrl ? "a" : "strong");
+  name.className = "equipment-character-name";
+  name.textContent = characterLabel(character);
+  if (detailUrl) {
+    name.href = detailUrl;
+    name.rel = "external";
+    name.title = et("characterDetailHint");
+    name.setAttribute("aria-label", `${characterLabel(character)} — ${et("characterDetailHint")}`);
+  }
+  details.appendChild(name);
+
+  const skillTitle = document.createElement("h3");
+  skillTitle.className = "equipment-skill-title";
+  skillTitle.textContent = et("skillInfo");
+  details.appendChild(skillTitle);
+
+  const unitCode = String(character?.unit_code || "");
+  const info = state.rangerInfo.get(unitCode);
+  if (info?.skills?.length) {
+    const list = document.createElement("div");
+    list.className = "equipment-skill-list";
+    info.skills.forEach((skill) => {
+      const item = document.createElement("div");
+      item.className = "equipment-skill-item";
+      const skillName = document.createElement("strong");
+      skillName.textContent = skill.name;
+      item.appendChild(skillName);
+      if (skill.description) {
+        const description = document.createElement("p");
+        description.textContent = skill.description;
+        item.appendChild(description);
+      }
+      list.appendChild(item);
+    });
+    details.appendChild(list);
+  } else {
+    const status = document.createElement("p");
+    status.className = "equipment-skill-status";
+    status.textContent = state.rangerInfoFailed.has(unitCode)
+      ? et("skillUnavailable")
+      : et("skillLoading");
+    details.appendChild(status);
+  }
+
+  summary.appendChild(details);
+  return summary;
+}
+
 function renderEquipment(character) {
   const dialog = document.querySelector("#equipment-dialog");
   const title = document.querySelector("#equipment-title");
@@ -2345,30 +2493,8 @@ function renderEquipment(character) {
   closeButton.setAttribute("aria-label", et("close"));
   content.textContent = "";
 
-  const summary = document.createElement("div");
-  summary.className = "equipment-summary";
-
-  const characterImage = createCharacterImage(character, {
-    className: "equipment-character-image",
-    alt: characterLabel(character),
-  });
-
-  const summaryText = document.createElement("div");
-  const description = document.createElement("p");
-  description.textContent = et("dialogDescription");
-  const characterMeta = document.createElement("p");
-  characterMeta.className = "equipment-meta";
-  characterMeta.textContent =
-    et("characterPlayers") +
-    ": " +
-    formatUnit(character.player_count, "players") +
-    " · " +
-    t("occurrence") +
-    ": " +
-    formatUnit(character.occurrence_count, "occurrence");
-  summaryText.append(description, characterMeta);
-  summary.append(characterImage, summaryText);
-  content.appendChild(summary);
+  content.appendChild(renderCharacterSkillSummary(character));
+  void loadRangerInfo(character);
 
   const tabList = document.createElement("div");
   tabList.className = "equipment-tabs";
