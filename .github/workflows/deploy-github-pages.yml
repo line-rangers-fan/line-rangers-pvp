@@ -114,6 +114,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Check out verification script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
       - name: Verify deployed Pages serves current comparison data
         env:
           SITE_URL: https://line-rangers-fan.github.io/line-rangers-pvp
