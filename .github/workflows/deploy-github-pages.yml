@@ -159,6 +159,10 @@ jobs:
                   [.change.periods.hour, .change.periods.day, .change.periods.week, .change.periods.month]
                   | all(.comparable == true and (.occurrence_count | type == "number"))]
                   | all(. == true))
+                and ([.characters[] | .equipment_rankings[]?.items[]? |
+                  [.change.periods.hour, .change.periods.day, .change.periods.week, .change.periods.month]
+                  | all(.comparable == true and (.occurrence_count | type == "number"))]
+                  | all(. == true))
               ' /tmp/data.json >/dev/null; then
               success=true
               break
