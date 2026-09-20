@@ -17,19 +17,43 @@ jobs:
     env:
       UNIT_CODE: u1556e-af
     steps:
-      - name: Inspect Lerico Ranger data APIs
+      - name: Inspect exact Handbook Ranger skill mapping
         run: |
           set -euo pipefail
-          fetch() {
-            label="$1"
-            url="$2"
-            out="$(mktemp)"
-            code="$(curl --location --silent --show-error --output "$out" --write-out '%{http_code}' --connect-timeout 10 --max-time 30 "$url" || true)"
-            echo "=== $label STATUS=$code BYTES=$(wc -c < "$out") ==="
-            head -c 4000 "$out" | tr '\n' ' '
-            echo
-          }
-          fetch GET_RANGER "https://rangers.lerico.net/api/getRanger/$UNIT_CODE"
-          fetch GET_SKILLS "https://rangers.lerico.net/api/getSkills"
-          fetch GET_RANGERS_BASICS "https://rangers.lerico.net/api/getRangersBasics"
-          fetch TRANSLATE "https://rangers.lerico.net/api/v2/translate?keys=ja%3AUNIT%2Cja%3ASKILL"
+          basics="$(mktemp)"
+          skills="$(mktemp)"
+          translate="$(mktemp)"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             -H 'Accept: application/json'             -H 'User-Agent: line-rangers-pvp-character-detail/1.0'             'https://rangers.lerico.net/api/getRangersBasics' > "$basics"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             -H 'Accept: application/json'             -H 'User-Agent: line-rangers-pvp-character-detail/1.0'             'https://rangers.lerico.net/api/getSkills' > "$skills"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             -H 'Accept: application/json'             -H 'User-Agent: line-rangers-pvp-character-detail/1.0'             'https://rangers.lerico.net/api/v2/translate?keys=ja%3ASKILL%2Cja%3AUNIT' > "$translate"
+
+          ranger="$(jq -cer --arg unit "$UNIT_CODE" '.[] | select(.unitCode==$unit) | {
+            unitCode,unitNameCode,unitDescriptionCode,grade,
+            skillCode,skillCode2,skillCode3,
+            iconSkillCode,iconSkillCode2,iconSkillCode3
+          }' "$basics")"
+          echo "RANGER_MAPPING=$ranger"
+
+          codes="$(printf '%s' "$ranger" | jq -r '[.skillCode,.skillCode2,.skillCode3,.iconSkillCode,.iconSkillCode2,.iconSkillCode3] | map(select(type=="string" and length>0)) | unique | .[]')"
+          while IFS= read -r code; do
+            [ -n "$code" ] || continue
+            jq -cer --arg code "$code" '.[] | select(.skillCode==$code) | {skillCode,nameCode,descriptionCode}' "$skills" || true
+          done <<< "$codes"
+
+          jq -cer --arg unit "$UNIT_CODE" '{
+            unitName: ."ja:UNIT"[($unit+"_nm")],
+            unitShortName: ."ja:UNIT"[($unit+"_snm")]
+          }' "$translate"
+          while IFS= read -r code; do
+            [ -n "$code" ] || continue
+            skill_meta="$(jq -cer --arg code "$code" '.[] | select(.skillCode==$code) | {nameCode,descriptionCode}' "$skills" || true)"
+            [ -n "$skill_meta" ] || continue
+            name_code="$(printf '%s' "$skill_meta" | jq -r '.nameCode // empty')"
+            desc_code="$(printf '%s' "$skill_meta" | jq -r '.descriptionCode // empty')"
+            jq -cer --arg name "$name_code" --arg desc "$desc_code" '{
+              nameCode:$name,
+              descriptionCode:$desc,
+              name:(."ja:SKILL"[$name] // null),
+              description:(."ja:SKILL"[$desc] // null)
+            }' "$translate"
+          done <<< "$codes"
