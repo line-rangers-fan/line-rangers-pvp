@@ -105,6 +105,31 @@ jobs:
                 const state = await page.evaluate(() => {
                   const root = document.documentElement;
                   const body = document.body;
+                  const allElements = [...document.querySelectorAll('body *')];
+                  const overflowing = allElements.flatMap((element) => {
+                    const style = getComputedStyle(element);
+                    const rect = element.getBoundingClientRect();
+                    const hidden =
+                      style.display === 'none' ||
+                      style.visibility === 'hidden' ||
+                      Number(style.opacity || '1') === 0 ||
+                      rect.width === 0 ||
+                      rect.height === 0;
+                    if (hidden) return [];
+                    if (rect.left < -2 || rect.right > window.innerWidth + 2) {
+                      return [{
+                        tag: element.tagName,
+                        id: element.id || '',
+                        className: typeof element.className === 'string' ? element.className.slice(0, 120) : '',
+                        text: (element.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 100),
+                        left: Math.round(rect.left),
+                        right: Math.round(rect.right),
+                        width: Math.round(rect.width),
+                        overflowX: style.overflowX,
+                      }];
+                    }
+                    return [];
+                  }).slice(0, 40);
                   const interactive = [...document.querySelectorAll('a,button,input,textarea,select')];
                   const clipped = interactive.flatMap((element) => {
                     const style = getComputedStyle(element);
@@ -133,6 +158,7 @@ jobs:
                     innerWidth: window.innerWidth,
                     rootScrollWidth: root.scrollWidth,
                     bodyScrollWidth: body?.scrollWidth || 0,
+                    overflowing,
                     clipped,
                   };
                 });
@@ -150,6 +176,7 @@ jobs:
                   horizontalOverflow,
                   rootScrollWidth: state.rootScrollWidth,
                   bodyScrollWidth: state.bodyScrollWidth,
+                  overflowing: state.overflowing,
                   clipped: state.clipped,
                   missing,
                   shieldFound,
