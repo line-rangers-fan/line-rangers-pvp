@@ -283,3 +283,16 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert '.equipment-skill-image' in style
     assert '.equipment-skill-effects {' in style
     assert 'margin-top: 0.85rem;' in style
+
+
+def test_saturday_pvp_reset_notice_is_fully_removed():
+    index = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+    app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
+    style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
+
+    assert "sunday-notice" not in index
+    assert "weekly-notice" not in index
+    assert "WEEKLY_NOTICE" not in app
+    assert "updateWeeklyNotice" not in app
+    assert "土曜のPVPランキング初期化直後は" not in app
+    assert ".weekly-notice" not in style
