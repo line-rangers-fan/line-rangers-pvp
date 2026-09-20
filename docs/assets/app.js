@@ -243,6 +243,7 @@ const STATUS_TEXT = {
     partialMessage: "200人に満たないため、取得できた人数で一時更新しています。監視処理が完全取得を再試行します。",
     delayed: "更新が少し遅れています。監視処理が再集\u2060計を試みます。",
     stale: "更新が2時間以上遅れています。前回の正常データを表示中です。",
+    sourceStale: "取得元のPvPデータが長時間同一のため、同じ値を新しい履歴として扱わず再取得しています。",
     refresh: "今すぐ再読込",
     refreshing: "再読込中…",
     refreshError:
@@ -260,6 +261,7 @@ const STATUS_TEXT = {
     rankMonth: "先月締め",
     rankComparison: "とのキャラ数比較",
     rankHistoryPending: "履歴待ち",
+    rankSourcePending: "更新待ち",
   },
   en: {
     healthy: "Up to date",
@@ -267,6 +269,7 @@ const STATUS_TEXT = {
     partialMessage: "A verified partial sample is shown while the watchdog retries all 200 players.",
     delayed: "The update is delayed. The watchdog will retry collection.",
     stale: "Over two hours late. Showing the last verified dataset.",
+    sourceStale: "The PvP source data has remained unchanged for an extended period. Identical data is not treated as new history while retries continue.",
     refresh: "Refresh now",
     refreshing: "Refreshing…",
     refreshError:
@@ -284,6 +287,7 @@ const STATUS_TEXT = {
     rankMonth: "Previous-month close",
     rankComparison: "character count comparison",
     rankHistoryPending: "History pending",
+    rankSourcePending: "Source update pending",
   },
   zh: {
     healthy: "更新正常",
@@ -1117,6 +1121,7 @@ function detectLanguage() {
 }
 
 function getFreshnessLevel() {
+  if (state.data?.comparison?.source_stale === true) return "sourceStale";
   if (state.data?.publication_mode === "partial_after_stale") return "partial";
   const updatedTime = new Date(state.data?.updated_at || "").getTime();
   if (Number.isNaN(updatedTime)) return "stale";
@@ -1185,7 +1190,7 @@ function updateFreshnessWarning() {
       level === "healthy" ? "healthy" : level
     );
     elements.freshness.className = `freshness-badge freshness-${
-      level === "partial" ? "delayed" : level
+      level === "partial" || level === "sourceStale" ? "delayed" : level
     }`;
   }
 
@@ -1257,20 +1262,23 @@ function renderRankPeriodChanges(container, change, options = {}) {
     const isComparable = value?.comparable === true;
     const parsedDelta = metric === "occurrence" ? value?.occurrence_count : value?.rank;
     const hasDelta = isComparable && typeof parsedDelta === "number" && Number.isSafeInteger(parsedDelta);
+    const sourcePending =
+      !hasDelta &&
+      state.data?.comparison?.periods?.[key]?.reason === "source_stale";
     const delta = hasDelta
       ? parsedDelta
       : 0;
     const badge = document.createElement("span");
     badge.className =
       !hasDelta
-        ? "rank-period-change rank-period-pending"
+        ? `rank-period-change rank-period-pending${sourcePending ? " rank-period-source-pending" : ""}`
         : delta > 0
         ? "rank-period-change rank-period-up"
         : delta < 0
           ? "rank-period-change rank-period-down"
           : "rank-period-change rank-period-neutral";
     const movement = !hasDelta
-      ? st("rankHistoryPending")
+      ? st(sourcePending ? "rankSourcePending" : "rankHistoryPending")
       : metric === "occurrence"
         ? delta > 0
           ? `+${formatOccurrence(delta)}`

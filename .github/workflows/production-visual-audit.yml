@@ -123,13 +123,15 @@ jobs:
                     const comparisonState = await page.evaluate(() => ({
                       rows: document.querySelectorAll('#ranking-body tr').length,
                       badges: document.querySelectorAll('#ranking-body .rank-period-change').length,
-                      pending: document.querySelectorAll('#ranking-body .rank-period-pending').length,
+                      pending: document.querySelectorAll('#ranking-body .rank-period-pending:not(.rank-period-source-pending)').length,
+                      sourcePending: document.querySelectorAll('#ranking-body .rank-period-source-pending').length,
                     }));
                     comparisonStates[period] = comparisonState;
                     if (
                       comparisonState.rows === 0 ||
                       comparisonState.badges !== comparisonState.rows ||
-                      comparisonState.pending !== 0
+                      comparisonState.pending !== 0 ||
+                      (comparisonState.sourcePending !== 0 && comparisonState.sourcePending !== comparisonState.rows)
                     ) {
                       throw new Error(
                         `${target.name} rendered invalid ${period} comparison badges at ${viewport.name}: ${JSON.stringify(comparisonState)}`,
@@ -152,13 +154,15 @@ jobs:
                     const equipmentState = await page.evaluate(() => ({
                       rows: document.querySelectorAll('#equipment-dialog[open] .equipment-table tbody tr').length,
                       badges: document.querySelectorAll('#equipment-dialog[open] .equipment-table .rank-period-change').length,
-                      pending: document.querySelectorAll('#equipment-dialog[open] .equipment-table .rank-period-pending').length,
+                      pending: document.querySelectorAll('#equipment-dialog[open] .equipment-table .rank-period-pending:not(.rank-period-source-pending)').length,
+                      sourcePending: document.querySelectorAll('#equipment-dialog[open] .equipment-table .rank-period-source-pending').length,
                     }));
                     equipmentComparisonStates[period] = equipmentState;
                     if (
                       equipmentState.rows === 0 ||
                       equipmentState.badges !== equipmentState.rows ||
-                      equipmentState.pending !== 0
+                      equipmentState.pending !== 0 ||
+                      (equipmentState.sourcePending !== 0 && equipmentState.sourcePending !== equipmentState.rows)
                     ) {
                       throw new Error(
                         `${target.name} rendered invalid equipment ${period} comparison badges at ${viewport.name}: ${JSON.stringify(equipmentState)}`,

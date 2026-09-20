@@ -71,6 +71,9 @@ def test_history_and_equipment_change_contract_is_present():
     assert 'data-rank-period="hour"' in (ROOT / "docs/index.html").read_text(encoding="utf-8")
     assert 'metric: "occurrence"' in app
     assert 'rankHistoryPending' in app
+    assert 'rankSourcePending' in app
+    assert 'rank-period-source-pending' in app
+    assert 'sourceStale:' in app
     assert '"±0"' in app
     assert "fetchJsonWithLimits" in app
     assert "REQUEST_TIMEOUT_MS" in app
