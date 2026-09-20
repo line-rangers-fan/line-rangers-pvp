@@ -15,29 +15,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Inspect u1616e-brown source mapping
+      - name: Inspect exact u1616e-brown translations
         run: |
           set -euo pipefail
-          basics="$(mktemp)"
-          skills="$(mktemp)"
           translations="$(mktemp)"
-          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             'https://rangers.lerico.net/api/getRangersBasics' > "$basics"
-          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             'https://rangers.lerico.net/api/getSkills' > "$skills"
-          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             'https://rangers.lerico.net/api/v2/translate?keys=ja%3ASKILL%2Cja%3AUNIT' > "$translations"
-
-          ranger="$(jq -cer '.[] | select(.unitCode=="u1616e-brown") | {
-            unitCode,unitNameCode,grade,isTranscendentUnit,isHyperUnit,
-            iconSkillCode,skillCode,iconSkillCode2,skillCode2,iconSkillCode3,skillCode3
-          }' "$basics")"
-          echo "TARGET_RANGER=$ranger"
-
-          mapfile -t codes < <(printf '%s' "$ranger" | jq -r '[.skillCode,.skillCode2,.skillCode3,.iconSkillCode,.iconSkillCode2,.iconSkillCode3] | map(select(type=="string" and length>0)) | unique | .[]')
-          for code in "${codes[@]}"; do
-            echo "TARGET_SKILL_CODE=$code"
-            jq -cer --arg code "$code" '.[] | select(.skillCode==$code) | {skillCode,nameCode,descriptionCode,iconResourcePath}' "$skills" || true
-          done
-
-          jq -cer '{
-            unitName: ."ja:UNIT"."u1616e-brown_nm",
-            matchingSkillTranslations: (."ja:SKILL" | with_entries(select(.key|test("1615|1616|sk11|brown";"i"))))
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             'https://rangers.lerico.net/api/v2/translate?keys=ja%3ASKILL%2Cja%3AUNIT%2Cen%3ASKILL%2Cen%3AUNIT' > "$translations"
+          jq -c '{
+            jaUnit: ."ja:UNIT"."u1616e-brown_nm",
+            jaSkill1Name: ."ja:SKILL"."sk1615_brown_nm",
+            jaSkill1Desc: ."ja:SKILL"."sk1615_brown_desc",
+            jaSkill2Name: ."ja:SKILL"."hsk1615_brown_nm",
+            jaSkill2Desc: ."ja:SKILL"."hsk1615_brown_desc",
+            enUnit: ."en:UNIT"."u1616e-brown_nm",
+            enSkill1Name: ."en:SKILL"."sk1615_brown_nm",
+            enSkill1Desc: ."en:SKILL"."sk1615_brown_desc",
+            enSkill2Name: ."en:SKILL"."hsk1615_brown_nm",
+            enSkill2Desc: ."en:SKILL"."hsk1615_brown_desc"
           }' "$translations"
