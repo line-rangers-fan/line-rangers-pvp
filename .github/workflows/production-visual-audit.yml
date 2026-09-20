@@ -198,6 +198,133 @@ jobs:
               }
               await context.close();
             }
+
+            async function verifyViewerRoundTrip(ownerMode) {
+              const context = await browser.newContext({
+                viewport: { width: 390, height: 844 },
+                deviceScaleFactor: 1,
+                reducedMotion: 'reduce',
+                locale: 'ja-JP',
+              });
+              const name = ownerMode ? 'owner-viewer-roundtrip' : 'viewer-roundtrip';
+              const page = await context.newPage();
+              const pageErrors = [];
+              page.on('pageerror', error => pageErrors.push(String(error)));
+
+              try {
+                if (ownerMode) {
+                  const ownerResponse = await context.request.post(worker + '/api/owner', {
+                    headers: {
+                      Origin: worker,
+                      'Sec-Fetch-Site': 'same-origin',
+                      'Content-Type': 'application/json',
+                    },
+                    data: { key: ownerKey },
+                  });
+                  if (ownerResponse.status() !== 200) {
+                    throw new Error(`Owner activation failed in round trip: HTTP ${ownerResponse.status()}`);
+                  }
+                }
+
+                const topResponse = await page.goto(pvp, { waitUntil: 'domcontentloaded', timeout: 45000 });
+                if (!topResponse || !topResponse.ok()) {
+                  throw new Error(`PvP navigation failed in ${name}: HTTP ${topResponse?.status() ?? 'no-response'}`);
+                }
+                await page.waitForSelector('.community-board-entry-button', { state: 'visible', timeout: 20000 });
+                await page.waitForFunction(() => {
+                  const token = localStorage.getItem('line-rangers-community-viewer-v1') || '';
+                  return /^v1[.][a-f0-9-]{36}[.][0-9]+[.][A-Za-z0-9_-]{43}$/.test(token);
+                }, undefined, { timeout: 20000 });
+
+                const viewerBefore = await page.evaluate(() => localStorage.getItem('line-rangers-community-viewer-v1') || '');
+                const unreadBefore = (await page.locator('.community-board-entry-stat-unread').innerText()).trim();
+                const boardHref = await page.locator('.community-board-entry-button').getAttribute('href');
+                if (!boardHref) throw new Error(`Board href missing in ${name}`);
+                const linkedViewer = new URL(boardHref).searchParams.get('viewer') || '';
+                if (linkedViewer !== viewerBefore) {
+                  throw new Error(`Board link Viewer token mismatch in ${name}`);
+                }
+
+                await Promise.all([
+                  page.waitForURL(url => url.origin === worker && url.pathname === '/boards', { timeout: 30000 }),
+                  page.locator('.community-board-entry-button').click(),
+                ]);
+                await page.waitForFunction(() => !new URL(location.href).searchParams.has('viewer'), undefined, { timeout: 20000 });
+                await page.waitForTimeout(1800);
+
+                const boardUrl = page.url();
+                if (new URL(boardUrl).searchParams.has('viewer')) {
+                  throw new Error(`Viewer token remained in board URL in ${name}`);
+                }
+
+                const boardState = await page.evaluate(async token => {
+                  const response = await fetch('/api/board?viewer=' + encodeURIComponent(token), {
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                  });
+                  if (!response.ok) throw new Error('board_api_' + response.status);
+                  return await response.json();
+                }, viewerBefore);
+
+                if (Number(boardState?.stats?.unread) !== 0) {
+                  throw new Error(`Board unread did not clear for ${name}: ${boardState?.stats?.unread}`);
+                }
+                if (ownerMode && boardState?.me?.role !== 'owner') {
+                  throw new Error(`Owner role was lost while using Viewer token: ${boardState?.me?.role}`);
+                }
+                if (!ownerMode && boardState?.me?.role === 'owner') {
+                  throw new Error('Normal Viewer unexpectedly gained Owner role');
+                }
+
+                await page.screenshot({ path: path.join(artifactDir, `${name}-board.png`), fullPage: true });
+
+                const backResponsePromise = page.waitForURL(url => url.origin === new URL(pvp).origin, { timeout: 30000 });
+                await page.goBack({ waitUntil: 'domcontentloaded', timeout: 30000 });
+                await backResponsePromise;
+                await page.waitForSelector('.community-board-entry-stat-unread', { state: 'visible', timeout: 20000 });
+                await page.waitForFunction(() => {
+                  const el = document.querySelector('.community-board-entry-stat-unread');
+                  return !!el && /0/.test(el.textContent || '');
+                }, undefined, { timeout: 20000 });
+
+                const viewerAfter = await page.evaluate(() => localStorage.getItem('line-rangers-community-viewer-v1') || '');
+                const unreadAfter = (await page.locator('.community-board-entry-stat-unread').innerText()).trim();
+                if (viewerAfter !== viewerBefore) {
+                  throw new Error(`Viewer token changed after board round trip in ${name}`);
+                }
+                if (!/0/.test(unreadAfter)) {
+                  throw new Error(`PvP NEW did not stay at zero after board round trip in ${name}: ${unreadAfter}`);
+                }
+
+                await page.screenshot({ path: path.join(artifactDir, `${name}-pvp-return.png`), fullPage: true });
+                results.push({
+                  target: name,
+                  viewport: { name: 'mobile-390x844', width: 390, height: 844 },
+                  viewerStable: true,
+                  viewerPassedInLink: true,
+                  viewerScrubbedFromUrl: true,
+                  unreadBefore,
+                  boardUnread: Number(boardState?.stats?.unread),
+                  unreadAfter,
+                  ownerRole: boardState?.me?.role || null,
+                  pageErrors,
+                });
+                if (pageErrors.length) failed = true;
+              } catch (error) {
+                failed = true;
+                results.push({
+                  target: name,
+                  viewport: { name: 'mobile-390x844', width: 390, height: 844 },
+                  error: String(error),
+                  pageErrors,
+                });
+              } finally {
+                await context.close();
+              }
+            }
+
+            await verifyViewerRoundTrip(false);
+            await verifyViewerRoundTrip(true);
           } finally {
             await browser.close();
           }
