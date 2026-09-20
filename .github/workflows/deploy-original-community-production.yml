@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone --filter=blob:none --no-checkout --no-tags https://github.com/nyu1791-collab/copy-LINE-.git copy-source
-          git -C copy-source fetch --depth=1 origin "$COPY_SOURCE_SHA"
+          git -C copy-source fetch --depth=256 origin "$COPY_SOURCE_SHA" "$MINIMUM_COMMUNITY_SOURCE_SHA"
           git -C copy-source checkout --detach "$COPY_SOURCE_SHA"
           test "$(git -C copy-source rev-parse HEAD)" = "$COPY_SOURCE_SHA"
           if ! git -C copy-source merge-base --is-ancestor "$MINIMUM_COMMUNITY_SOURCE_SHA" "$COPY_SOURCE_SHA"; then
