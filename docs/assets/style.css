@@ -1511,26 +1511,44 @@ a.equipment-character-name:focus-visible {
 
 @media (max-width: 600px) {
   .equipment-dialog {
-    width: calc(100% - 0.75rem);
+    width: calc(100% - 0.5rem);
     max-height: 92vh;
-    padding: 0.85rem;
+    padding: 0.6rem;
   }
 
   .equipment-summary {
-    gap: 0.7rem;
-    padding: 0.75rem;
+    display: grid;
+    grid-template-columns: 3.2rem minmax(0, 1fr);
+    column-gap: 0.55rem;
+    row-gap: 0.45rem;
+    padding: 0.52rem;
+  }
+
+  .equipment-character-details {
+    display: contents;
   }
 
   .equipment-character-image {
-    width: 3.4rem;
-    height: 3.4rem;
+    grid-column: 1;
+    grid-row: 1;
+    width: 3.2rem;
+    height: 3.2rem;
   }
 
   .equipment-character-name {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
     font-size: 0.94rem;
   }
 
+  .equipment-skill-title {
+    grid-column: 1 / -1;
+    margin: 0.15rem 0 0.1rem;
+  }
+
   .equipment-skill-list {
+    grid-column: 1 / -1;
     grid-template-columns: none;
     grid-auto-flow: column;
     grid-auto-columns: minmax(15.5rem, 92%);
