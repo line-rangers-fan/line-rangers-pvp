@@ -189,22 +189,3 @@ jobs:
             exit 1
           fi
           echo "Published Pages comparison data is current and complete."
-
-  audit:
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Dispatch production browser comparison audit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/production-visual-audit.yml/dispatches" \
-            -f ref=main >/dev/null
-          echo "Dispatched production visual audit after verified Pages publication."
-
