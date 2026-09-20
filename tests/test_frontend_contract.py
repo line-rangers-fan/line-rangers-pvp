@@ -243,19 +243,34 @@ def test_mobile_heading_wraps_inside_the_viewport():
   }""" in style
 
 
-def test_character_modal_shows_name_skill_information_and_handbook_link():
+def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_handbook_link():
     app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
     style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
 
     assert 'skillInfo: "スキル情報"' in app
+    assert 'skillEffects: "スキル効果"' in app
     assert 'function rangerDetailUrl(character)' in app
+    assert 'function isTrustedSkillIconUrl(value)' in app
+    assert 'function createSkillIcon(skill)' in app
     assert 'https://rangers.lerico.net/ja/ranger/' in app
+    assert 'url.pathname.startsWith("/res/skill_icon/")' in app
     assert 'RANGER_INFO_WORKER_URL' in app
     assert 'function loadRangerInfo(character)' in app
     assert 'renderCharacterSkillSummary(character)' in app
     assert 'equipment-character-name' in app
-    assert 'equipment-skill-list' in app
+    assert 'equipment-skill-image' in app
+    assert 'equipment-skill-description' in app
+    assert 'equipment-skill-effects' in app
+    assert 'skill.effects.forEach' in app
     assert 'description.textContent = et("dialogDescription")' not in app
     assert 'et("characterPlayers") +' not in app
     assert '.equipment-character-name' in style
-    assert '.equipment-skill-item' in style
+    assert 'color: #60a5fa;' in style
+    assert 'a.equipment-character-name:visited' in style
+    assert '.equipment-skill-list {' in style
+    assert 'grid-template-columns: repeat(2, minmax(0, 1fr));' in style
+    assert '.equipment-skill-item {' in style
+    assert 'grid-template-columns: 4.25rem minmax(0, 1fr);' in style
+    assert '.equipment-skill-image' in style
+    assert '.equipment-skill-effects {' in style
+    assert 'margin-top: 0.85rem;' in style
