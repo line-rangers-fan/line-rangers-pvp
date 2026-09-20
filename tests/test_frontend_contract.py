@@ -72,9 +72,10 @@ def test_history_and_equipment_change_contract_is_present():
     assert 'metric: "occurrence"' in app
     assert 'rankHistoryPending' in app
     assert 'rankSourcePending' in app
-    assert 'rank-period-source-pending' in app
     assert 'sourceStale:' in app
-    assert '"±0"' in app
+    assert 'const movement = !hasDelta' in app
+    assert '? "±0"' in app
+    assert 'rank-period-source-pending' not in app
     assert "fetchJsonWithLimits" in app
     assert "REQUEST_TIMEOUT_MS" in app
     # The browser must use the same bounded collection window as the

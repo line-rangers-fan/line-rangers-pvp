@@ -114,8 +114,26 @@ def test_published_comparison_values_match_selected_history_baselines():
         if isinstance(snapshot, dict) and isinstance(snapshot.get("updated_at"), str)
     }
 
+    source_stale = data["comparison"].get("source_stale") is True
     for period in ("hour", "day", "week", "month"):
         summary = data["comparison"]["periods"][period]
+        if source_stale and period in {"hour", "day"}:
+            assert summary["comparable"] is False
+            assert summary["reason"] == "source_stale"
+            assert summary["updated_at"] is None
+            for current in data["characters"]:
+                change = current["change"]["periods"][period]
+                assert change["comparable"] is False
+                assert change["reason"] == "source_stale"
+                assert change["occurrence_count"] is None
+                for category in current["equipment_rankings"].values():
+                    for item in category["items"]:
+                        item_change = item["change"]["periods"][period]
+                        assert item_change["comparable"] is False
+                        assert item_change["reason"] == "source_stale"
+                        assert item_change["occurrence_count"] is None
+            continue
+
         assert summary["comparable"] is True
         baseline = snapshots.get(summary["updated_at"])
         assert baseline is not None, f"{period} baseline is not retained in public history"
