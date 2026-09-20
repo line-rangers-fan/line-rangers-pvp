@@ -243,7 +243,7 @@ const STATUS_TEXT = {
     partialMessage: "200人に満たないため、取得できた人数で一時更新しています。監視処理が完全取得を再試行します。",
     delayed: "更新が少し遅れています。監視処理が再集\u2060計を試みます。",
     stale: "更新が2時間以上遅れています。前回の正常データを表示中です。",
-    sourceStale: "取得元のPvPデータが長時間同一のため、同じ値を新しい履歴として扱わず再取得しています。",
+    sourceStale: "取得元のPvPデータが長時間同一のため、全キャラ±0です。こちらのサイトのエラーではございません。",
     refresh: "今すぐ再読込",
     refreshing: "再読込中…",
     refreshError:
@@ -269,7 +269,7 @@ const STATUS_TEXT = {
     partialMessage: "A verified partial sample is shown while the watchdog retries all 200 players.",
     delayed: "The update is delayed. The watchdog will retry collection.",
     stale: "Over two hours late. Showing the last verified dataset.",
-    sourceStale: "The PvP source data has remained unchanged for an extended period. Identical data is not treated as new history while retries continue.",
+    sourceStale: "The source PvP data has remained unchanged for an extended period, so all characters show ±0. This is not an error with this site.",
     refresh: "Refresh now",
     refreshing: "Refreshing…",
     refreshError:
