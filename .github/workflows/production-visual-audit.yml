@@ -161,6 +161,14 @@ jobs:
                       skillImages: images.length,
                       loadedSkillImages: images.filter((image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0).length,
                       effectGroups: effects.length,
+                      separatedEffects: [...effects].every((effectsBlock) => {
+                        const description = effectsBlock.parentElement?.querySelector('.equipment-skill-description');
+                        if (!(description instanceof HTMLElement)) return true;
+                        const descriptionRect = description.getBoundingClientRect();
+                        const effectsRect = effectsBlock.getBoundingClientRect();
+                        const marginTop = Number.parseFloat(getComputedStyle(effectsBlock).marginTop || '0');
+                        return effectsRect.top > descriptionRect.bottom && marginTop >= 8;
+                      }),
                       skillGridColumns: firstSkill ? getComputedStyle(firstSkill).gridTemplateColumns : '',
                       legacyMeta: document.querySelectorAll('#equipment-dialog[open] .equipment-meta').length,
                     };
@@ -176,6 +184,7 @@ jobs:
                     rangerDetailState.skillItems < 1 ||
                     rangerDetailState.skillImages !== rangerDetailState.skillItems ||
                     rangerDetailState.loadedSkillImages !== rangerDetailState.skillImages ||
+                    !rangerDetailState.separatedEffects ||
                     !rangerDetailState.skillGridColumns ||
                     rangerDetailState.skillGridColumns === 'none' ||
                     rangerDetailState.legacyMeta !== 0
@@ -301,7 +310,7 @@ jobs:
                 };
                 results.push(result);
 
-                if (horizontalOverflow || state.clipped.length || missing.length || shieldFound || pageErrors.length) {
+                if (horizontalOverflow || state.clipped.length || missing.length || shieldFound || pageErrors.length || consoleErrors.length) {
                   failed = true;
                 }
                 await page.close();
