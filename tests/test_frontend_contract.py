@@ -26,6 +26,9 @@ def test_frontend_assets_keep_strict_csp_and_required_controls():
     parser.feed(index)
 
     assert "script-src 'self';" in index
+    # frame-ancestors is ignored when CSP is delivered through a meta element
+    # and causes a browser console error. Framing policy belongs in HTTP headers.
+    assert "frame-ancestors" not in index
     assert parser.inline_scripts == 0
     assert parser.inline_styles == 0
     for element_id in (
