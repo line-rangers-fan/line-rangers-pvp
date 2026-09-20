@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import {
   dataNeedsCollection,
@@ -10,6 +11,21 @@ import {
   inspectDataHealth,
   runWatchdog,
 } from "../infra/cloudflare-watchdog/src/index.mjs";
+
+
+test("watchdog cron configuration matches the advertised 15-minute recovery schedule", () => {
+  const wrangler = readFileSync(
+    new URL("../infra/cloudflare-watchdog/wrangler.toml", import.meta.url),
+    "utf8",
+  );
+  const source = readFileSync(
+    new URL("../infra/cloudflare-watchdog/src/index.mjs", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(wrangler, /crons\s*=\s*\["\*\/15 \* \* \* \*"\]/);
+  assert.match(source, /const SCHEDULE = "\*\/15 \* \* \* \*";/);
+});
 
 
 const NOW = Date.parse("2026-08-27T04:00:00Z");
