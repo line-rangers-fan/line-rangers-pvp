@@ -55,6 +55,16 @@ jobs:
           print('SCRIPT_SRCS='+repr(scripts[:40]))
           api_refs=sorted(set(re.findall(r'["\\\']([^"\\\']*(?:/api/|api/v[0-9]/)[^"\\\']*)["\\\']',text,re.I)))
           print('INLINE_API_REFS='+repr(api_refs[:80]))
+          attrs=re.findall(r'(?:src|href|ng-include)\\s*=\\s*["\\\']([^"\\\']+)["\\\']',text,re.I)
+          print('RESOURCE_ATTRS='+repr(attrs[:120]))
+          snippets=[]
+          for line in text.splitlines():
+              low=line.lower()
+              if '.js' in low or 'angular' in low or 'currentres' in low or 'ranger' in low or 'unitdata' in low:
+                  clean=' '.join(line.split())
+                  if clean:
+                      snippets.append(clean[:700])
+          print('SOURCE_SNIPPETS='+repr(snippets[:80]))
           PY
 
           # Diagnostic run: inspect upstream application assets before asserting Worker success.
