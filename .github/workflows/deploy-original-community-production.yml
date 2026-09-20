@@ -18,7 +18,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  COPY_SOURCE_SHA: ac4f80f71ec42b4c79fedf85c670618eee5d3af4
+  COPY_SOURCE_SHA: d7b4fe844766a77d3526379f74e6bce8becc425c
+  MINIMUM_COMMUNITY_SOURCE_SHA: d7b4fe844766a77d3526379f74e6bce8becc425c
   WORKER_NAME: line-rangers-pvp-community-production
   D1_NAME: line-rangers-pvp-production-db
   R2_BUCKET: line-rangers-pvp-production-media
@@ -41,6 +42,10 @@ jobs:
           git -C copy-source fetch --depth=1 origin "$COPY_SOURCE_SHA"
           git -C copy-source checkout --detach "$COPY_SOURCE_SHA"
           test "$(git -C copy-source rev-parse HEAD)" = "$COPY_SOURCE_SHA"
+          if ! git -C copy-source merge-base --is-ancestor "$MINIMUM_COMMUNITY_SOURCE_SHA" "$COPY_SOURCE_SHA"; then
+            echo "Selected community source predates the minimum validated unread/Owner identity fix."
+            exit 78
+          fi
 
       - name: Preserve original PvP exactly
         run: |
@@ -320,6 +325,103 @@ jobs:
           grep -qi "^content-security-policy: base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'" "$api_headers"
           grep -qi '^access-control-allow-origin: https://line-rangers-fan.github.io' "$activity_headers"
           echo "Production Worker verified without deleting existing board content: $PRODUCTION_BASE_URL"
+
+      - name: Verify Owner plus Viewer A/B unread isolation without posts
+        working-directory: copy-source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+          BOARD_OWNER_ACCESS_TOKEN: ${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
+            echo "Owner access token is unavailable to this workflow; refusing to claim Owner+Viewer E2E coverage."
+            exit 78
+          fi
+          ranking_origin='https://line-rangers-fan.github.io'
+          owner_cookie="$RUNNER_TEMP/owner-viewer-e2e-cookie.txt"
+          owner_body="$(jq -nc --arg key "$BOARD_OWNER_ACCESS_TOKEN" '{key:$key}')"
+          owner_status="$(curl --location --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
+            -H 'Content-Type: application/json' -c "$owner_cookie" \
+            --data "$owner_body" "$PRODUCTION_BASE_URL/api/owner")"
+          test "$owner_status" = '200'
+
+          issue_viewer() {
+            curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+              -H "Origin: $ranking_origin" "$PRODUCTION_BASE_URL/api/activity?public=1"
+          }
+          activity_a="$(issue_viewer)"
+          activity_b="$(issue_viewer)"
+          viewer_a="$(printf '%s' "$activity_a" | jq -er '.viewerToken')"
+          viewer_b="$(printf '%s' "$activity_b" | jq -er '.viewerToken')"
+          subject_a="$(printf '%s' "$viewer_a" | cut -d. -f2)"
+          subject_b="$(printf '%s' "$viewer_b" | cut -d. -f2)"
+          test "$viewer_a" != "$viewer_b"
+          test "$subject_a" != "$subject_b"
+          [[ "$viewer_a" =~ ^v1\.[a-f0-9-]{36}\.[0-9]+\.[A-Za-z0-9_-]{43}$ ]]
+          [[ "$viewer_b" =~ ^v1\.[a-f0-9-]{36}\.[0-9]+\.[A-Za-z0-9_-]{43}$ ]]
+          echo "::add-mask::$viewer_a"
+          echo "::add-mask::$viewer_b"
+          echo "::add-mask::$subject_a"
+          echo "::add-mask::$subject_b"
+
+          cleanup_viewers() {
+            npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
+              --command "DELETE FROM visits WHERE subject IN ('$subject_a','$subject_b')" >/dev/null 2>&1 || true
+          }
+          trap cleanup_viewers EXIT
+          npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
+            --command "INSERT INTO visits(subject,seen) VALUES('$subject_a',1),('$subject_b',1) ON CONFLICT(subject) DO UPDATE SET seen=1" >/dev/null
+
+          before_a="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer_a" "$PRODUCTION_BASE_URL/api/activity?public=1")"
+          before_b="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer_b" "$PRODUCTION_BASE_URL/api/activity?public=1")"
+          comments="$(printf '%s' "$before_a" | jq -er '.comments')"
+          if [ "$comments" -gt 0 ]; then
+            printf '%s' "$before_a" | jq -e '.unread > 0' >/dev/null
+            printf '%s' "$before_b" | jq -e '.unread > 0' >/dev/null
+          fi
+
+          owner_board_before="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
+            -b "$owner_cookie" "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_a")"
+          printf '%s' "$owner_board_before" | jq -e '.me.role == "owner"' >/dev/null
+          if [ "$comments" -gt 0 ]; then
+            printf '%s' "$owner_board_before" | jq -e '.stats.unread > 0' >/dev/null
+          fi
+
+          body="$(jq -nc --argjson until "$(date +%s%3N)" '{action:"seen",until:$until}')"
+          seen_status="$(curl --location --silent --show-error --output /tmp/owner-viewer-seen.json --write-out '%{http_code}' \
+            --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
+            -H 'Content-Type: application/json' -b "$owner_cookie" --data "$body" \
+            "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_a")"
+          test "$seen_status" = '200'
+          jq -e '.ok == true' /tmp/owner-viewer-seen.json >/dev/null
+
+          after_a="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer_a" "$PRODUCTION_BASE_URL/api/activity?public=1")"
+          after_b="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer_b" "$PRODUCTION_BASE_URL/api/activity?public=1")"
+          printf '%s' "$after_a" | jq -e --arg viewer "$viewer_a" '.viewerToken == $viewer and .unread == 0' >/dev/null
+          if [ "$comments" -gt 0 ]; then
+            printf '%s' "$after_b" | jq -e '.unread > 0' >/dev/null
+          fi
+
+          owner_board_after="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
+            -b "$owner_cookie" "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_a")"
+          printf '%s' "$owner_board_after" | jq -e '.me.role == "owner" and .stats.unread == 0' >/dev/null
+
+          viewer_rows="$(npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
+            --command "SELECT subject,seen FROM visits WHERE subject IN ('$subject_a','$subject_b')" )"
+          seen_a="$(printf '%s' "$viewer_rows" | jq -er --arg s "$subject_a" '[.. | objects | select(.subject? == $s) | .seen][0]')"
+          seen_b="$(printf '%s' "$viewer_rows" | jq -er --arg s "$subject_b" '[.. | objects | select(.subject? == $s) | .seen][0]')"
+          test "$seen_a" -gt 1
+          test "$seen_b" = '1'
+          echo 'Verified Owner auth remains Owner while NEW/seen is isolated by Viewer A/B subject.'
 
       - name: Verify per-viewer NEW seen round trip without posts
         working-directory: copy-source
