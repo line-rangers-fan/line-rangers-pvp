@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 # Serialize with full community promotions so a PvP-only refresh can never race
 # a board deployment or overwrite a newer validated community build.
@@ -186,3 +187,13 @@ jobs:
           ' "$live" >/dev/null
           curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3             "$PRODUCTION_BASE_URL/pvp/index.html" | grep -q 'レジェンド帯 キャラ集計'
           echo "Production Worker PvP is synchronized with canonical docs data."
+
+      - name: Dispatch synchronized GitHub Pages publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-github-pages.yml/dispatches" \
+            -f ref=main >/dev/null
+          echo "Dispatched GitHub Pages publication after successful Worker synchronization."
