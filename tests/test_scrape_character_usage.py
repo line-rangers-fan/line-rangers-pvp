@@ -172,6 +172,63 @@ def test_source_requests_are_limited_to_the_known_handbook_host():
     )
 
 
+def test_dynamic_source_requests_use_unique_query_cache_busters(monkeypatch):
+    seen = []
+    counter = iter((1001, 1002))
+
+    class Response:
+        status = 200
+        chunked = False
+
+        def __init__(self):
+            self.body = b'{"ok": true}'
+            self.headers = {"Content-Length": str(len(self.body))}
+
+        def read1(self, size):
+            if not self.body:
+                return b""
+            chunk, self.body = self.body[:size], self.body[size:]
+            return chunk
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    def open_request(request, timeout):
+        seen.append((request.full_url, dict(request.header_items()), timeout))
+        return Response()
+
+    monkeypatch.setattr(scraper, "time_ns", lambda: next(counter))
+    monkeypatch.setattr(scraper.SOURCE_OPENER, "open", open_request)
+
+    url = "https://rangers.lerico.net/api/v2/pvp/league/rank/LEGEND"
+    assert scraper.fetch_json(url, "test", attempts=1, cache_bust=True) == {"ok": True}
+    assert scraper.fetch_json(url, "test", attempts=1, cache_bust=True) == {"ok": True}
+
+    assert seen[0][0].endswith("_lr_fresh=1001-1")
+    assert seen[1][0].endswith("_lr_fresh=1002-1")
+    assert seen[0][0] != seen[1][0]
+    assert seen[0][1]["Cache-control"] == "no-cache, no-store, max-age=0"
+    assert seen[0][1]["Pragma"] == "no-cache"
+
+
+def test_rank_and_player_endpoints_enable_query_cache_busting(monkeypatch):
+    calls = []
+
+    def fake_fetch(url, label, **kwargs):
+        calls.append((url, label, kwargs))
+        return {"top100": []} if label == "PvP ranking API" else {"mid": "player-1"}
+
+    monkeypatch.setattr(scraper, "fetch_json", fake_fetch)
+
+    assert scraper.fetch_rank_data() == {"top100": []}
+    assert scraper.fetch_player_detail("player-1") == {"mid": "player-1"}
+    assert calls[0][2]["cache_bust"] is True
+    assert calls[1][2]["cache_bust"] is True
+
+
 def test_insufficient_ranked_players_refuses_publish(monkeypatch):
     monkeypatch.setattr(scraper, "TARGET_PLAYER_COUNT", 2)
     monkeypatch.setattr(

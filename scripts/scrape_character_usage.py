@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from http.client import HTTPException, HTTPResponse, HTTPSConnection
 from pathlib import Path
 from statistics import median
-from time import monotonic, sleep
+from time import monotonic, sleep, time_ns
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlparse
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
@@ -327,28 +327,32 @@ def fetch_json(
     *,
     attempts: int | None = None,
     timeout_seconds: int | None = None,
+    cache_bust: bool = False,
 ) -> object:
     """Fetch a bounded, trusted JSON response with patient retry handling."""
     if not is_trusted_source_url(url):
         raise ValueError("Refusing to request an untrusted source URL.")
-    request = Request(
-        url,
-        headers={
-            "Accept": "application/json",
-            "User-Agent": "line-rangers-pvp-stats/1.1",
-            # Dynamic PvP/player endpoints must be revalidated on every
-            # collection.  A stale CDN response can otherwise look like a
-            # healthy 200/200 sample while making every comparison falsely ±0.
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache",
-        },
-    )
     request_attempts = REQUEST_ATTEMPTS if attempts is None else max(1, attempts)
     request_timeout = (
         REQUEST_TIMEOUT_SECONDS if timeout_seconds is None else max(1, timeout_seconds)
     )
     last_error: Exception | None = None
     for attempt in range(1, request_attempts + 1):
+        request_url = url
+        if cache_bust:
+            separator = "&" if "?" in url else "?"
+            request_url = f"{url}{separator}_lr_fresh={time_ns()}-{attempt}"
+            if not is_trusted_source_url(request_url):
+                raise ValueError("Refusing to request an untrusted cache-busted URL.")
+        request = Request(
+            request_url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "line-rangers-pvp-stats/1.2",
+                "Cache-Control": "no-cache, no-store, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
         try:
             with SOURCE_OPENER.open(request, timeout=request_timeout) as response:
                 status = getattr(response, "status", 200)
@@ -379,7 +383,7 @@ def fetch_json(
 
 def fetch_rank_data(league: str = LEAGUE) -> dict:
     url = API_URL_TEMPLATE.format(league=quote(league, safe=""))
-    payload = fetch_json(url, "PvP ranking API")
+    payload = fetch_json(url, "PvP ranking API", cache_bust=True)
     if not isinstance(payload, dict):
         raise RuntimeError("PvP ranking API response has an invalid root structure.")
     return payload
@@ -389,7 +393,7 @@ def fetch_player_detail(mid: str) -> dict:
     if not PLAYER_ID_PATTERN.fullmatch(mid):
         raise ValueError(f"Invalid player id: {mid!r}")
     url = PLAYER_API_URL_TEMPLATE.format(mid=quote(mid, safe=""))
-    payload = fetch_json(url, "Player detail API")
+    payload = fetch_json(url, "Player detail API", cache_bust=True)
     if not isinstance(payload, dict):
         raise RuntimeError("Player detail API has an invalid structure.")
     returned_mid = str(payload.get("mid") or "").strip()
