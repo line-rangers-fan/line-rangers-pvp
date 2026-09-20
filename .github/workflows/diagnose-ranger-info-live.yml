@@ -1,0 +1,58 @@
+name: diagnose-ranger-info-live
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-ranger-info-live.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE: https://line-rangers-pvp-community-production.n-yu1791.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Check current ranking Ranger API responses
+        run: |
+          set -euo pipefail
+          mapfile -t units < <(jq -r '.characters[:40][]?.unit_code // empty' docs/data/character_usage.json | awk 'NF && !seen[$0]++')
+          echo "UNIT_COUNT=\${#units[@]}"
+          failures=0
+          for unit in "\${units[@]}"; do
+            body="$(mktemp)"
+            headers="$(mktemp)"
+            status="$(curl --location --silent --show-error --output "$body" --dump-header "$headers" --write-out '%{http_code}' \
+              --connect-timeout 10 --max-time 30 -H 'Origin: https://line-rangers-fan.github.io' \
+              "$BASE/api/ranger-info?unit=$unit&diag=\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}" || true)"
+            cors="$(awk 'BEGIN{IGNORECASE=1}/^access-control-allow-origin:/{gsub("\r","");print $2}' "$headers" | tail -1)"
+            valid=false
+            if [ "$status" = "200" ] && jq -e --arg unit "$unit" '
+              .unitCode==$unit and
+              (.name|type=="string" and length>0) and
+              (.sourceUrl|type=="string" and startswith("https://rangers.lerico.net/ja/ranger/")) and
+              (.skills|type=="array" and length>=1 and length<=3) and
+              ([.skills[] |
+                (.name|type=="string" and length>0) and
+                (.description|type=="string") and
+                (.effects|type=="array" and all(type=="string")) and
+                ((.iconUrl==null) or (.iconUrl|type=="string" and startswith("https://rangers.lerico.net/res/skill_icon/")))
+              ]|all)
+            ' "$body" >/dev/null 2>&1; then
+              valid=true
+            fi
+            summary="$(jq -c '{unitCode,name,skillCount:(.skills|if type=="array" then length else null end),effects:[.skills[]?.effects|length],icons:[.skills[]?.iconUrl],error}' "$body" 2>/dev/null || printf '{"parse":"failed"}')"
+            echo "RANGER_CHECK unit=$unit status=$status cors=$cors valid=$valid body=$summary"
+            if [ "$status" != "200" ] || [ "$cors" != "https://line-rangers-fan.github.io" ] || [ "$valid" != true ]; then
+              failures=$((failures+1))
+            fi
+          done
+          echo "RANGER_FAILURES=$failures"
+          test "$failures" -eq 0
