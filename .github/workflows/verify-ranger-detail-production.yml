@@ -17,43 +17,28 @@ jobs:
     env:
       UNIT_CODE: u1556e-af
     steps:
-      - name: Inspect exact Handbook Ranger skill mapping
+      - name: Inspect target Ranger skill mapping
         run: |
           set -euo pipefail
           basics="$(mktemp)"
           skills="$(mktemp)"
-          translate="$(mktemp)"
-          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             -H 'Accept: application/json'             -H 'User-Agent: line-rangers-pvp-character-detail/1.0'             'https://rangers.lerico.net/api/getRangersBasics' > "$basics"
-          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             -H 'Accept: application/json'             -H 'User-Agent: line-rangers-pvp-character-detail/1.0'             'https://rangers.lerico.net/api/getSkills' > "$skills"
-          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30             -H 'Accept: application/json'             -H 'User-Agent: line-rangers-pvp-character-detail/1.0'             'https://rangers.lerico.net/api/v2/translate?keys=ja%3ASKILL%2Cja%3AUNIT' > "$translate"
+          translations="$(mktemp)"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 45             https://rangers.lerico.net/api/getRangersBasics -o "$basics"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 45             https://rangers.lerico.net/api/getSkills -o "$skills"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 45             'https://rangers.lerico.net/api/v2/translate?keys=ja%3AUNIT%2Cja%3ASKILL' -o "$translations"
 
-          ranger="$(jq -cer --arg unit "$UNIT_CODE" '.[] | select(.unitCode==$unit) | {
-            unitCode,unitNameCode,unitDescriptionCode,grade,
-            skillCode,skillCode2,skillCode3,
-            iconSkillCode,iconSkillCode2,iconSkillCode3
-          }' "$basics")"
-          echo "RANGER_MAPPING=$ranger"
+          row="$(jq -c --arg unit "$UNIT_CODE" '.[] | select(.unitCode==$unit)' "$basics")"
+          test -n "$row"
+          echo "TARGET_BASIC=$(jq -c '{unitCode,unitNameCode,skillCode,skillCode2,skillCode3,passiveSkillCode,iconSkillCode,iconSkillCode2,iconSkillCode3}' <<<"$row")"
 
-          codes="$(printf '%s' "$ranger" | jq -r '[.skillCode,.skillCode2,.skillCode3,.iconSkillCode,.iconSkillCode2,.iconSkillCode3] | map(select(type=="string" and length>0)) | unique | .[]')"
+          codes="$(jq -r '[.skillCode,.skillCode2,.skillCode3] | map(select(type=="string" and length>0)) | unique | .[]' <<<"$row")"
           while IFS= read -r code; do
             [ -n "$code" ] || continue
-            jq -cer --arg code "$code" '.[] | select(.skillCode==$code) | {skillCode,nameCode,descriptionCode}' "$skills" || true
-          done <<< "$codes"
-
-          jq -cer --arg unit "$UNIT_CODE" '{
-            unitName: ."ja:UNIT"[($unit+"_nm")],
-            unitShortName: ."ja:UNIT"[($unit+"_snm")]
-          }' "$translate"
-          while IFS= read -r code; do
-            [ -n "$code" ] || continue
-            skill_meta="$(jq -cer --arg code "$code" '.[] | select(.skillCode==$code) | {nameCode,descriptionCode}' "$skills" || true)"
-            [ -n "$skill_meta" ] || continue
-            name_code="$(printf '%s' "$skill_meta" | jq -r '.nameCode // empty')"
-            desc_code="$(printf '%s' "$skill_meta" | jq -r '.descriptionCode // empty')"
-            jq -cer --arg name "$name_code" --arg desc "$desc_code" '{
-              nameCode:$name,
-              descriptionCode:$desc,
-              name:(."ja:SKILL"[$name] // null),
-              description:(."ja:SKILL"[$desc] // null)
-            }' "$translate"
-          done <<< "$codes"
+            skill="$(jq -c --arg code "$code" '.[] | select(.skillCode==$code) | {skillCode,nameCode,descriptionCode,skillType,iconResourcePath}' "$skills")"
+            echo "TARGET_SKILL=$skill"
+            name_code="$(jq -r '.nameCode // empty' <<<"$skill")"
+            desc_code="$(jq -r '.descriptionCode // empty' <<<"$skill")"
+            echo "TARGET_SKILL_NAME=$(jq -r --arg code "$name_code" '."ja:SKILL"[$code] // ""' "$translations")"
+            echo "TARGET_SKILL_DESC=$(jq -r --arg code "$desc_code" '."ja:SKILL"[$code] // ""' "$translations" | tr '\n' ' ')"
+          done <<<"$codes"
+          echo "TARGET_UNIT_NAME=$(jq -r --arg code "$UNIT_CODE" '."ja:UNIT"[$code+"_nm"] // ""' "$translations")"
