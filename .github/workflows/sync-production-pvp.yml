@@ -179,7 +179,8 @@ jobs:
           jq -e '
             if (.sampled_players == 200 and .complete_target == true) then
               (.comparison.periods | [.hour,.day,.week,.month] | all(.comparable == true)) and
-              ([.characters[] | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all)
+              ([.characters[] | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all) and
+              ([.characters[] | .equipment_rankings[]?.items[]? | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all)
             else
               true
             end
