@@ -108,6 +108,7 @@ jobs:
                 }
                 await page.waitForTimeout(2500);
 
+                const comparisonStates = {};
                 if (target.kind === 'pvp') {
                   await page.waitForSelector('#ranking-body tr', { timeout: 15000 });
                   for (const period of ['hour', 'day', 'week', 'month']) {
@@ -124,6 +125,7 @@ jobs:
                       badges: document.querySelectorAll('#ranking-body .rank-period-change').length,
                       pending: document.querySelectorAll('#ranking-body .rank-period-pending').length,
                     }));
+                    comparisonStates[period] = comparisonState;
                     if (
                       comparisonState.rows === 0 ||
                       comparisonState.badges !== comparisonState.rows ||
@@ -214,6 +216,7 @@ jobs:
                   clipped: state.clipped,
                   missing,
                   shieldFound,
+                  comparisonStates,
                   pageErrors,
                   consoleErrors,
                   screenshot,
