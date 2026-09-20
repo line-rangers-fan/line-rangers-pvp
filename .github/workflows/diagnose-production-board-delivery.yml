@@ -57,6 +57,9 @@ jobs:
           echo "=== BRUSH2_POSTS ==="
           query "SELECT p.id,u.name,u.role,p.board,p.parent,p.status,p.created,p.media_group mediaGroup,p.media_type mediaType,CASE WHEN p.media_key IS NULL THEN 0 ELSE 1 END hasMedia FROM posts p JOIN users u ON u.id=p.author WHERE u.name='ブラシ2' OR u.name LIKE '%ブラシ2%' ORDER BY p.created DESC LIMIT 100" | jq -c '.result[0].results'
 
+          echo "=== BRUSH2_DELETE_AUDIT ==="
+          query "SELECT a.action,a.target,a.created,actor.name actorName,actor.role actorRole FROM audit a JOIN users actor ON actor.id=a.actor WHERE a.action='delete' AND a.target IN (SELECT p.id FROM posts p JOIN users u ON u.id=p.author WHERE u.name='ブラシ2' OR u.name LIKE '%ブラシ2%') ORDER BY a.created DESC LIMIT 50" | jq -c '.result[0].results'
+
           echo "=== RECENT_POSTS ==="
           query "SELECT p.id,u.name,u.role,p.board,p.parent,p.status,p.created,p.media_group mediaGroup,p.media_type mediaType,CASE WHEN p.media_key IS NULL THEN 0 ELSE 1 END hasMedia FROM posts p JOIN users u ON u.id=p.author ORDER BY p.created DESC LIMIT 80" | jq -c '.result[0].results'
 
