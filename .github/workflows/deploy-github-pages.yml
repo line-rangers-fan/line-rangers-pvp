@@ -19,6 +19,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      data_sha256: ${{ steps.snapshot.outputs.data_sha256 }}
     steps:
       - name: Check out current site source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -108,6 +110,17 @@ jobs:
           grep -q "style.css?v=$GITHUB_SHA" pages-dist/index.html
           grep -q "community-entry.css?v=$GITHUB_SHA" pages-dist/index.html
 
+      - name: Record deployed comparison snapshot
+        id: snapshot
+        run: |
+          set -euo pipefail
+          hash="$(sha256sum pages-dist/data/character_usage.json | awk '{print $1}')"
+          if ! [[ "$hash" =~ ^[a-f0-9]{64}$ ]]; then
+            echo "Invalid comparison data SHA-256."
+            exit 1
+          fi
+          echo "data_sha256=$hash" >> "$GITHUB_OUTPUT"
+
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
@@ -129,7 +142,7 @@ jobs:
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
 
   verify:
-    needs: deploy
+    needs: [build, deploy]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -138,6 +151,7 @@ jobs:
       - name: Verify deployed Pages serves current comparison data
         env:
           SITE_URL: https://line-rangers-fan.github.io/line-rangers-pvp
+          EXPECTED_DATA_SHA256: ${{ needs.build.outputs.data_sha256 }}
         run: |
           set -euo pipefail
           success=false
@@ -148,6 +162,7 @@ jobs:
               && grep -q 'data-language="ja"' /tmp/index.html \
               && grep -q 'data-language="en"' /tmp/index.html \
               && ! grep -q 'data-language="zh"' /tmp/index.html \
+              && [ "$(sha256sum /tmp/data.json | awk '{print $1}')" = "$EXPECTED_DATA_SHA256" ] \
               && jq -e '
                 .target_players == 200
                 and .sampled_players == 200
