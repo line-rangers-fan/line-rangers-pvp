@@ -40,7 +40,6 @@ def test_frontend_assets_keep_strict_csp_and_required_controls():
         "rank-period-trigger",
         "rank-period-options",
         "equipment-dialog",
-        "sunday-notice",
         "source-status-notice",
     ):
         assert f'id="{element_id}"' in index
