@@ -164,5 +164,7 @@ jobs:
             exit 1
           fi
           python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" "$live"
-          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3             "$PRODUCTION_BASE_URL/pvp/index.html" | grep -q 'レジェンド帯 キャラ集計'
+          live_index="$RUNNER_TEMP/production-pvp-index.html"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3             "$PRODUCTION_BASE_URL/pvp/index.html" -o "$live_index"
+          grep -q 'レジェンド帯 キャラ集計' "$live_index"
           echo "Production Worker PvP is synchronized with canonical docs data."
