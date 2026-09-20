@@ -1262,23 +1262,23 @@ function renderRankPeriodChanges(container, change, options = {}) {
     const isComparable = value?.comparable === true;
     const parsedDelta = metric === "occurrence" ? value?.occurrence_count : value?.rank;
     const hasDelta = isComparable && typeof parsedDelta === "number" && Number.isSafeInteger(parsedDelta);
-    const sourcePending =
-      !hasDelta &&
-      state.data?.comparison?.periods?.[key]?.reason === "source_stale";
     const delta = hasDelta
       ? parsedDelta
       : 0;
     const badge = document.createElement("span");
     badge.className =
       !hasDelta
-        ? `rank-period-change rank-period-pending${sourcePending ? " rank-period-source-pending" : ""}`
+        ? "rank-period-change rank-period-neutral"
         : delta > 0
         ? "rank-period-change rank-period-up"
         : delta < 0
           ? "rank-period-change rank-period-down"
           : "rank-period-change rank-period-neutral";
+    // A missing comparison baseline is still retained as non-comparable in
+    // the data model. The compact ranking UI uses ±0 as its visual placeholder
+    // so cells remain stable and never expose "history pending" to visitors.
     const movement = !hasDelta
-      ? st(sourcePending ? "rankSourcePending" : "rankHistoryPending")
+      ? "±0"
       : metric === "occurrence"
         ? delta > 0
           ? `+${formatOccurrence(delta)}`

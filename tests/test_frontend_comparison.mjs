@@ -39,12 +39,12 @@ test("character and equipment changes preserve signs and units", () => {
   assert.equal(render(0, "個"), "±0");
 });
 
-test("unknown or coerced comparison values never display zero", () => {
+test("unknown or non-comparable comparison values display the stable ±0 placeholder", () => {
   for (const value of [null, undefined, false, true, "", "0", "8", NaN, Infinity, 1.5, {}, []]) {
-    assert.equal(render(value), "履歴待ち");
-    assert.equal(render(value, "個"), "履歴待ち");
+    assert.equal(render(value), "±0");
+    assert.equal(render(value, "個"), "±0");
   }
-  assert.equal(render(0, "体", false), "履歴待ち");
+  assert.equal(render(0, "体", false), "±0");
 });
 
 function historySample() {
