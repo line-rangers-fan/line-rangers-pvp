@@ -259,6 +259,12 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert 'url.pathname.startsWith("/res/skill_icon/")' in app
     assert 'RANGER_INFO_WORKER_URL' in app
     assert 'function loadRangerInfo(character)' in app
+    assert 'RANGER_INFO_RETRY_COOLDOWN_MS = 15_000' in app
+    assert 'RANGER_INFO_SCHEMA_VERSION = "2"' in app
+    assert 'rangerInfoFailed: new Map()' in app
+    assert 'cache: "no-store"' in app
+    assert 'state.rangerInfoFailed.set(unitCode, Date.now())' in app
+    assert 'item.dataset.hasEffects = String(skill.effects.length > 0)' in app
     assert 'renderCharacterSkillSummary(character)' in app
     assert 'equipment-character-name' in app
     assert 'equipment-skill-image' in app
