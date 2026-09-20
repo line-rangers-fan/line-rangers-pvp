@@ -309,15 +309,9 @@ jobs:
           activity="$(curl --location --fail --silent --show-error --dump-header "$activity_headers" --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 -H 'Origin: https://line-rangers-fan.github.io' "$PRODUCTION_BASE_URL/api/activity?public=1")"
           grep -q 'レジェンド帯 キャラ集計' <<< "$pvp"
           grep -q '新キャラ情報掲示板' <<< "$board"
-          printf '%s' "$snapshot" | jq -e '
-            .target_players == 200 and
-            .sampled_players == 200 and
-            .complete_target == true and
-            .comparison.reference_mode == "jst_calendar_close_v1" and
-            (.comparison.periods | [.hour,.day,.week,.month] | all(.comparable == true)) and
-            ([.characters[] | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all) and
-            ([.characters[] | .equipment_rankings[]?.items[]? | [.change.periods.hour,.change.periods.day,.change.periods.week,.change.periods.month] | all(.comparable == true)] | all)
-          ' >/dev/null
+          snapshot_file="$RUNNER_TEMP/production-character-usage.json"
+          printf '%s' "$snapshot" > "$snapshot_file"
+          python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" "$snapshot_file"
           printf '%s' "$health" | jq -e '.ok == true and .checks.d1 == true and .checks.r2 == true' >/dev/null
           printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array")' >/dev/null
           printf '%s' "$activity" | jq -e '(.topics | type == "array") and ((.featured == null) or (.featured | type == "object"))' >/dev/null
