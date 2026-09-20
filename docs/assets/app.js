@@ -52,15 +52,7 @@ const CHARACTER_IMAGE_FALLBACKS = Object.freeze({
   }),
 });
 
-const LANGUAGES = [
-  "ja",
-  "en",
-  "zh",
-  "th",
-  "id",
-  "vi",
-  "ko",
-];
+const LANGUAGES = ["ja", "en"];
 
 // Browser time zone is preferred; these language zones are safe fallbacks.
 const TIMEZONES = {
@@ -1121,12 +1113,6 @@ function detectLanguage() {
   const browser = String(navigator.language || "").toLowerCase();
 
   if (browser.startsWith("ja")) return "ja";
-  if (browser.startsWith("th")) return "th";
-  if (browser.startsWith("zh")) return "zh";
-  if (browser.startsWith("id")) return "id";
-  if (browser.startsWith("vi")) return "vi";
-  if (browser.startsWith("ko")) return "ko";
-
   return "en";
 }
 

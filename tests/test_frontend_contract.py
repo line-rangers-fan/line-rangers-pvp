@@ -208,3 +208,17 @@ def test_static_rank_period_matches_the_javascript_default():
     assert "path: ./pages-dist" in pages_workflow
     assert 'data.publication_mode === "partial_after_stale"' in app
     assert "PARTIAL_FALLBACK_AFTER_MINUTES = 180" in app
+
+
+def test_public_language_switcher_is_strictly_japanese_and_english():
+    index = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+    app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
+
+    assert index.count('data-language="ja"') == 1
+    assert index.count('data-language="en"') == 1
+    for unsupported in ("zh", "th", "id", "vi", "ko"):
+        assert f'data-language="{unsupported}"' not in index
+    assert 'const LANGUAGES = ["ja", "en"];' in app
+    assert 'if (browser.startsWith("ja")) return "ja";' in app
+    for unsupported_prefix in ("th", "zh", "id", "vi", "ko"):
+        assert f'if (browser.startsWith("{unsupported_prefix}"))' not in app
