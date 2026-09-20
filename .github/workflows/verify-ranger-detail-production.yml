@@ -16,65 +16,23 @@ jobs:
     timeout-minutes: 8
     env:
       WORKER_BASE: https://line-rangers-pvp-community-production.n-yu1791.workers.dev
-      PAGES_BASE: https://line-rangers-fan.github.io/line-rangers-pvp
       UNIT_CODE: u1556e-af
     steps:
-      - name: Diagnose and verify Ranger detail API
+      - name: Inspect live Ranger source
         run: |
           set -euo pipefail
-          headers="$(mktemp)"
-          body="$(mktemp)"
-          status="$(curl --location --silent --show-error --output "$body" --dump-header "$headers" --write-out '%{http_code}'             --connect-timeout 10 --max-time 30 -H 'Origin: https://line-rangers-fan.github.io'             "$WORKER_BASE/api/ranger-info?unit=$UNIT_CODE" || true)"
-          echo "WORKER_STATUS=$status"
-          echo "WORKER_BODY=$(head -c 800 "$body" | tr '\n' ' ')"
+          worker_body="$(mktemp)"
+          worker_status="$(curl --location --silent --show-error --output "$worker_body" --write-out '%{http_code}'             --connect-timeout 10 --max-time 30 -H 'Origin: https://line-rangers-fan.github.io'             "$WORKER_BASE/api/ranger-info?unit=$UNIT_CODE" || true)"
+          echo "WORKER_STATUS=$worker_status"
+          echo "WORKER_BODY=$(head -c 500 "$worker_body" | tr '\n' ' ')"
 
           upstream="$(mktemp)"
-          upstream_headers="$(mktemp)"
-          upstream_status="$(curl --location --silent --show-error --output "$upstream" --dump-header "$upstream_headers" --write-out '%{http_code}'             --connect-timeout 10 --max-time 30             -H 'Accept: text/html,application/xhtml+xml'             -H 'User-Agent: line-rangers-pvp-character-detail/1.0'             "https://rangers.lerico.net/ja/ranger/$UNIT_CODE" || true)"
+          upstream_status="$(curl --location --silent --show-error --output "$upstream" --write-out '%{http_code}'             --connect-timeout 10 --max-time 30             -H 'Accept: text/html,application/xhtml+xml'             -H 'User-Agent: line-rangers-pvp-character-detail/1.0'             "https://rangers.lerico.net/ja/ranger/$UNIT_CODE" || true)"
           echo "UPSTREAM_STATUS=$upstream_status"
           echo "UPSTREAM_BYTES=$(wc -c < "$upstream")"
-          echo "UPSTREAM_CONTENT_TYPE=$(grep -i '^content-type:' "$upstream_headers" | tail -1 | tr -d '\r')"
-          python - "$upstream" <<'PY'
-          import re,sys,html
-          text=open(sys.argv[1],encoding='utf-8',errors='replace').read()
-          headings=[]
-          for m in re.finditer(r'<h([1-6])\b[^>]*>([\s\S]*?)</h\1>',text,re.I):
-              value=re.sub(r'<[^>]+>',' ',m.group(2))
-              value=' '.join(html.unescape(value).split())
-              if value:
-                  headings.append((m.group(1),value[:180]))
-          print('UPSTREAM_HEADINGS='+repr(headings[:40]))
-          print('HAS_SKILL_TEXT='+str('スキル' in text))
-          scripts=re.findall(r'<script[^>]+src=["\\']([^"\\']+)["\\']',text,re.I)
-          print('UPSTREAM_SCRIPTS='+repr(scripts[:30]))
-          hrefs=re.findall(r'<link[^>]+href=["\\']([^"\\']+)["\\']',text,re.I)
-          print('UPSTREAM_LINKS='+repr(hrefs[:30]))
-          api_hints=sorted(set(re.findall(r'[^"\\'<> ]*(?:api|ranger|skill)[^"\\'<> ]*',text,re.I)))
-          print('UPSTREAM_API_HINTS='+repr(api_hints[:60]))
-          scripts=re.findall(r'<script\\b[^>]*\\bsrc=["\\\']([^"\\\']+)["\\\']',text,re.I)
-          print('SCRIPT_SRCS='+repr(scripts[:40]))
-          api_refs=sorted(set(re.findall(r'["\\\']([^"\\\']*(?:/api/|api/v[0-9]/)[^"\\\']*)["\\\']',text,re.I)))
-          print('INLINE_API_REFS='+repr(api_refs[:80]))
-          attrs=re.findall(r'(?:src|href|ng-include)\\s*=\\s*["\\\']([^"\\\']+)["\\\']',text,re.I)
-          print('RESOURCE_ATTRS='+repr(attrs[:120]))
-          snippets=[]
-          for line in text.splitlines():
-              low=line.lower()
-              if '.js' in low or 'angular' in low or 'currentres' in low or 'ranger' in low or 'unitdata' in low:
-                  clean=' '.join(line.split())
-                  if clean:
-                      snippets.append(clean[:700])
-          print('SOURCE_SNIPPETS='+repr(snippets[:80]))
-          PY
-
-          # Diagnostic run: inspect upstream application assets before asserting Worker success.
-
-          pages_js="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 "$PAGES_BASE/assets/app.js")"
-          worker_js="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 "$WORKER_BASE/pvp/assets/app.js")"
-          for js in "$pages_js" "$worker_js"; do
-            grep -q 'equipment-character-name' <<< "$js"
-            grep -q 'equipment-skill-list' <<< "$js"
-            grep -q 'rangers.lerico.net/ja/ranger/' <<< "$js"
-            grep -q 'RANGER_INFO_WORKER_URL' <<< "$js"
-          done
-          echo "Ranger detail production verification passed."
+          echo "=== JS REFERENCES ==="
+          grep -oE '[A-Za-z0-9_./?&=%{}:-]+\.js[A-Za-z0-9_./?&=%{}:-]*' "$upstream" | sort -u | head -80 || true
+          echo "=== SRC/HREF/NG-INCLUDE ==="
+          grep -oE '(src|href|ng-include)="[^"]+"' "$upstream" | head -120 || true
+          echo "=== API/RANGER/SKILL SOURCE LINES ==="
+          grep -inE 'api|get-current-res|angular|ranger|skill|unit' "$upstream" | head -120 || true
