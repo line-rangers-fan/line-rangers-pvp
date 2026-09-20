@@ -1531,13 +1531,27 @@ a.equipment-character-name:focus-visible {
   }
 
   .equipment-skill-list {
-    grid-template-columns: 1fr;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(15.5rem, 92%);
+    gap: 0.6rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 0 0.35rem;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 0.1rem;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
   }
 
   .equipment-skill-item {
     grid-template-columns: 3.55rem minmax(0, 1fr);
     gap: 0.6rem;
+    min-width: 0;
     padding: 0.55rem;
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
   }
 
   .equipment-skill-visual {
