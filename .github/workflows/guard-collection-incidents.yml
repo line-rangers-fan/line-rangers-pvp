@@ -105,14 +105,22 @@ jobs:
             const retryableFailure = failedSteps.some((name) => retryableSteps.has(name));
             const attempt = Number(current.run_attempt || 1);
 
-            if (!existing && attempt === 1 && retryableFailure) {
+            if (attempt === 1 && retryableFailure) {
               await github.rest.actions.reRunWorkflowFailedJobs({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 run_id: current.id,
               });
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existing.number,
+                  body: `新しい実行で一時障害を検出したため、この実行にも1回だけ自動再試行をかけました。\n\n実行: ${current.html_url}\n失敗ステップ: ${failedSteps.join(", ") || "不明"}`,
+                });
+              }
               core.notice(
-                `Transient collection failure detected at ${failedSteps.join(", ")}; one automatic retry was requested.`,
+                `Transient collection failure detected at ${failedSteps.join(", ")}; one automatic retry was requested for this run.`,
               );
               return;
             }
