@@ -225,6 +225,42 @@ def test_failure_artifact_records_stage_without_error_or_player_details(
     assert "sensitive-player-id" not in json.dumps(report)
 
 
+def test_public_delivery_guard_uses_balanced_failure_classes():
+    root = Path(__file__).resolve().parents[1]
+    pages = (root / ".github/workflows/deploy-github-pages.yml").read_text(encoding="utf-8")
+    worker = (root / ".github/workflows/sync-production-pvp.yml").read_text(encoding="utf-8")
+    guard = (root / ".github/workflows/guard-public-delivery-incidents.yml").read_text(encoding="utf-8")
+
+    # Static/security/build gates are separated from the one repairable
+    # derived-data gate, so the guardian never has to guess which class failed.
+    assert "- name: Validate public static safety" in pages
+    assert "- name: Validate current PvP snapshot" in pages
+    assert "- name: Validate current PvP snapshot" in worker
+    assert "- name: Build composite safely" in worker
+
+    # A broken derived comparison snapshot gets one fresh 200/200 collection
+    # and rebuild. The repair is bounded by an incident Issue, preventing loops.
+    assert 'const dataRepairSteps = new Set([' in guard
+    assert '"Validate current PvP snapshot",' in guard
+    assert 'workflow_id: "update-character-usage.yml"' in guard
+    assert 'inputs: { force_collection: "true" }' in guard
+    assert '"auto-repair-kind:data"' in guard
+    assert "if (existing)" in guard
+
+    # Network/CDN/deploy failures get one idempotent retry, while static safety
+    # and build failures are intentionally absent from the retryable list.
+    assert 'const transientSteps = new Set([' in guard
+    assert '"Deploy GitHub Pages",' in guard
+    assert '"Verify deployed Pages serves current comparison data",' in guard
+    assert '"Deploy PvP refresh without mutating board data",' in guard
+    assert '"Verify live PvP matches canonical snapshot",' in guard
+    transient_block = guard.split("const transientSteps = new Set([", 1)[1].split("]);", 1)[0]
+    assert "Validate public static safety" not in transient_block
+    assert "Build composite safely" not in transient_block
+    assert "if (transientFailure && attempt === 1)" in guard
+    assert "const hardFailure = !transientFailure;" in guard
+
+
 def test_live_collection_uses_balanced_preflight_and_strict_post_validation():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/update-character-usage.yml").read_text(encoding="utf-8")
