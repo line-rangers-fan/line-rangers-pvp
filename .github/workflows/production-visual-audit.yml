@@ -153,6 +153,9 @@ jobs:
                     const skillList = document.querySelector('#equipment-dialog[open] .equipment-skill-list');
                     const summary = document.querySelector('#equipment-dialog[open] .equipment-summary');
                     const firstSkill = document.querySelector('#equipment-dialog[open] .equipment-skill-item');
+                    const firstHeader = document.querySelector('#equipment-dialog[open] .equipment-skill-header');
+                    const firstVisual = document.querySelector('#equipment-dialog[open] .equipment-skill-visual');
+                    const firstSkillName = document.querySelector('#equipment-dialog[open] .equipment-skill-name');
                     const items = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-item')];
                     const images = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-image')];
                     const effects = document.querySelectorAll('#equipment-dialog[open] .equipment-skill-effects');
@@ -160,6 +163,8 @@ jobs:
                     const skillListRect = skillList?.getBoundingClientRect();
                     const firstRect = items[0]?.getBoundingClientRect();
                     const secondRect = items[1]?.getBoundingClientRect();
+                    const visualRect = firstVisual?.getBoundingClientRect();
+                    const nameRect = firstSkillName?.getBoundingClientRect();
                     return {
                       name: link?.textContent?.trim() || '',
                       href: link instanceof HTMLAnchorElement ? link.href : '',
@@ -177,7 +182,14 @@ jobs:
                         const marginTop = Number.parseFloat(getComputedStyle(effectsBlock).marginTop || '0');
                         return effectsRect.top > descriptionRect.bottom && marginTop >= 8;
                       }),
-                      skillGridColumns: firstSkill ? getComputedStyle(firstSkill).gridTemplateColumns : '',
+                      skillHeaderDisplay: firstHeader ? getComputedStyle(firstHeader).display : '',
+                      skillHeaderAlignItems: firstHeader ? getComputedStyle(firstHeader).alignItems : '',
+                      skillIconWidth: visualRect ? Math.round(visualRect.width * 10) / 10 : 0,
+                      skillIconHeight: visualRect ? Math.round(visualRect.height * 10) / 10 : 0,
+                      skillIconBesideName: visualRect && nameRect
+                        ? Math.abs((visualRect.top + visualRect.height / 2) - (nameRect.top + nameRect.height / 2)) < 8
+                          && nameRect.left > visualRect.right
+                        : false,
                       skillListGridAutoFlow: skillList ? getComputedStyle(skillList).gridAutoFlow : '',
                       skillListOverflowX: skillList ? getComputedStyle(skillList).overflowX : '',
                       mobileSkillListLeftGap: summaryRect && skillListRect
@@ -202,8 +214,12 @@ jobs:
                     rangerDetailState.loadedSkillImages !== rangerDetailState.skillImages ||
                     rangerDetailState.effectGroups !== rangerDetailState.skillItemsExpectingEffects ||
                     !rangerDetailState.separatedEffects ||
-                    !rangerDetailState.skillGridColumns ||
-                    rangerDetailState.skillGridColumns === 'none' ||
+                    rangerDetailState.skillHeaderDisplay !== 'flex' ||
+                    rangerDetailState.skillHeaderAlignItems !== 'center' ||
+                    rangerDetailState.skillIconWidth < 28 ||
+                    rangerDetailState.skillIconWidth > 40 ||
+                    rangerDetailState.skillIconHeight !== rangerDetailState.skillIconWidth ||
+                    !rangerDetailState.skillIconBesideName ||
                     (viewport.width <= 600 && rangerDetailState.skillListGridAutoFlow !== 'column') ||
                     (viewport.width <= 600 && !['auto', 'scroll'].includes(rangerDetailState.skillListOverflowX)) ||
                     (viewport.width <= 600 && (rangerDetailState.mobileSkillListLeftGap == null || rangerDetailState.mobileSkillListLeftGap > 12)) ||
@@ -214,6 +230,51 @@ jobs:
                       `${target.name} rendered invalid Ranger detail at ${viewport.name}: ${JSON.stringify({ firstCharacterUnit, ...rangerDetailState })}`,
                     );
                   }
+                  await page.locator('[data-language="en"]').click();
+                  await page.waitForFunction((unitCode) => {
+                    const link = document.querySelector('#equipment-dialog[open] .equipment-character-name');
+                    const skills = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-name')];
+                    return (
+                      document.documentElement.lang === 'en' &&
+                      link instanceof HTMLAnchorElement &&
+                      link.href === `https://rangers.lerico.net/en/ranger/${encodeURIComponent(unitCode)}` &&
+                      skills.length > 0
+                    );
+                  }, firstCharacterUnit, { timeout: 20000 });
+                  const englishRangerState = await page.evaluate(() => {
+                    const link = document.querySelector('#equipment-dialog[open] .equipment-character-name');
+                    const skillNames = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-name')].map(node => node.textContent?.trim() || '');
+                    const descriptions = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-description')].map(node => node.textContent?.trim() || '');
+                    const effects = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-effects li')].map(node => node.textContent?.trim() || '');
+                    const effectLabels = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-effects-label')].map(node => node.textContent?.trim() || '');
+                    const text = [link?.textContent?.trim() || '', ...skillNames, ...descriptions, ...effects].join('\n');
+                    return {
+                      lang: document.documentElement.lang,
+                      href: link instanceof HTMLAnchorElement ? link.href : '',
+                      name: link?.textContent?.trim() || '',
+                      skillNames,
+                      descriptions,
+                      effects,
+                      effectLabels,
+                      containsJapaneseScript: /[ぁ-んァ-ヶ一-龠]/u.test(text),
+                    };
+                  });
+                  if (
+                    englishRangerState.lang !== 'en' ||
+                    englishRangerState.href !== `https://rangers.lerico.net/en/ranger/${encodeURIComponent(firstCharacterUnit)}` ||
+                    !englishRangerState.name ||
+                    englishRangerState.skillNames.length < 1 ||
+                    englishRangerState.descriptions.length < 1 ||
+                    englishRangerState.effectLabels.some(label => label !== 'Skill effects') ||
+                    englishRangerState.containsJapaneseScript
+                  ) {
+                    throw new Error(
+                      `${target.name} rendered invalid English Ranger detail at ${viewport.name}: ${JSON.stringify(englishRangerState)}`,
+                    );
+                  }
+                  await page.locator('[data-language="ja"]').click();
+                  await page.waitForFunction(() => document.documentElement.lang === 'ja', undefined, { timeout: 10000 });
+
                   const equipmentComparisonStates = {};
                   for (const period of ['hour', 'day', 'week', 'month']) {
                     await page.evaluate((selected) => {
