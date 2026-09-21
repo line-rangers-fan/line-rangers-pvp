@@ -322,6 +322,7 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert 'const RANGER_INFO_DEFERRED_RETRY_MS = 4_000;' in app
     assert 'function fetchRangerInfoPayload(endpoint, unitCode, language)' in app
     assert 'rangerInfoRetryableStatus(response.status)' in app
+    assert 'if (!finalAttempt && rangerInfoRetryableError(error)) {' in app
     assert 'state.rangerInfoDeferredRetry.add(cacheKey)' in app
     assert 'void loadRangerInfo(character, { finalAttempt: true });' in app
     assert 'state.rangerInfoFailed.set(cacheKey, Date.now())' in app
