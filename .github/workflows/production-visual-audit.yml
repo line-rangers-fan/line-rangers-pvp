@@ -251,6 +251,7 @@ jobs:
                     return {
                       title: document.querySelector('#page-title')?.textContent?.trim() || '',
                       hint: document.querySelector('#ranking-tap-hint-text')?.textContent?.trim() || '',
+                      newBadge: document.querySelector('#ranking-tap-hint .ranking-tap-new')?.textContent?.trim() || '',
                       communityTitle: document.querySelector('#community-board-entry-title')?.textContent?.trim() || '',
                       boardHref,
                       metaDescription: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
@@ -264,6 +265,7 @@ jobs:
                   if (
                     englishUiState.title !== 'LINE Rangers Legend Tier Character Statistics' ||
                     englishUiState.hint !== 'Tap a character to view its equipment ranking and character information.' ||
+                    englishUiState.newBadge !== 'NEW' ||
                     englishUiState.communityTitle !== 'New Character Community Board' ||
                     !/[?&]lang=en(?:&|$)/.test(englishUiState.boardHref) ||
                     !englishUiState.metaDescription ||
