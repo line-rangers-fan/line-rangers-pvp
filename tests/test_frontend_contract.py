@@ -254,7 +254,8 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert 'function rangerDetailUrl(character)' in app
     assert 'function isTrustedSkillIconUrl(value)' in app
     assert 'function createSkillIcon(skill)' in app
-    assert 'https://rangers.lerico.net/ja/ranger/' in app
+    assert 'return `https://rangers.lerico.net/${language}/ranger/${encodeURIComponent(unitCode)}`;' in app
+    assert 'state.language === "ja" ? "ja" : "en"' in app
     assert 'url.pathname.startsWith("/res/skill_icon/")' in app
     assert 'RANGER_INFO_WORKER_URL' in app
     assert 'function loadRangerInfo(character)' in app
