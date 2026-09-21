@@ -306,15 +306,25 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert 'state.language === "ja" ? "ja" : "en"' in app
     assert 'url.pathname.startsWith("/res/skill_icon/")' in app
     assert 'RANGER_INFO_WORKER_URL' in app
-    assert 'function loadRangerInfo(character)' in app
+    assert 'function loadRangerInfo(character, { finalAttempt = false } = {})' in app
     assert 'RANGER_INFO_RETRY_COOLDOWN_MS = 15_000' in app
-    assert 'RANGER_INFO_SCHEMA_VERSION = "3"' in app
+    assert 'RANGER_INFO_SCHEMA_VERSION = "4"' in app
+    assert 'rangerInfoDeferredRetry: new Set()' in app
     assert 'rangerInfoFailed: new Map()' in app
     assert 'function rangerInfoLanguage()' in app
     assert 'function rangerInfoCacheKey(unitCode, language = rangerInfoLanguage())' in app
     assert 'lang: language' in app
     assert 'payload.language !== language' in app
-    assert 'cache: "no-store"' in app
+    ranger_loader = app.split("function rangerInfoRetryableStatus", 1)[1].split("function renderCharacterSkillSummary", 1)[0]
+    assert 'cache: "no-store"' not in ranger_loader
+    assert 'const RANGER_INFO_TIMEOUT_MS = 12_000;' in app
+    assert 'const RANGER_INFO_RETRY_DELAYS_MS = [0, 700];' in app
+    assert 'const RANGER_INFO_DEFERRED_RETRY_MS = 4_000;' in app
+    assert 'function fetchRangerInfoPayload(endpoint, unitCode, language)' in app
+    assert 'rangerInfoRetryableStatus(response.status)' in app
+    assert 'if (!finalAttempt && rangerInfoRetryableError(error)) {' in app
+    assert 'state.rangerInfoDeferredRetry.add(cacheKey)' in app
+    assert 'void loadRangerInfo(character, { finalAttempt: true });' in app
     assert 'state.rangerInfoFailed.set(cacheKey, Date.now())' in app
     assert 'item.dataset.hasEffects = String(skill.effects.length > 0)' in app
     assert 'renderCharacterSkillSummary(character)' in app

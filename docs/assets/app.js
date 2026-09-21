@@ -6,9 +6,11 @@ const HISTORY_PATH = "./data/character_usage_history.json";
 const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
 const REQUEST_TIMEOUT_MS = 12_000;
 const CHARACTER_IMAGE_TIMEOUT_MS = 6_000;
-const RANGER_INFO_TIMEOUT_MS = 8_000;
+const RANGER_INFO_TIMEOUT_MS = 12_000;
+const RANGER_INFO_RETRY_DELAYS_MS = [0, 700];
+const RANGER_INFO_DEFERRED_RETRY_MS = 4_000;
 const RANGER_INFO_RETRY_COOLDOWN_MS = 15_000;
-const RANGER_INFO_SCHEMA_VERSION = "3";
+const RANGER_INFO_SCHEMA_VERSION = "4";
 const RANGER_INFO_WORKER_URL = "https://line-rangers-pvp-community-production.n-yu1791.workers.dev/api/ranger-info";
 const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
 // Match the collector, freshness gate, and watchdog. A result that exceeded
@@ -866,6 +868,7 @@ const state = {
   selectedCharacter: null,
   rangerInfo: new Map(),
   rangerInfoPending: new Set(),
+  rangerInfoDeferredRetry: new Set(),
   rangerInfoFailed: new Map(),
   selectedEquipmentType: "WEAPON",
   selectedRankPeriod: "day",
@@ -2441,7 +2444,58 @@ function isValidRangerInfo(payload, unitCode, language) {
   );
 }
 
-async function loadRangerInfo(character) {
+function rangerInfoRetryableStatus(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function rangerInfoRetryableError(error) {
+  return (
+    error?.retryable === true ||
+    error?.name === "TimeoutError" ||
+    error?.name === "AbortError" ||
+    error instanceof TypeError
+  );
+}
+
+async function fetchRangerInfoPayload(endpoint, unitCode, language) {
+  let lastError = null;
+  for (let attempt = 0; attempt < RANGER_INFO_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delay = RANGER_INFO_RETRY_DELAYS_MS[attempt];
+    if (delay > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, delay));
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(RANGER_INFO_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        const error = new Error("Ranger skill information is unavailable.");
+        error.retryable = rangerInfoRetryableStatus(response.status);
+        throw error;
+      }
+      const payload = await response.json();
+      if (!isValidRangerInfo(payload, unitCode, language)) {
+        const error = new Error("Invalid Ranger skill information.");
+        error.retryable = false;
+        throw error;
+      }
+      return payload;
+    } catch (error) {
+      lastError = error;
+      if (
+        !rangerInfoRetryableError(error) ||
+        attempt === RANGER_INFO_RETRY_DELAYS_MS.length - 1
+      ) {
+        throw error;
+      }
+    }
+  }
+  throw lastError || new Error("Ranger skill information is unavailable.");
+}
+
+async function loadRangerInfo(character, { finalAttempt = false } = {}) {
   const unitCode = String(character?.unit_code || "");
   if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return;
 
@@ -2452,7 +2506,11 @@ async function loadRangerInfo(character) {
     return;
   }
   if (failedAt) state.rangerInfoFailed.delete(cacheKey);
-  if (state.rangerInfo.has(cacheKey) || state.rangerInfoPending.has(cacheKey)) {
+  if (
+    state.rangerInfo.has(cacheKey) ||
+    state.rangerInfoPending.has(cacheKey) ||
+    (!finalAttempt && state.rangerInfoDeferredRetry.has(cacheKey))
+  ) {
     return;
   }
 
@@ -2461,21 +2519,22 @@ async function loadRangerInfo(character) {
 
   state.rangerInfoPending.add(cacheKey);
   try {
-    const response = await fetch(endpoint, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(RANGER_INFO_TIMEOUT_MS),
-      cache: "no-store",
-    });
-    if (!response.ok) throw new Error("Ranger skill information is unavailable.");
-    const payload = await response.json();
-    if (!isValidRangerInfo(payload, unitCode, language)) {
-      throw new Error("Invalid Ranger skill information.");
-    }
+    const payload = await fetchRangerInfoPayload(endpoint, unitCode, language);
     state.rangerInfo.set(cacheKey, payload);
     state.rangerInfoFailed.delete(cacheKey);
+    state.rangerInfoDeferredRetry.delete(cacheKey);
   } catch (error) {
     console.warn("Ranger skill information is unavailable.", error);
-    state.rangerInfoFailed.set(cacheKey, Date.now());
+    if (!finalAttempt && rangerInfoRetryableError(error)) {
+      state.rangerInfoDeferredRetry.add(cacheKey);
+      window.setTimeout(() => {
+        state.rangerInfoDeferredRetry.delete(cacheKey);
+        if (state.rangerInfo.has(cacheKey)) return;
+        void loadRangerInfo(character, { finalAttempt: true });
+      }, RANGER_INFO_DEFERRED_RETRY_MS);
+    } else {
+      state.rangerInfoFailed.set(cacheKey, Date.now());
+    }
   } finally {
     state.rangerInfoPending.delete(cacheKey);
     if (
