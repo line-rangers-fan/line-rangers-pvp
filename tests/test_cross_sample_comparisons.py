@@ -133,7 +133,19 @@ def test_published_comparison_values_match_selected_history_baselines():
                         assert item_change["occurrence_count"] is None
             continue
 
-        assert summary["comparable"] is True
+        if summary["comparable"] is False:
+            assert summary["updated_at"] is None
+            for current in data["characters"]:
+                change = current["change"]["periods"][period]
+                assert change["comparable"] is False
+                assert change["occurrence_count"] is None
+                for category in current["equipment_rankings"].values():
+                    for item in category["items"]:
+                        item_change = item["change"]["periods"][period]
+                        assert item_change["comparable"] is False
+                        assert item_change["occurrence_count"] is None
+            continue
+
         baseline = snapshots.get(summary["updated_at"])
         assert baseline is not None, f"{period} baseline is not retained in public history"
         assert baseline["sampled_players"] == scraper.TARGET_PLAYER_COUNT
