@@ -119,16 +119,19 @@ jobs:
           ' wrangler.jsonc > "$tmp"
           mv "$tmp" wrangler.jsonc
 
-      - name: Validate PvP snapshot and build composite
+      - name: Validate current PvP snapshot
+        working-directory: copy-source
+        run: |
+          set -euo pipefail
+          # Derived comparison state may be repaired by the collector, but the
+          # public snapshot itself must still satisfy the canonical validator.
+          python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" public/pvp/data/character_usage.json
+
+      - name: Build composite safely
         working-directory: copy-source
         run: |
           set -euo pipefail
           npm audit --omit=dev --audit-level=high
-          # This validator understands both normal comparable baselines and
-          # the intentional source_stale state for hour/day. Do not duplicate
-          # it with a stricter jq gate that would reject a safe stale-source
-          # snapshot before the UI can render the requested ±0 placeholder.
-          python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" public/pvp/data/character_usage.json
           npm run build
 
       - name: Deploy PvP refresh without mutating board data
