@@ -1912,6 +1912,29 @@ def quarantine_repeated_source_history(
         )
         is not None
     ]
+
+    # Once a source has been frozen long enough, we intentionally stop
+    # extending history with duplicate snapshots. If that frozen interval then
+    # crosses a JST day/week/month close, there may be no duplicate snapshot to
+    # quarantine at the required close even though the source itself prevented
+    # a trustworthy baseline from being created. Record those covered closes
+    # explicitly so deployment validators can distinguish source staleness
+    # from an unrelated missing-history defect.
+    stale_covered_periods: list[str] = []
+    if current_time is not None and stale_since is not None:
+        stale_local = stale_since.astimezone(HISTORY_TIME_ZONE)
+        for period in ("day", "week", "month"):
+            close_date = _calendar_close_date(current_time, period)
+            close_start = datetime(
+                close_date.year,
+                close_date.month,
+                close_date.day,
+                CALENDAR_CLOSE_START_HOUR,
+                tzinfo=HISTORY_TIME_ZONE,
+            )
+            if stale_local <= close_start:
+                stale_covered_periods.append(period)
+    context["stale_covered_periods"] = stale_covered_periods
     return clean, context
 
 
@@ -1931,7 +1954,11 @@ def mark_source_stale_comparison(data: dict, context: dict) -> None:
     # Sunday or month-end can also make week/month honestly non-comparable.
     # Only periods that are actually missing are annotated; valid retained
     # week/month closes remain fully comparable.
-    stale_candidates = {"hour", "day"} | set(context.get("quarantined_periods", []))
+    stale_candidates = (
+        {"hour", "day"}
+        | set(context.get("quarantined_periods", []))
+        | set(context.get("stale_covered_periods", []))
+    )
     stale_periods = {
         period
         for period in stale_candidates
