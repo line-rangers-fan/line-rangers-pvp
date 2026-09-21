@@ -1321,6 +1321,70 @@ def test_stale_source_crossing_sunday_marks_week_non_comparable():
     assert "reason" not in month
 
 
+def test_prolonged_stale_source_marks_week_after_close_even_without_retained_frozen_snapshots():
+    data = {
+        "updated_at": "2026-09-21T09:00:00+00:00",  # Monday 18:00 JST
+        "comparison": {
+            "reference_mode": "jst_calendar_close_v1",
+            "periods": {
+                "hour": {"comparable": False, "updated_at": None, "calendar_date": None},
+                "day": {"comparable": False, "updated_at": None, "calendar_date": None},
+                "week": {"comparable": False, "updated_at": None, "calendar_date": None},
+                "month": {"comparable": True, "updated_at": "2026-08-31T14:01:00+00:00", "calendar_date": "2026-08-31"},
+            },
+        },
+        "characters": [{
+            "change": {
+                "periods": {
+                    "hour": {"comparable": False, "rank": None, "occurrence_count": None, "from_updated_at": None, "interval_minutes": None},
+                    "day": {"comparable": False, "rank": None, "occurrence_count": None, "from_updated_at": None, "interval_minutes": None},
+                    "week": {"comparable": False, "rank": None, "occurrence_count": None, "from_updated_at": None, "interval_minutes": None},
+                    "month": {"comparable": True, "rank": 0, "occurrence_count": 0, "from_updated_at": "2026-08-31T14:01:00+00:00", "interval_minutes": 30000.0},
+                }
+            },
+            "equipment_rankings": {},
+        }],
+    }
+    context = {
+        "stale": True,
+        "unchanged_since": "2026-09-18T14:08:29+00:00",  # Friday 23:08 JST
+        "unchanged_minutes": 4000.0,
+        "quarantined_periods": [],
+    }
+
+    scraper.mark_source_stale_comparison(data, context)
+
+    assert data["comparison"]["periods"]["week"]["reason"] == "source_stale"
+    assert data["characters"][0]["change"]["periods"]["week"]["reason"] == "source_stale"
+    assert "reason" not in data["comparison"]["periods"]["month"]
+
+
+def test_stale_source_started_after_week_close_does_not_mask_missing_week_history():
+    data = {
+        "updated_at": "2026-09-21T09:00:00+00:00",  # Monday 18:00 JST
+        "comparison": {
+            "reference_mode": "jst_calendar_close_v1",
+            "periods": {
+                "hour": {"comparable": False, "updated_at": None, "calendar_date": None},
+                "day": {"comparable": False, "updated_at": None, "calendar_date": None},
+                "week": {"comparable": False, "updated_at": None, "calendar_date": None},
+                "month": {"comparable": True, "updated_at": "2026-08-31T14:01:00+00:00", "calendar_date": "2026-08-31"},
+            },
+        },
+        "characters": [],
+    }
+    context = {
+        "stale": True,
+        "unchanged_since": "2026-09-21T00:00:00+00:00",  # Monday 09:00 JST, after Sunday close
+        "unchanged_minutes": 540.0,
+        "quarantined_periods": [],
+    }
+
+    scraper.mark_source_stale_comparison(data, context)
+
+    assert "reason" not in data["comparison"]["periods"]["week"]
+
+
 def test_short_identical_source_suffix_keeps_valid_zero_history():
     data = {
         "updated_at": "2026-09-20T02:00:00+00:00",
