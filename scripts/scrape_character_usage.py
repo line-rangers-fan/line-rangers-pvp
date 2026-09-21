@@ -1910,10 +1910,20 @@ def mark_source_stale_comparison(data: dict, context: dict) -> None:
     comparison["source_unchanged_since"] = context.get("unchanged_since")
     comparison["source_unchanged_minutes"] = context.get("unchanged_minutes")
 
-    for period in ("hour", "day"):
-        summary = comparison.get("periods", {}).get(period)
-        if isinstance(summary, dict) and summary.get("comparable") is False:
-            summary["reason"] = "source_stale"
+    # Quarantining a frozen upstream suffix can remove the fixed close for
+    # any period. Hour/day are the common case, but a stale interval crossing
+    # Sunday or month-end can also make week/month honestly non-comparable.
+    # Only periods that are actually missing are annotated; valid retained
+    # week/month closes remain fully comparable.
+    stale_periods = {
+        period
+        for period, summary in (comparison.get("periods") or {}).items()
+        if period in RANK_COMPARISON_PERIODS
+        and isinstance(summary, dict)
+        and summary.get("comparable") is False
+    }
+    for period in stale_periods:
+        comparison["periods"][period]["reason"] = "source_stale"
 
     def annotate(row: object) -> None:
         if not isinstance(row, dict):
@@ -1921,7 +1931,7 @@ def mark_source_stale_comparison(data: dict, context: dict) -> None:
         periods = row.get("change", {}).get("periods")
         if not isinstance(periods, dict):
             return
-        for period in ("hour", "day"):
+        for period in stale_periods:
             value = periods.get(period)
             if isinstance(value, dict) and value.get("comparable") is False:
                 value["reason"] = "source_stale"
