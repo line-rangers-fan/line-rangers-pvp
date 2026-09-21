@@ -1321,6 +1321,53 @@ def test_stale_source_crossing_sunday_marks_week_non_comparable():
     assert "reason" not in month
 
 
+def test_stale_source_marks_week_when_history_stopped_before_sunday_close():
+    def data_at(updated_at: str, count: int) -> dict:
+        return {
+            "updated_at": updated_at,
+            "sampled_players": 200,
+            "character_slots": count,
+            "unique_characters": 1,
+            "characters": [{
+                "unit_code": "u-alpha",
+                "rank": 1,
+                "occurrence_count": count,
+                "player_count": 200,
+                "adoption_rate": 100.0,
+                "equipment_rankings": {
+                    "WEAPON": {"items": []},
+                    "ARMOR": {"items": []},
+                    "ACC": {"items": []},
+                },
+            }],
+        }
+
+    # Monday 18:00 JST. Duplicate history stopped being retained once the
+    # source was already known stale on Friday night, so there is no synthetic
+    # Sunday-close snapshot to quarantine. The Sunday weekly close is still
+    # inside the frozen interval and must be labeled source_stale.
+    current = data_at("2026-09-21T09:00:00+00:00", 200)
+    changed = scraper.history_snapshot(data_at("2026-09-18T13:00:00+00:00", 201))
+    frozen_start = scraper.history_snapshot(data_at("2026-09-18T14:08:00+00:00", 200))
+    month_close = scraper.history_snapshot(data_at("2026-08-31T14:30:00+00:00", 200))
+    history = {"snapshots": [month_close, changed, frozen_start]}
+
+    clean, context = scraper.quarantine_repeated_source_history(current, history)
+    assert context["stale"] is True
+    assert context["quarantined_periods"] == []
+    assert set(context["stale_covered_periods"]) == {"day", "week"}
+
+    scraper.add_previous_comparison(current, None, clean)
+    scraper.mark_source_stale_comparison(current, context)
+
+    assert current["comparison"]["periods"]["day"]["reason"] == "source_stale"
+    assert current["comparison"]["periods"]["week"]["reason"] == "source_stale"
+    assert current["comparison"]["periods"]["week"]["comparable"] is False
+    assert current["comparison"]["periods"]["week"]["updated_at"] is None
+    assert current["comparison"]["periods"]["month"]["comparable"] is True
+    assert current["comparison"]["periods"]["month"]["updated_at"] == month_close["updated_at"]
+
+
 def test_short_identical_source_suffix_keeps_valid_zero_history():
     data = {
         "updated_at": "2026-09-20T02:00:00+00:00",
