@@ -14,8 +14,9 @@ on:
     types: [collect-pvp-data]
   schedule:
     # Two independent opportunities per hour make a dropped GitHub cron event
-    # recoverable. The 50-minute freshness gate still permits at most one
-    # successful normal collection per hour.
+    # recoverable. A 40-minute freshness gate still avoids duplicate 30-minute
+    # collections while ensuring an off-cycle success is rechecked within the
+    # following hour instead of drifting toward a 75-minute gap.
     - cron: "17,47 * * * *"
 
 permissions:
@@ -103,7 +104,7 @@ jobs:
           FORCE_COLLECTION: ${{ (github.event_name == 'workflow_dispatch' && inputs.force_collection) || contains(github.event.head_commit.message, '[collect-now]') }}
         run: |
           set -euo pipefail
-          args=(--max-age-minutes 50 --github-output "$GITHUB_OUTPUT")
+          args=(--max-age-minutes 40 --github-output "$GITHUB_OUTPUT")
           if [ "$FORCE_COLLECTION" = "true" ]; then
             args+=(--force)
           fi
