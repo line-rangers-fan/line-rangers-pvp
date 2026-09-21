@@ -464,6 +464,9 @@ const translations = {
     slots: "全編成キャラ数",
     characters: "キャラ種類数",
     updated: "最終更新",
+    summaryAria: "集計概要",
+    rankPeriodSelectorAria: "キャラ数比較の基準時刻",
+    rankPeriodOptionsAria: "比較する時点を選択",
     ranking: "キャラクターランキング",
     rankingDescription: "編成数が多い順に表示しています。",
     rank: "順位",
@@ -524,6 +527,9 @@ const translations = {
     slots: "Total Character Slots",
     characters: "Character Types",
     updated: "Last Updated",
+    summaryAria: "Statistics summary",
+    rankPeriodSelectorAria: "Character count comparison baseline",
+    rankPeriodOptionsAria: "Choose a comparison time",
     ranking: "Character Ranking",
     rankingDescription: "Sorted by team count.",
     rank: "Rank",
@@ -997,10 +1003,17 @@ function characterLabel(character) {
 function applyTranslations() {
   const tr = translations[state.language];
 
-  document.documentElement.lang =
-    state.language === "zh" ? "zh-TW" : state.language;
-
+  document.documentElement.lang = state.language;
   document.title = tr.title;
+
+  const metaDescription = document.querySelector('meta[name="description"]');
+  if (metaDescription) metaDescription.setAttribute("content", tr.description);
+  const summary = document.querySelector("#summary");
+  if (summary) summary.setAttribute("aria-label", tr.summaryAria);
+  const periodSelector = document.querySelector("#rank-period-selector");
+  if (periodSelector) periodSelector.setAttribute("aria-label", tr.rankPeriodSelectorAria);
+  const periodOptions = document.querySelector("#rank-period-options");
+  if (periodOptions) periodOptions.setAttribute("aria-label", tr.rankPeriodOptionsAria);
 
   setText("#page-title", tr.title);
   setText("#page-description", tr.description);

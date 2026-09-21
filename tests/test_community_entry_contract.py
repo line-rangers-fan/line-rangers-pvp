@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 
@@ -72,7 +73,11 @@ def test_urls_are_https_allowlisted_and_activity_feed_is_read_only_public_data()
 
 def test_csp_allows_only_the_production_worker_for_live_teaser_fetch():
     assert f"connect-src 'self' https://{BOARD_HOST}" in INDEX
-    assert 'community-entry.js?v=20260918-viewer-1' in INDEX
+    entry_bytes = (ROOT / "docs" / "assets" / "community-entry.js").read_bytes()
+    entry_blob = hashlib.sha1(
+        f"blob {len(entry_bytes)}\0".encode() + entry_bytes
+    ).hexdigest()[:12]
+    assert f'community-entry.js?v={entry_blob}' in INDEX
     assert 'community-entry.css?v=20260918-stats-1' in INDEX
 
 
@@ -85,7 +90,8 @@ def test_featured_comment_is_live_clickable_and_shows_reaction_counts():
     # read those attributes later are safe; raw HTML injection remains banned.
     assert 'helpful.dataset.communityHelpful = "true"' in ENTRY_JS
     assert 'helpful.dataset.helpfulCount = String(featured.helpful)' in ENTRY_JS
-    assert 'wrapper.href = href' in ENTRY_JS
+    assert 'rememberCommunityHref(wrapper, href)' in ENTRY_JS
+    assert 'url.searchParams.set("lang", communityEntryLanguage === "ja" ? "ja" : "en")' in ENTRY_JS
     assert 'url.searchParams.set("board", topic.id)' in ENTRY_JS
     assert 'url.searchParams.set("month", topic.month)' in ENTRY_JS
     assert 'innerHTML' not in ENTRY_JS
