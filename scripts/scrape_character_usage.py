@@ -1931,9 +1931,10 @@ def mark_source_stale_comparison(data: dict, context: dict) -> None:
     # Sunday or month-end can also make week/month honestly non-comparable.
     # Only periods that are actually missing are annotated; valid retained
     # week/month closes remain fully comparable.
+    stale_candidates = {"hour", "day"} | set(context.get("quarantined_periods", []))
     stale_periods = {
         period
-        for period in context.get("quarantined_periods", [])
+        for period in stale_candidates
         if period in RANK_COMPARISON_PERIODS
         and isinstance((comparison.get("periods") or {}).get(period), dict)
         and comparison["periods"][period].get("comparable") is False
