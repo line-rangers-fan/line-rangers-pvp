@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       data_sha256: ${{ steps.snapshot.outputs.data_sha256 }}
+      source_sha: ${{ steps.snapshot.outputs.source_sha }}
     steps:
       - name: Check out current site source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -83,11 +84,13 @@ jobs:
         run: |
           set -euo pipefail
           hash="$(sha256sum pages-dist/data/character_usage.json | awk '{print $1}')"
-          if ! [[ "$hash" =~ ^[a-f0-9]{64}$ ]]; then
-            echo "Invalid comparison data SHA-256."
+          source_sha="$(git rev-parse HEAD)"
+          if ! [[ "$hash" =~ ^[a-f0-9]{64}$ ]] || ! [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "Invalid Pages source identity."
             exit 1
           fi
           echo "data_sha256=$hash" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
@@ -125,8 +128,15 @@ jobs:
         env:
           SITE_URL: https://line-rangers-fan.github.io/line-rangers-pvp
           EXPECTED_DATA_SHA256: ${{ needs.build.outputs.data_sha256 }}
+          EXPECTED_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
         run: |
           set -euo pipefail
+          canonical_sha="$(git rev-parse HEAD)"
+          canonical_data_sha="$(sha256sum docs/data/character_usage.json | awk '{print $1}')"
+          if [ "$canonical_sha" != "$EXPECTED_SOURCE_SHA" ] && [ "$canonical_data_sha" != "$EXPECTED_DATA_SHA256" ]; then
+            echo "Pages verification superseded by newer canonical PvP data; allowing the newer queued deployment to continue."
+            exit 0
+          fi
           success=false
           for attempt in $(seq 1 18); do
             nonce="$GITHUB_SHA-$attempt"
