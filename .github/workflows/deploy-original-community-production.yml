@@ -308,9 +308,11 @@ jobs:
           activity_headers="$(mktemp)"
           activity="$(curl --location --fail --silent --show-error --dump-header "$activity_headers" --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 -H 'Origin: https://line-rangers-fan.github.io' "$PRODUCTION_BASE_URL/api/activity?public=1")"
           ranger_headers="$(mktemp)"
-          ranger="$(curl --location --fail --silent --show-error --dump-header "$ranger_headers" --connect-timeout 10 --max-time 45 --retry 10 --retry-delay 3 -H 'Origin: https://line-rangers-fan.github.io' "$PRODUCTION_BASE_URL/api/ranger-info?unit=u1556e-af")"
+          ranger="$(curl --location --fail --silent --show-error --dump-header "$ranger_headers" --connect-timeout 10 --max-time 45 --retry 10 --retry-delay 3 -H 'Origin: https://line-rangers-fan.github.io' "$PRODUCTION_BASE_URL/api/ranger-info?unit=u1556e-af&lang=ja&schema=3")"
+          ranger_en_headers="$(mktemp)"
+          ranger_en="$(curl --location --fail --silent --show-error --dump-header "$ranger_en_headers" --connect-timeout 10 --max-time 45 --retry 10 --retry-delay 3 -H 'Origin: https://line-rangers-fan.github.io' "$PRODUCTION_BASE_URL/api/ranger-info?unit=u1556e-af&lang=en&schema=3")"
           ranger_partial_headers="$(mktemp)"
-          ranger_partial="$(curl --location --fail --silent --show-error --dump-header "$ranger_partial_headers" --connect-timeout 10 --max-time 45 --retry 10 --retry-delay 3 -H 'Origin: https://line-rangers-fan.github.io' "$PRODUCTION_BASE_URL/api/ranger-info?unit=u1616e-brown")"
+          ranger_partial="$(curl --location --fail --silent --show-error --dump-header "$ranger_partial_headers" --connect-timeout 10 --max-time 45 --retry 10 --retry-delay 3 -H 'Origin: https://line-rangers-fan.github.io' "$PRODUCTION_BASE_URL/api/ranger-info?unit=u1616e-brown&lang=ja&schema=3")"
           grep -q 'レジェンド帯 キャラ集計' <<< "$pvp"
           grep -q '新キャラ情報掲示板' <<< "$board"
           snapshot_file="$RUNNER_TEMP/production-character-usage.json"
@@ -321,6 +323,7 @@ jobs:
           printf '%s' "$activity" | jq -e '(.topics | type == "array") and ((.featured == null) or (.featured | type == "object"))' >/dev/null
           printf '%s' "$ranger" | jq -e '
             .unitCode == "u1556e-af" and
+            .language == "ja" and
             .name == "9★ 超能力者 アーニャ" and
             (.sourceUrl == "https://rangers.lerico.net/ja/ranger/u1556e-af") and
             (.skills | type == "array" and length == 2) and
@@ -331,8 +334,22 @@ jobs:
               (.iconUrl | type == "string" and startswith("https://rangers.lerico.net/res/skill_icon/"))
             ] | all)
           ' >/dev/null
+          printf '%s' "$ranger_en" | jq -e '
+            .unitCode == "u1556e-af" and
+            .language == "en" and
+            (.name | type == "string" and length > 0) and
+            (.sourceUrl == "https://rangers.lerico.net/en/ranger/u1556e-af") and
+            (.skills | type == "array" and length == 2) and
+            ([.skills[] |
+              (.name | type == "string" and length > 0) and
+              (.description | type == "string" and length > 0) and
+              (.effects | type == "array" and length > 0 and all(type == "string" and length > 0)) and
+              (.iconUrl | type == "string" and startswith("https://rangers.lerico.net/res/skill_icon/"))
+            ] | all)
+          ' >/dev/null
           printf '%s' "$ranger_partial" | jq -e '
             .unitCode == "u1616e-brown" and
+            .language == "ja" and
             (.name | type == "string" and length > 0) and
             (.sourceUrl == "https://rangers.lerico.net/ja/ranger/u1616e-brown") and
             (.skills | type == "array" and length == 2) and
@@ -344,6 +361,7 @@ jobs:
             ] | all)
           ' >/dev/null
           grep -qi '^access-control-allow-origin: https://line-rangers-fan.github.io' "$ranger_partial_headers"
+          grep -qi '^access-control-allow-origin: https://line-rangers-fan.github.io' "$ranger_en_headers"
           while IFS= read -r skill_icon; do
             case "$skill_icon" in
               https://rangers.lerico.net/res/skill_icon/*) ;;
