@@ -235,6 +235,9 @@ def test_static_rank_period_matches_the_javascript_default():
     assert "community-entry.js?v=$GITHUB_SHA" in pages_workflow
     assert "git hash-object docs/assets/community-entry.js" in pages_workflow
     assert "community-entry.js?v=20260918-viewer-1" not in pages_workflow
+    assert "source_sha: ${{ steps.snapshot.outputs.source_sha }}" in pages_workflow
+    assert "EXPECTED_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}" in pages_workflow
+    assert "Pages verification superseded by newer canonical PvP data" in pages_workflow
     assert "path: ./pages-dist" in pages_workflow
     assert 'data.publication_mode === "partial_after_stale"' in app
     assert "PARTIAL_FALLBACK_AFTER_MINUTES = 180" in app
@@ -243,6 +246,7 @@ def test_static_rank_period_matches_the_javascript_default():
 def test_public_language_switcher_is_strictly_japanese_and_english():
     index = (ROOT / "docs/index.html").read_text(encoding="utf-8")
     app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
+    community = (ROOT / "docs/assets/community-entry.js").read_text(encoding="utf-8")
 
     assert index.count('data-language="ja"') == 1
     assert index.count('data-language="en"') == 1
@@ -252,6 +256,9 @@ def test_public_language_switcher_is_strictly_japanese_and_english():
     assert 'if (browser.startsWith("ja")) return "ja";' in app
     for unsupported_prefix in ("th", "zh", "id", "vi", "ko"):
         assert f'if (browser.startsWith("{unsupported_prefix}"))' not in app
+    assert 'const COMMUNITY_ENTRY_LANGUAGES = Object.freeze(["ja", "en"]);' in community
+    for unsupported in ("zh", "th", "id", "vi", "ko"):
+        assert f"  {unsupported}: Object.freeze(" not in community
 
 
 def test_english_mode_updates_metadata_accessibility_and_board_navigation():
