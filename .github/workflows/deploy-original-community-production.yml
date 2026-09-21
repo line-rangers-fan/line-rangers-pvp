@@ -1,8 +1,9 @@
 name: deploy-original-community-production
 
 # Production promotion stays manual or uses the promotion marker. The workflow
-# is pinned to a validated copy commit, refuses to create missing D1/R2 resources,
-# and preserves existing production board data on routine code deployments.
+# resolves the exact validated copy commit from that marker, refuses to create
+# missing D1/R2 resources, and preserves existing production board data on routine
+# code deployments.
 on:
   workflow_dispatch:
   push:
@@ -18,7 +19,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  COPY_SOURCE_SHA: 3790879c49c76b607e8ffe356f3606dd2ee6e6c1
   MINIMUM_COMMUNITY_SOURCE_SHA: d7b4fe844766a77d3526379f74e6bce8becc425c
   WORKER_NAME: line-rangers-pvp-community-production
   D1_NAME: line-rangers-pvp-production-db
@@ -32,6 +32,18 @@ jobs:
     steps:
       - name: Check out original repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Resolve currently promoted community source
+        run: |
+          set -euo pipefail
+          source_sha="$(sed -n 's/^copy_source_sha=//p' .production-promotion-trigger | head -n1)"
+          if ! [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "Production promotion marker does not contain a valid copy source SHA."
+            exit 78
+          fi
+          echo "COPY_SOURCE_SHA=$source_sha" >> "$GITHUB_ENV"
 
       - name: Fetch exact validated copy source
         env:
