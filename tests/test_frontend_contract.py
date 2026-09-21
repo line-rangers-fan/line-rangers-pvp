@@ -48,6 +48,23 @@ def test_frontend_assets_keep_strict_csp_and_required_controls():
     assert "hidden" in notice
 
 
+def test_character_tap_notice_mentions_character_info_and_deduplicates_source_warning():
+    index = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+    app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
+    style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
+
+    assert 'class="ranking-tap-new" aria-label="NEW">NEW</span>' in index
+    assert 'id="ranking-tap-hint-text">キャラクターをタップすると、装備ランキングとキャラ情報が見れます。' in index
+    assert 'ja: "キャラクターをタップすると、装備ランキングとキャラ情報が見れます。"' in app
+    assert 'en: "Tap a character to view its equipment ranking and character information."' in app
+    assert 'sourceStaleBadge: "取得元更新待ち"' in app
+    assert 'sourceStaleBadge: "Source update pending"' in app
+    assert 'tapHint.insertAdjacentElement("afterend", banner);' in app
+    assert 'level === "sourceStale" ? "sourceStaleBadge"' in app
+    assert ".ranking-tap-new {" in style
+    assert "max-width: 48rem;" in style
+
+
 def test_history_and_equipment_change_contract_is_present():
     app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
     style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
