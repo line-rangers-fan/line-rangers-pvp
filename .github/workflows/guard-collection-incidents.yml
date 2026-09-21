@@ -33,6 +33,8 @@ jobs:
             ]);
             const retryableSteps = new Set([
               "Run scraper",
+              "Rebuild verified comparisons",
+              "Validate publishable snapshot after repair",
               "Save collected data",
               "Dispatch synchronized PvP publication",
             ]);
