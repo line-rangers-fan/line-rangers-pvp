@@ -75,7 +75,7 @@ def test_csp_allows_only_the_production_worker_for_live_teaser_fetch():
     assert f"connect-src 'self' https://{BOARD_HOST}" in INDEX
     entry_bytes = (ROOT / "docs" / "assets" / "community-entry.js").read_bytes()
     entry_blob = hashlib.sha1(
-        f"blob {len(entry_bytes)}\\0".encode() + entry_bytes
+        f"blob {len(entry_bytes)}\0".encode() + entry_bytes
     ).hexdigest()[:12]
     assert f'community-entry.js?v={entry_blob}' in INDEX
     assert 'community-entry.css?v=20260918-stats-1' in INDEX
