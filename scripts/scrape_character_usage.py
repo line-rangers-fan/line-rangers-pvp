@@ -1915,6 +1915,38 @@ def quarantine_repeated_source_history(
     return clean, context
 
 
+def _source_stale_crossed_calendar_close(
+    data: dict,
+    context: dict,
+    period_name: str,
+) -> bool:
+    """Return true when the frozen-source interval covers a fixed JST close.
+
+    Repeated source snapshots are intentionally not retained after staleness is
+    confirmed. Once that frozen interval later crosses a Sunday or month-end
+    close, there may be no quarantined snapshot left to prove why the baseline
+    is missing. Infer that cause only when the source was already unchanged
+    before the accepted 22:00-23:59 JST close window began.
+    """
+    if period_name not in {"week", "month"}:
+        return False
+    current_time = _parse_history_time(data.get("updated_at"))
+    stale_since = _parse_history_time(context.get("unchanged_since"))
+    if current_time is None or stale_since is None:
+        return False
+    close_date = _calendar_close_date(current_time, period_name)
+    close_window_start = datetime(
+        close_date.year,
+        close_date.month,
+        close_date.day,
+        CALENDAR_CLOSE_START_HOUR,
+        0,
+        0,
+        tzinfo=HISTORY_TIME_ZONE,
+    )
+    return _as_japan_time(stale_since) <= close_window_start
+
+
 def mark_source_stale_comparison(data: dict, context: dict) -> None:
     """Expose source freshness uncertainty instead of fabricated zero deltas."""
     if context.get("stale") is not True:
@@ -1931,7 +1963,16 @@ def mark_source_stale_comparison(data: dict, context: dict) -> None:
     # Sunday or month-end can also make week/month honestly non-comparable.
     # Only periods that are actually missing are annotated; valid retained
     # week/month closes remain fully comparable.
-    stale_candidates = {"hour", "day"} | set(context.get("quarantined_periods", []))
+    crossed_calendar_closes = {
+        period
+        for period in ("week", "month")
+        if _source_stale_crossed_calendar_close(data, context, period)
+    }
+    stale_candidates = (
+        {"hour", "day"}
+        | set(context.get("quarantined_periods", []))
+        | crossed_calendar_closes
+    )
     stale_periods = {
         period
         for period in stale_candidates
