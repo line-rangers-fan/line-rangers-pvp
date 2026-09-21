@@ -240,12 +240,17 @@ def test_live_collection_uses_balanced_preflight_and_strict_post_validation():
 
     # New data still fails closed unless it is a real complete 200/200 sample
     # with a valid public comparison contract after derived-data repair.
-    assert "python scripts/rebuild_cross_sample_comparisons.py" in workflow
+    assert workflow.count("python scripts/rebuild_cross_sample_comparisons.py") >= 2
     assert ".target_players == 200 and .sampled_players == 200 and .complete_target == true" in workflow
-    assert "python scripts/validate_public_comparisons.py docs/data/character_usage.json" in workflow
+    assert workflow.count("python scripts/validate_public_comparisons.py docs/data/character_usage.json") >= 2
+    assert "git pull --rebase origin main" in workflow
+    assert "git commit --amend --no-edit" in workflow
 
-    # Recoverable derived/publication stages get one automatic retry, while
-    # raw data integrity gates themselves are not removed or weakened.
+    # Recoverable derived/publication stages get one automatic retry per new
+    # workflow run, even while an incident Issue remains open. Hard data gates
+    # themselves are still never weakened.
     assert '"Rebuild verified comparisons",' in guardian
     assert '"Validate publishable snapshot after repair",' in guardian
-    assert "one automatic retry was requested" in guardian
+    assert "if (attempt === 1 && retryableFailure)" in guardian
+    assert "if (!existing && attempt === 1 && retryableFailure)" not in guardian
+    assert "one automatic retry was requested for this run" in guardian
