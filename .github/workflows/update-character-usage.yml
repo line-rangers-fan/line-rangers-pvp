@@ -59,12 +59,21 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run quality tests
+      - name: Run collector-critical quality tests
         run: |
           set -euo pipefail
-          PYTHONPATH=. pytest -q
-          node --check docs/assets/app.js
-          node --test tests/*.mjs
+          # Keep the data pipeline protected by the tests that can actually
+          # invalidate a PvP collection. UI/visual/board regressions remain
+          # mandatory in pull-request CI, but they must not freeze fresh 200/200
+          # collection timestamps.
+          PYTHONPATH=. pytest -q \
+            tests/test_scrape_character_usage.py \
+            tests/test_quality_checks.py \
+            tests/test_check_data_freshness.py \
+            tests/test_collection_resilience.py \
+            tests/test_queued_collection_checkout.py \
+            tests/test_comparison_guards.py \
+            tests/test_cross_sample_comparisons.py
 
       - name: Decide whether collection is due
         id: decision
@@ -107,9 +116,17 @@ jobs:
 
       - name: Rebuild verified comparisons
         if: steps.decision.outputs.due == 'true'
-        # Public hour/day/week/month baselines stay complete-only (200/200).
-        # Partial publications never become comparison references.
+        # Derived comparison metadata is safe to recompute from verified 200/200
+        # history. This is the only automatic repair class in the data path.
+        # Raw player/equipment counts are never synthesized or relaxed here.
         run: python scripts/rebuild_cross_sample_comparisons.py
+
+      - name: Validate publishable snapshot after repair
+        if: steps.decision.outputs.due == 'true'
+        run: |
+          set -euo pipefail
+          jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
+          python scripts/validate_public_comparisons.py docs/data/character_usage.json
 
       - name: Save collected data
         if: steps.decision.outputs.due == 'true'
