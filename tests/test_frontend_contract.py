@@ -252,6 +252,25 @@ def test_public_language_switcher_is_strictly_japanese_and_english():
         assert f'if (browser.startsWith("{unsupported_prefix}"))' not in app
 
 
+def test_english_mode_updates_metadata_accessibility_and_board_navigation():
+    app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
+    community = (ROOT / "docs/assets/community-entry.js").read_text(encoding="utf-8")
+
+    assert 'summaryAria: "Statistics summary"' in app
+    assert 'rankPeriodSelectorAria: "Character count comparison baseline"' in app
+    assert 'rankPeriodOptionsAria: "Choose a comparison time"' in app
+    assert "metaDescription.setAttribute(\"content\", tr.description)" in app
+    assert 'periodSelector.setAttribute("aria-label", tr.rankPeriodSelectorAria)' in app
+    assert 'periodOptions.setAttribute("aria-label", tr.rankPeriodOptionsAria)' in app
+    assert 'document.documentElement.lang = state.language;' in app
+
+    assert 'url.searchParams.set("lang", communityEntryLanguage === "ja" ? "ja" : "en")' in community
+    assert 'function rememberCommunityHref(element, rawUrl)' in community
+    assert 'element.dataset.communityHref = url.href' in community
+    assert 'slot.querySelectorAll("[data-community-href]")' in community
+    assert 'COMMUNITY_ENTRY_I18N[communityEntryLanguage]?.[key] ?? COMMUNITY_ENTRY_I18N.en[key] ?? key' in community
+
+
 def test_mobile_heading_wraps_inside_the_viewport():
     style = (ROOT / "docs/assets/style.css").read_text(encoding="utf-8")
     assert """  h1 {
