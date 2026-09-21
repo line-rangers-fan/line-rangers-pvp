@@ -231,13 +231,13 @@ const EQUIPMENT_TYPES = [
 ];
 
 const TAP_HINT = {
-  ja: "キャラクターをタップすると、装備ランキングが見れます。",
-  en: "Tap a character to view its equipment ranking.",
-  zh: "點選角色即可查看裝備排名。",
-  th: "แตะตัวละครเพื่อดูอันดับอุปกรณ์",
-  id: "Ketuk karakter untuk melihat peringkat perlengkapannya.",
-  vi: "Chạm vào nhân vật để xem xếp hạng trang bị.",
-  ko: "캐릭터를 탭하면 장비 순위를 볼 수 있습니다.",
+  ja: "キャラクターをタップすると、装備ランキングとキャラ情報が見れます。",
+  en: "Tap a character to view its equipment ranking and character information.",
+  zh: "點選角色即可查看裝備排名與角色資訊。",
+  th: "แตะตัวละครเพื่อดูอันดับอุปกรณ์และข้อมูลตัวละคร",
+  id: "Ketuk karakter untuk melihat peringkat perlengkapan dan informasi karakter.",
+  vi: "Chạm vào nhân vật để xem xếp hạng trang bị và thông tin nhân vật.",
+  ko: "캐릭터를 탭하면 장비 순위와 캐릭터 정보를 볼 수 있습니다.",
 };
 
 const STATUS_TEXT = {
@@ -248,6 +248,7 @@ const STATUS_TEXT = {
     delayed: "更新が少し遅れています。監視処理が再集\u2060計を試みます。",
     stale: "更新が2時間以上遅れています。前回の正常データを表示中です。",
     sourceStale: "取得元のPvPデータが長時間同一のため、全キャラ±0です。こちらのサイトのエラーではございません。",
+    sourceStaleBadge: "取得元更新待ち",
     refresh: "今すぐ再読込",
     refreshing: "再読込中…",
     refreshError:
@@ -274,6 +275,7 @@ const STATUS_TEXT = {
     delayed: "The update is delayed. The watchdog will retry collection.",
     stale: "Over two hours late. Showing the last verified dataset.",
     sourceStale: "The source PvP data has remained unchanged for an extended period, so all characters show ±0. This is not an error with this site.",
+    sourceStaleBadge: "Source update pending",
     refresh: "Refresh now",
     refreshing: "Refreshing…",
     refreshError:
@@ -1002,7 +1004,7 @@ function applyTranslations() {
 
   setText("#page-title", tr.title);
   setText("#page-description", tr.description);
-  setText("#ranking-tap-hint", TAP_HINT[state.language] || TAP_HINT.en);
+  setText("#ranking-tap-hint-text", TAP_HINT[state.language] || TAP_HINT.en);
   const sourceStatus =
     SOURCE_STATUS_NOTICE[state.language] || SOURCE_STATUS_NOTICE.en;
   setText("#source-status-title", sourceStatus.title);
@@ -1171,7 +1173,12 @@ function ensureDataWarning() {
     loadData({ background: Boolean(state.data) });
   });
   banner.append(message, refresh);
-  elements.summary.insertAdjacentElement("beforebegin", banner);
+  const tapHint = document.querySelector("#ranking-tap-hint");
+  if (tapHint) {
+    tapHint.insertAdjacentElement("afterend", banner);
+  } else {
+    elements.summary.insertAdjacentElement("beforebegin", banner);
+  }
   return banner;
 }
 
@@ -1180,9 +1187,8 @@ function updateFreshnessWarning() {
 
   const level = getFreshnessLevel();
   if (elements.freshness) {
-    elements.freshness.textContent = st(
-      level === "healthy" ? "healthy" : level
-    );
+    const badgeKey = level === "sourceStale" ? "sourceStaleBadge" : level === "healthy" ? "healthy" : level;
+    elements.freshness.textContent = st(badgeKey);
     elements.freshness.className = `freshness-badge freshness-${
       level === "partial" || level === "sourceStale" ? "delayed" : level
     }`;
