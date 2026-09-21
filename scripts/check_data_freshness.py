@@ -28,6 +28,11 @@ except ImportError:  # Allows importing this module from the test suite.
         validate_data,
     )
 
+try:
+    from validate_public_comparisons import validate_payload as validate_public_payload
+except ImportError:
+    from scripts.validate_public_comparisons import validate_payload as validate_public_payload
+
 
 DEFAULT_DATA_PATH = Path("docs/data/character_usage.json")
 
@@ -77,6 +82,15 @@ def has_complete_sample(data: dict) -> bool:
             for period in RANK_PERIODS
         ):
             return False
+        # A source_stale payload is allowed to have non-comparable periods, but
+        # those periods must carry the explicit safe public reason. Treat only
+        # this recoverable derived-metadata class as incomplete so the collector
+        # repairs it immediately instead of waiting for the normal freshness age.
+        if comparison.get("source_stale") is True:
+            try:
+                validate_public_payload(data)
+            except ValueError:
+                return False
         collection_duration = float(quality.get("collection_duration_seconds"))
         detail_duration = float(quality.get("detail_fetch_duration_seconds"))
         equipment_fill_rate = float(quality.get("equipment_fill_rate"))
@@ -130,6 +144,24 @@ def check_freshness(
                 validate_data(data)
             except ValueError:
                 return Freshness(True, None, "invalid_quality")
+            comparison = data.get("comparison")
+            if (
+                isinstance(comparison, dict)
+                and comparison.get("source_stale") is True
+                and data.get("sampled_players") == 200
+                and data.get("complete_target") is True
+            ):
+                try:
+                    validate_public_payload(data)
+                except ValueError:
+                    age_minutes = (current_time - updated_at).total_seconds() / 60
+                    if age_minutes < -10:
+                        return Freshness(True, age_minutes, "future_timestamp")
+                    return Freshness(
+                        True,
+                        max(0.0, age_minutes),
+                        "repairable_public_comparison",
+                    )
             if data.get("publication_mode") != PARTIAL_PUBLICATION_MODE:
                 return Freshness(True, None, "invalid_quality")
             age_minutes = (current_time - updated_at).total_seconds() / 60
