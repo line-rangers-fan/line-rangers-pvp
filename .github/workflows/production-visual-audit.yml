@@ -233,6 +233,51 @@ jobs:
                   await page.locator('#equipment-close').click();
                   await page.locator('[data-language="en"]').click();
                   await page.waitForFunction(() => document.documentElement.lang === 'en', undefined, { timeout: 10000 });
+                  const englishUiState = await page.evaluate(() => {
+                    const text = [
+                      document.querySelector('#page-title')?.textContent || '',
+                      document.querySelector('#page-description')?.textContent || '',
+                      document.querySelector('#ranking-tap-hint-text')?.textContent || '',
+                      document.querySelector('#ranking-title')?.textContent || '',
+                      document.querySelector('#ranking-description')?.textContent || '',
+                      document.querySelector('#label-league')?.textContent || '',
+                      document.querySelector('#label-slots')?.textContent || '',
+                      document.querySelector('#label-updated')?.textContent || '',
+                      document.querySelector('#community-board-entry-title')?.textContent || '',
+                      document.querySelector('#community-board-entry-slot .community-board-entry-description')?.textContent || '',
+                      document.querySelector('#data-warning:not([hidden]) .data-warning-text')?.textContent || '',
+                    ].join('\n');
+                    const boardHref = document.querySelector('#community-board-entry-slot .community-board-entry-button')?.href || '';
+                    return {
+                      title: document.querySelector('#page-title')?.textContent?.trim() || '',
+                      hint: document.querySelector('#ranking-tap-hint-text')?.textContent?.trim() || '',
+                      communityTitle: document.querySelector('#community-board-entry-title')?.textContent?.trim() || '',
+                      boardHref,
+                      metaDescription: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+                      summaryAria: document.querySelector('#summary')?.getAttribute('aria-label') || '',
+                      selectorAria: document.querySelector('#rank-period-selector')?.getAttribute('aria-label') || '',
+                      optionsAria: document.querySelector('#rank-period-options')?.getAttribute('aria-label') || '',
+                      warningCount: document.querySelectorAll('#data-warning').length,
+                      japaneseChrome: /[ぁ-んァ-ヶ一-龠]/u.test(text),
+                    };
+                  });
+                  if (
+                    englishUiState.title !== 'LINE Rangers Legend Tier Character Statistics' ||
+                    englishUiState.hint !== 'Tap a character to view its equipment ranking and character information.' ||
+                    englishUiState.communityTitle !== 'New Character Community Board' ||
+                    !/[?&]lang=en(?:&|$)/.test(englishUiState.boardHref) ||
+                    !englishUiState.metaDescription ||
+                    /[ぁ-んァ-ヶ一-龠]/u.test(englishUiState.metaDescription) ||
+                    englishUiState.summaryAria !== 'Statistics summary' ||
+                    englishUiState.selectorAria !== 'Character count comparison baseline' ||
+                    englishUiState.optionsAria !== 'Choose a comparison time' ||
+                    englishUiState.warningCount > 1 ||
+                    englishUiState.japaneseChrome
+                  ) {
+                    throw new Error(
+                      `${target.name} rendered incomplete English UI at ${viewport.name}: ${JSON.stringify(englishUiState)}`,
+                    );
+                  }
                   await page.locator('#ranking-body .character-button').first().click();
                   await page.waitForSelector('#equipment-dialog[open] .equipment-skill-item', { timeout: 20000 });
                   await page.waitForFunction((unitCode) => {
@@ -279,6 +324,10 @@ jobs:
                   await page.locator('#equipment-close').click();
                   await page.locator('[data-language="ja"]').click();
                   await page.waitForFunction(() => document.documentElement.lang === 'ja', undefined, { timeout: 10000 });
+                  const japaneseBoardHref = await page.locator('#community-board-entry-slot .community-board-entry-button').getAttribute('href');
+                  if (!japaneseBoardHref || !/[?&]lang=ja(?:&|$)/.test(japaneseBoardHref)) {
+                    throw new Error(`${target.name} did not restore Japanese board navigation at ${viewport.name}: ${japaneseBoardHref}`);
+                  }
                   await page.locator('#ranking-body .character-button').first().click();
                   await page.waitForSelector('#equipment-dialog[open] .equipment-skill-item', { timeout: 20000 });
 
