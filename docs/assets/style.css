@@ -1287,10 +1287,6 @@ a.equipment-character-name:focus-visible {
 }
 
 .equipment-skill-item {
-  display: grid;
-  grid-template-columns: 4.25rem minmax(0, 1fr);
-  gap: 0.7rem;
-  align-items: start;
   min-width: 0;
   padding: 0.65rem;
   border: 1px solid rgb(255 255 255 / 8%);
@@ -1298,15 +1294,23 @@ a.equipment-character-name:focus-visible {
   background: rgb(255 255 255 / 3%);
 }
 
+.equipment-skill-header {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
 .equipment-skill-visual {
   position: relative;
   display: grid;
   place-items: center;
-  width: 4.25rem;
-  height: 4.25rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 2.25rem;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 0.65rem;
+  border-radius: 0.5rem;
   background: rgb(0 0 0 / 18%);
 }
 
@@ -1337,6 +1341,7 @@ a.equipment-character-name:focus-visible {
 
 .equipment-skill-name {
   display: block;
+  min-width: 0;
   color: var(--text);
   font-size: 0.9rem;
   line-height: 1.35;
@@ -1564,17 +1569,20 @@ a.equipment-character-name:focus-visible {
   }
 
   .equipment-skill-item {
-    grid-template-columns: 3.55rem minmax(0, 1fr);
-    gap: 0.6rem;
     min-width: 0;
     padding: 0.55rem;
     scroll-snap-align: start;
     scroll-snap-stop: normal;
   }
 
+  .equipment-skill-header {
+    gap: 0.5rem;
+  }
+
   .equipment-skill-visual {
-    width: 3.55rem;
-    height: 3.55rem;
+    width: 2rem;
+    height: 2rem;
+    flex-basis: 2rem;
   }
 
   .equipment-skill-description,

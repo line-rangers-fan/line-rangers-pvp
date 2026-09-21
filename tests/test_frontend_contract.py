@@ -254,18 +254,24 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert 'function rangerDetailUrl(character)' in app
     assert 'function isTrustedSkillIconUrl(value)' in app
     assert 'function createSkillIcon(skill)' in app
-    assert 'https://rangers.lerico.net/ja/ranger/' in app
+    assert 'return `https://rangers.lerico.net/${language}/ranger/${encodeURIComponent(unitCode)}`;' in app
+    assert 'state.language === "ja" ? "ja" : "en"' in app
     assert 'url.pathname.startsWith("/res/skill_icon/")' in app
     assert 'RANGER_INFO_WORKER_URL' in app
     assert 'function loadRangerInfo(character)' in app
     assert 'RANGER_INFO_RETRY_COOLDOWN_MS = 15_000' in app
-    assert 'RANGER_INFO_SCHEMA_VERSION = "2"' in app
+    assert 'RANGER_INFO_SCHEMA_VERSION = "3"' in app
     assert 'rangerInfoFailed: new Map()' in app
+    assert 'function rangerInfoLanguage()' in app
+    assert 'function rangerInfoCacheKey(unitCode, language = rangerInfoLanguage())' in app
+    assert 'lang: language' in app
+    assert 'payload.language !== language' in app
     assert 'cache: "no-store"' in app
-    assert 'state.rangerInfoFailed.set(unitCode, Date.now())' in app
+    assert 'state.rangerInfoFailed.set(cacheKey, Date.now())' in app
     assert 'item.dataset.hasEffects = String(skill.effects.length > 0)' in app
     assert 'renderCharacterSkillSummary(character)' in app
     assert 'equipment-character-name' in app
+    assert 'equipment-skill-header' in app
     assert 'equipment-skill-image' in app
     assert 'equipment-skill-description' in app
     assert 'equipment-skill-effects' in app
@@ -278,7 +284,11 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert '.equipment-skill-list {' in style
     assert 'grid-template-columns: repeat(2, minmax(0, 1fr));' in style
     assert '.equipment-skill-item {' in style
-    assert 'grid-template-columns: 4.25rem minmax(0, 1fr);' in style
+    assert '.equipment-skill-header {' in style
+    assert 'display: flex;' in style
+    assert 'width: 2.25rem;' in style
+    assert 'height: 2.25rem;' in style
+    assert 'flex: 0 0 2.25rem;' in style
     assert '.equipment-skill-image' in style
     assert '.equipment-skill-effects {' in style
     assert 'margin-top: 0.85rem;' in style
@@ -298,6 +308,10 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert 'overflow-x: auto;' in mobile
     assert 'scroll-snap-type: x mandatory;' in mobile
     assert 'scroll-snap-align: start;' in mobile
+    assert '.equipment-skill-header {' in mobile
+    assert 'width: 2rem;' in mobile
+    assert 'height: 2rem;' in mobile
+    assert 'flex-basis: 2rem;' in mobile
 
 
 def test_saturday_pvp_reset_notice_is_fully_removed():
