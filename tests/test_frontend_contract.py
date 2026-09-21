@@ -60,6 +60,9 @@ def test_character_tap_notice_mentions_character_info_and_deduplicates_source_wa
     assert 'sourceStaleBadge: "取得元更新待ち"' in app
     assert 'sourceStaleBadge: "Source update pending"' in app
     assert 'tapHint.insertAdjacentElement("afterend", banner);' in app
+    assert 'const hintText = document.querySelector("#ranking-tap-hint-text");' in app
+    assert 'hintText.textContent = TAP_HINT[state.language] || TAP_HINT.en;' in app
+    assert 'hint.textContent = TAP_HINT[state.language] || TAP_HINT.en;' not in app
     assert 'level === "sourceStale" ? "sourceStaleBadge"' in app
     assert ".ranking-tap-new {" in style
     assert "max-width: 48rem;" in style
