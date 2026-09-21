@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Retry once or open a delivery incident
+      - name: Classify, self-heal, or open a delivery incident
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
@@ -72,31 +72,141 @@ jobs:
 
             if (!failureConclusions.has(current.conclusion)) return;
 
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: current.id,
+              per_page: 100,
+            });
+            const failedSteps = jobs.data.jobs.flatMap((job) =>
+              (job.steps || [])
+                .filter((step) =>
+                  step.conclusion === "failure" ||
+                  step.conclusion === "timed_out" ||
+                  step.conclusion === "action_required"
+                )
+                .map((step) => step.name),
+            );
+
+            // Only this gate is automatically repaired by collecting and
+            // rebuilding a fresh canonical 200/200 snapshot. Raw counts,
+            // secrets, build output, and D1/R2 checks are never relaxed.
+            const dataRepairSteps = new Set([
+              "Validate current PvP snapshot",
+            ]);
+
+            // These operations are idempotent or verification-only. A single
+            // retry handles CDN convergence, GitHub/Cloudflare/network flakes,
+            // and package/source transport without hiding persistent defects.
+            const transientSteps = new Set([
+              "Check out current site source",
+              "Check out current PvP source",
+              "Check out verification script",
+              "Fetch exact promoted community source",
+              "Set up Node",
+              "Install dependencies",
+              "Resolve existing Cloudflare bindings only",
+              "Upload GitHub Pages artifact",
+              "Deploy GitHub Pages",
+              "Verify deployed Pages serves current comparison data",
+              "Deploy PvP refresh without mutating board data",
+              "Verify live PvP matches canonical snapshot",
+              "Run production browser audit",
+            ]);
+
+            const dataRepairFailure = failedSteps.some((name) => dataRepairSteps.has(name));
+            const transientFailure =
+              current.name === "production-visual-audit" ||
+              failedSteps.length === 0 ||
+              failedSteps.some((name) => transientSteps.has(name));
             const attempt = Number(current.run_attempt || 1);
-            if (!existing && attempt === 1) {
+
+            if (dataRepairFailure) {
+              if (existing) {
+                core.notice("A data-repair incident is already open; waiting for the next scheduled or repair collection.");
+                return;
+              }
+
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: incidentTitle,
+                body: [
+                  `${label} の比較データ検証で停止しました。`,
+                  "",
+                  `実行: ${current.html_url}`,
+                  `失敗ステップ: ${failedSteps.join(", ") || "不明"}`,
+                  "",
+                  "auto-repair-kind:data",
+                  "最新mainから200/200を再取得し、派生比較を再構築して再公開する自動修復を1回だけ実行します。",
+                  "生の順位・装備数、200/200条件、秘密情報、D1/R2保護条件は緩めません。",
+                ].join("\n"),
+              });
+
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: "update-character-usage.yml",
+                  ref: "main",
+                  inputs: { force_collection: "true" },
+                });
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.data.number,
+                  body: "自動修復用の強制200/200収集を起動しました。成功後、Pages/Worker公開も自動同期されます。",
+                });
+              } catch (error) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.data.number,
+                  body: `自動修復の起動自体に失敗しました。次の定期収集でも再検証されます。\n\n${error.message}`,
+                });
+                throw error;
+              }
+              return;
+            }
+
+            if (transientFailure && attempt === 1) {
               await github.rest.actions.reRunWorkflowFailedJobs({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 run_id: current.id,
               });
-              core.notice(`${label} failed once; one automatic retry was requested.`);
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existing.number,
+                  body: `一時的な公開/通信失敗を検出したため、この実行を1回だけ再試行しました。\n\n実行: ${current.html_url}\n失敗ステップ: ${failedSteps.join(", ") || "起動段階"}`,
+                });
+              }
+              core.notice(`${label} had a retryable delivery failure; one automatic retry was requested.`);
               return;
             }
 
             if (existing) return;
 
+            const hardFailure = !transientFailure;
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: incidentTitle,
               body: [
-                `${label} が自動再試行後も完了できませんでした。`,
+                hardFailure
+                  ? `${label} の安全・構成・ビルド品質ゲートで停止しました。`
+                  : `${label} が1回の自動再試行後も完了できませんでした。`,
                 "",
                 `実行: ${current.html_url}`,
                 `run attempt: ${attempt}`,
+                `失敗ステップ: ${failedSteps.join(", ") || "不明"}`,
                 "",
-                "品質条件やD1/R2の保護条件は緩めていません。",
-                "一時的な公開反映・ネットワーク・Cloudflare/GitHub側の失敗だけを1回自動再試行します。",
-                "次の成功実行を確認すると、このIssueは自動的に閉じます。",
+                hardFailure
+                  ? "この種類は自動で品質条件を緩めません。前回の正常公開を維持します。"
+                  : "一時的な公開反映・ネットワーク障害として1回再試行しましたが、前回の正常公開を維持します。",
+                "200/200、比較整合性、秘密情報検査、D1/R2保護条件は常に必須です。",
+                "次の正常実行を確認すると、このIssueは自動的に閉じます。",
               ].join("\n"),
             });
