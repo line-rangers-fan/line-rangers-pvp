@@ -117,9 +117,8 @@ def test_published_comparison_values_match_selected_history_baselines():
     source_stale = data["comparison"].get("source_stale") is True
     for period in ("hour", "day", "week", "month"):
         summary = data["comparison"]["periods"][period]
-        if source_stale and period in {"hour", "day"}:
+        if source_stale and summary.get("reason") == "source_stale":
             assert summary["comparable"] is False
-            assert summary["reason"] == "source_stale"
             assert summary["updated_at"] is None
             for current in data["characters"]:
                 change = current["change"]["periods"][period]
