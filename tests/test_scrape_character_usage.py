@@ -1257,11 +1257,12 @@ def test_stale_source_crossing_sunday_marks_week_non_comparable():
     changed = scraper.history_snapshot(data_at("2026-09-18T13:00:00+00:00", 201))
     frozen_start = scraper.history_snapshot(data_at("2026-09-18T14:08:00+00:00", 200))
     frozen_sunday_close = scraper.history_snapshot(data_at("2026-09-20T14:46:00+00:00", 200))
-    month_close = scraper.history_snapshot(data_at("2026-08-31T14:30:00+00:00", 199))
+    month_close = scraper.history_snapshot(data_at("2026-08-31T14:30:00+00:00", 200))
     history = {"snapshots": [month_close, changed, frozen_start, frozen_sunday_close]}
 
     clean, context = scraper.quarantine_repeated_source_history(current, history)
     assert context["stale"] is True
+    assert set(context["quarantined_periods"]) == {"day", "week"}
     assert frozen_sunday_close["updated_at"] not in {
         row["updated_at"] for row in clean["snapshots"]
     }
@@ -1276,6 +1277,10 @@ def test_stale_source_crossing_sunday_marks_week_non_comparable():
         "calendar_date": None,
         "reason": "source_stale",
     }
+    month = current["comparison"]["periods"]["month"]
+    assert month["comparable"] is True
+    assert month["updated_at"] == month_close["updated_at"]
+    assert "reason" not in month
 
 
 def test_short_identical_source_suffix_keeps_valid_zero_history():
