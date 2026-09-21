@@ -4,6 +4,7 @@ from copy import deepcopy
 from http.client import IncompleteRead
 import io
 import json
+from pathlib import Path
 
 import pytest
 
@@ -222,3 +223,29 @@ def test_failure_artifact_records_stage_without_error_or_player_details(
         "previous_data_retained": True,
     }
     assert "sensitive-player-id" not in json.dumps(report)
+
+
+def test_live_collection_uses_balanced_preflight_and_strict_post_validation():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/update-character-usage.yml").read_text(encoding="utf-8")
+    guardian = (root / ".github/workflows/guard-collection-incidents.yml").read_text(encoding="utf-8")
+
+    # Full data-dependent regressions protect code changes, but a scheduled
+    # collection cannot be frozen merely because the already-published JSON
+    # entered a recoverable stale/comparison state.
+    assert "- name: Run collector-critical quality tests\n        if: github.event_name == 'push'" in workflow
+    assert "- name: Run scheduled collector preflight\n        if: github.event_name != 'push'" in workflow
+    assert "python -m py_compile" in workflow
+    assert "assert scraper.TARGET_PLAYER_COUNT == 200" in workflow
+
+    # New data still fails closed unless it is a real complete 200/200 sample
+    # with a valid public comparison contract after derived-data repair.
+    assert "python scripts/rebuild_cross_sample_comparisons.py" in workflow
+    assert ".target_players == 200 and .sampled_players == 200 and .complete_target == true" in workflow
+    assert "python scripts/validate_public_comparisons.py docs/data/character_usage.json" in workflow
+
+    # Recoverable derived/publication stages get one automatic retry, while
+    # raw data integrity gates themselves are not removed or weakened.
+    assert '"Rebuild verified comparisons",' in guardian
+    assert '"Validate publishable snapshot after repair",' in guardian
+    assert "one automatic retry was requested" in guardian
