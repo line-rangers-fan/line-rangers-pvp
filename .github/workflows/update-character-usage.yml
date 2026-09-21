@@ -164,9 +164,18 @@ jobs:
             exit 0
           fi
           git commit -m "Update PvP ranking data"
-          # A manual site fix may land while this run is collecting. Rebase the
-          # data-only commit first so the push cannot overwrite that fix.
+          # A manual/site-code fix may land while this run is collecting. Rebase
+          # first, then rebuild derived comparison metadata with the newest main
+          # code before push. This prevents an older in-flight collector from
+          # publishing data that violates a newer comparison contract.
           git pull --rebase origin main
+          python scripts/rebuild_cross_sample_comparisons.py
+          jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
+          python scripts/validate_public_comparisons.py docs/data/character_usage.json
+          git add docs/data/character_usage.json docs/data/character_usage_history.json docs/data/character_usage_cross_sample_history.json docs/data/character_usage_health.json
+          if ! git diff --cached --quiet; then
+            git commit --amend --no-edit
+          fi
           git push
 
       - name: Dispatch synchronized PvP publication
