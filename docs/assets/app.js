@@ -2235,10 +2235,10 @@ async function loadData({ background = false } = {}) {
 }
 
 function setupRankingTapHint() {
-  const hint = document.querySelector("#ranking-tap-hint");
-  if (!hint) return;
+  const hintText = document.querySelector("#ranking-tap-hint-text");
+  if (!hintText) return;
 
-  hint.textContent = TAP_HINT[state.language] || TAP_HINT.en;
+  hintText.textContent = TAP_HINT[state.language] || TAP_HINT.en;
 }
 
 function setupRankingScrollGuard() {
