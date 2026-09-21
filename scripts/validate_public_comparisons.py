@@ -8,7 +8,10 @@ from datetime import datetime
 from pathlib import Path
 
 PERIODS = ("hour", "day", "week", "month")
-STALE_PERIODS = {"hour", "day"}
+# A frozen upstream interval can cross an hourly, daily, weekly, or monthly
+# fixed close. Explicit source_stale is the only accepted non-comparable state;
+# ordinary missing/malformed history still fails closed.
+STALE_PERIODS = set(PERIODS)
 
 
 def _timestamp(value: object) -> bool:
