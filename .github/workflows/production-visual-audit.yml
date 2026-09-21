@@ -230,7 +230,11 @@ jobs:
                       `${target.name} rendered invalid Ranger detail at ${viewport.name}: ${JSON.stringify({ firstCharacterUnit, ...rangerDetailState })}`,
                     );
                   }
+                  await page.locator('#equipment-close').click();
                   await page.locator('[data-language="en"]').click();
+                  await page.waitForFunction(() => document.documentElement.lang === 'en', undefined, { timeout: 10000 });
+                  await page.locator('#ranking-body .character-button').first().click();
+                  await page.waitForSelector('#equipment-dialog[open] .equipment-skill-item', { timeout: 20000 });
                   await page.waitForFunction((unitCode) => {
                     const link = document.querySelector('#equipment-dialog[open] .equipment-character-name');
                     const skills = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-name')];
@@ -272,8 +276,11 @@ jobs:
                       `${target.name} rendered invalid English Ranger detail at ${viewport.name}: ${JSON.stringify(englishRangerState)}`,
                     );
                   }
+                  await page.locator('#equipment-close').click();
                   await page.locator('[data-language="ja"]').click();
                   await page.waitForFunction(() => document.documentElement.lang === 'ja', undefined, { timeout: 10000 });
+                  await page.locator('#ranking-body .character-button').first().click();
+                  await page.waitForSelector('#equipment-dialog[open] .equipment-skill-item', { timeout: 20000 });
 
                   const equipmentComparisonStates = {};
                   for (const period of ['hour', 'day', 'week', 'month']) {
