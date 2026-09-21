@@ -43,16 +43,31 @@ function saveCommunityViewerToken(value) {
 }
 communityViewerToken = readCommunityViewerToken();
 function withCommunityViewer(rawUrl) {
-  if (!communityViewerToken || typeof rawUrl !== "string") return rawUrl;
+  if (typeof rawUrl !== "string") return rawUrl;
   try {
     const url = new URL(rawUrl);
-    url.searchParams.set("viewer", communityViewerToken);
+    url.searchParams.set("lang", communityEntryLanguage === "ja" ? "ja" : "en");
+    if (communityViewerToken) url.searchParams.set("viewer", communityViewerToken);
+    else url.searchParams.delete("viewer");
     return url.href;
   } catch { return rawUrl; }
 }
 
+function rememberCommunityHref(element, rawUrl) {
+  if (!(element instanceof HTMLAnchorElement) || typeof rawUrl !== "string") return;
+  try {
+    const url = new URL(rawUrl);
+    url.searchParams.delete("lang");
+    url.searchParams.delete("viewer");
+    element.dataset.communityHref = url.href;
+    element.href = withCommunityViewer(url.href);
+  } catch {}
+}
+
 function readCommunityBoardState(value) { return value === true; }
-function entryText(key) { return COMMUNITY_ENTRY_I18N[communityEntryLanguage][key]; }
+function entryText(key) {
+  return COMMUNITY_ENTRY_I18N[communityEntryLanguage]?.[key] ?? COMMUNITY_ENTRY_I18N.en[key] ?? key;
+}
 
 function detectCommunityLanguage() {
   let saved = null;
@@ -157,7 +172,7 @@ function buildCharacter(topic, baseUrl) {
   const href = topicBoardUrl(topic, baseUrl);
   const element = document.createElement(href ? "a" : "div");
   element.className = "community-board-entry-character";
-  if (href) element.href = href;
+  if (href) rememberCommunityHref(element, href);
   const image = document.createElement("img");
   image.className = "community-board-entry-character-image";
   image.src = topic.image;
@@ -195,7 +210,7 @@ function buildFeatured(featured, baseUrl) {
   const href = featuredBoardUrl(featured, baseUrl) || withCommunityViewer(baseUrl.href);
   const wrapper = document.createElement("a");
   wrapper.className = "community-board-entry-featured";
-  wrapper.href = href;
+  rememberCommunityHref(wrapper, href);
   wrapper.setAttribute("aria-label", entryText("featuredAria"));
   wrapper.dataset.communityAria = "featuredAria";
   const labelRow = document.createElement("div");
@@ -243,7 +258,7 @@ function buildCommunityBoardEntry(baseUrl, state) {
   const firstTopicUrl = topicBoardUrl(topics[0], baseUrl) || withCommunityViewer(baseUrl.href);
   const button = document.createElement("a");
   button.className = "community-board-entry-button";
-  button.href = firstTopicUrl;
+  rememberCommunityHref(button, firstTopicUrl);
   button.textContent = entryText("openBoard");
   button.dataset.communityText = "openBoard";
   button.setAttribute("aria-label", entryText("openBoardAria"));
@@ -266,6 +281,9 @@ function updateCommunityEntryLanguage() {
   }
   for (const element of slot.querySelectorAll("[data-community-alt]")) element.alt = entryText(element.dataset.communityAlt || "imageAlt");
   for (const element of slot.querySelectorAll("[data-community-aria]")) element.setAttribute("aria-label", entryText(element.dataset.communityAria || "openBoardAria"));
+  for (const element of slot.querySelectorAll("[data-community-href]")) {
+    rememberCommunityHref(element, element.dataset.communityHref || "");
+  }
   const helpful = slot.querySelector("[data-community-helpful]");
   if (helpful) helpful.textContent = `👍 ${entryText("helpful")} ${helpful.dataset.helpfulCount || "0"}`;
 }
