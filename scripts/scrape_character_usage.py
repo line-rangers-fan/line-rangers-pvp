@@ -1883,6 +1883,7 @@ def quarantine_repeated_source_history(
     stale_since = _parse_history_time(context["unchanged_since"])
     signature = _character_comparison_signature(data)
     retained = []
+    quarantined = []
     for snapshot in snapshots:
         timestamp = _parse_history_time(
             snapshot.get("updated_at") if isinstance(snapshot, dict) else None
@@ -1893,9 +1894,24 @@ def quarantine_repeated_source_history(
             and timestamp > stale_since
             and _character_comparison_signature(snapshot) == signature
         ):
+            quarantined.append(snapshot)
             continue
         retained.append(snapshot)
     clean["snapshots"] = retained
+
+    # Record exactly which public period baselines became unavailable because
+    # of quarantine. This prevents source_stale from masking an unrelated
+    # history gap while still handling a frozen source that crosses Sunday or
+    # month-end.
+    current_time = _parse_history_time(data.get("updated_at"))
+    context["quarantined_periods"] = [
+        period
+        for period, seconds in RANK_COMPARISON_PERIODS.items()
+        if _period_reference(
+            {"snapshots": quarantined}, current_time, seconds, period
+        )
+        is not None
+    ]
     return clean, context
 
 
@@ -1917,10 +1933,10 @@ def mark_source_stale_comparison(data: dict, context: dict) -> None:
     # week/month closes remain fully comparable.
     stale_periods = {
         period
-        for period, summary in (comparison.get("periods") or {}).items()
+        for period in context.get("quarantined_periods", [])
         if period in RANK_COMPARISON_PERIODS
-        and isinstance(summary, dict)
-        and summary.get("comparable") is False
+        and isinstance((comparison.get("periods") or {}).get(period), dict)
+        and comparison["periods"][period].get("comparable") is False
     }
     for period in stale_periods:
         comparison["periods"][period]["reason"] = "source_stale"
