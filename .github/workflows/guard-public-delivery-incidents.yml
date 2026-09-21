@@ -1,0 +1,102 @@
+name: public-delivery-incident-guardian
+
+on:
+  workflow_run:
+    workflows:
+      - deploy-github-pages
+      - sync-production-pvp
+      - production-visual-audit
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+concurrency:
+  group: public-delivery-incident-guardian
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Retry once or open a delivery incident
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const current = context.payload.workflow_run;
+            if (!current) return;
+
+            const failureConclusions = new Set([
+              "failure", "timed_out", "action_required", "startup_failure",
+            ]);
+            const workflowNames = {
+              "deploy-github-pages": "GitHub Pages公開",
+              "sync-production-pvp": "Production Worker同期",
+              "production-visual-audit": "本番Visual Audit",
+            };
+            const label = workflowNames[current.name] || current.name;
+            const incidentTitle = `自動公開の継続障害: ${label}`;
+
+            const openIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              per_page: 100,
+            });
+            const existing = openIssues.data.find(
+              (issue) => !issue.pull_request && issue.title === incidentTitle,
+            );
+
+            if (current.conclusion === "success") {
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existing.number,
+                  body: `自動再検証で正常復旧を確認しました。\n\n確認した実行: ${current.html_url}`,
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existing.number,
+                  state: "closed",
+                  state_reason: "completed",
+                });
+              }
+              return;
+            }
+
+            if (!failureConclusions.has(current.conclusion)) return;
+
+            const attempt = Number(current.run_attempt || 1);
+            if (!existing && attempt === 1) {
+              await github.rest.actions.reRunWorkflowFailedJobs({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: current.id,
+              });
+              core.notice(`${label} failed once; one automatic retry was requested.`);
+              return;
+            }
+
+            if (existing) return;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: incidentTitle,
+              body: [
+                `${label} が自動再試行後も完了できませんでした。`,
+                "",
+                `実行: ${current.html_url}`,
+                `run attempt: ${attempt}`,
+                "",
+                "品質条件やD1/R2の保護条件は緩めていません。",
+                "一時的な公開反映・ネットワーク・Cloudflare/GitHub側の失敗だけを1回自動再試行します。",
+                "次の成功実行を確認すると、このIssueは自動的に閉じます。",
+              ].join("\n"),
+            });
