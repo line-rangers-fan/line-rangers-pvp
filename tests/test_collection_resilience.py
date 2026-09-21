@@ -237,6 +237,7 @@ def test_live_collection_uses_balanced_preflight_and_strict_post_validation():
     assert "- name: Run scheduled collector preflight\n        if: github.event_name != 'push'" in workflow
     assert "python -m py_compile" in workflow
     assert "assert scraper.TARGET_PLAYER_COUNT == 200" in workflow
+    assert 'args=(--max-age-minutes 40 --github-output "$GITHUB_OUTPUT")' in workflow
 
     # New data still fails closed unless it is a real complete 200/200 sample
     # with a valid public comparison contract after derived-data repair.
