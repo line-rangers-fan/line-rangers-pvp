@@ -8,7 +8,7 @@ const REQUEST_TIMEOUT_MS = 12_000;
 const CHARACTER_IMAGE_TIMEOUT_MS = 6_000;
 const RANGER_INFO_TIMEOUT_MS = 8_000;
 const RANGER_INFO_RETRY_COOLDOWN_MS = 15_000;
-const RANGER_INFO_SCHEMA_VERSION = "2";
+const RANGER_INFO_SCHEMA_VERSION = "3";
 const RANGER_INFO_WORKER_URL = "https://line-rangers-pvp-community-production.n-yu1791.workers.dev/api/ranger-info";
 const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
 // Match the collector, freshness gate, and watchdog. A result that exceeded
@@ -2322,10 +2322,19 @@ function createEquipmentTab(type, label, isSelected, character) {
 
 const SAFE_RANGER_UNIT_CODE = /^[A-Za-z0-9_-]{1,80}$/;
 
+function rangerInfoLanguage() {
+  return state.language === "ja" ? "ja" : "en";
+}
+
+function rangerInfoCacheKey(unitCode, language = rangerInfoLanguage()) {
+  return `${language}:${unitCode}`;
+}
+
 function rangerDetailUrl(character) {
   const unitCode = String(character?.unit_code || "");
   if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return "";
-  return `https://rangers.lerico.net/ja/ranger/${encodeURIComponent(unitCode)}`;
+  const language = rangerInfoLanguage();
+  return `https://rangers.lerico.net/${language}/ranger/${encodeURIComponent(unitCode)}`;
 }
 
 function isTrustedSkillIconUrl(value) {
@@ -2378,20 +2387,25 @@ function createSkillIcon(skill) {
   return visual;
 }
 
-function rangerInfoEndpoint(character) {
+function rangerInfoEndpoint(character, language = rangerInfoLanguage()) {
   const unitCode = String(character?.unit_code || "");
   if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return "";
-  const params = new URLSearchParams({ unit: unitCode, schema: RANGER_INFO_SCHEMA_VERSION });
+  const params = new URLSearchParams({
+    unit: unitCode,
+    lang: language,
+    schema: RANGER_INFO_SCHEMA_VERSION,
+  });
   if (window.location.hostname === "line-rangers-fan.github.io") {
     return `${RANGER_INFO_WORKER_URL}?${params.toString()}`;
   }
   return `/api/ranger-info?${params.toString()}`;
 }
 
-function isValidRangerInfo(payload, unitCode) {
+function isValidRangerInfo(payload, unitCode, language) {
   if (!payload || typeof payload !== "object" || payload.unitCode !== unitCode) return false;
+  if (payload.language !== language) return false;
   if (typeof payload.name !== "string" || payload.name.trim().length < 1 || payload.name.length > 180) return false;
-  if (typeof payload.sourceUrl !== "string" || payload.sourceUrl !== `https://rangers.lerico.net/ja/ranger/${encodeURIComponent(unitCode)}`) return false;
+  if (typeof payload.sourceUrl !== "string" || payload.sourceUrl !== `https://rangers.lerico.net/${language}/ranger/${encodeURIComponent(unitCode)}`) return false;
   if (!Array.isArray(payload.skills) || payload.skills.length < 1 || payload.skills.length > 3) return false;
   return payload.skills.every((skill) =>
     skill &&
@@ -2412,19 +2426,21 @@ async function loadRangerInfo(character) {
   const unitCode = String(character?.unit_code || "");
   if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return;
 
-  const failedAt = state.rangerInfoFailed.get(unitCode);
+  const language = rangerInfoLanguage();
+  const cacheKey = rangerInfoCacheKey(unitCode, language);
+  const failedAt = state.rangerInfoFailed.get(cacheKey);
   if (failedAt && Date.now() - failedAt < RANGER_INFO_RETRY_COOLDOWN_MS) {
     return;
   }
-  if (failedAt) state.rangerInfoFailed.delete(unitCode);
-  if (state.rangerInfo.has(unitCode) || state.rangerInfoPending.has(unitCode)) {
+  if (failedAt) state.rangerInfoFailed.delete(cacheKey);
+  if (state.rangerInfo.has(cacheKey) || state.rangerInfoPending.has(cacheKey)) {
     return;
   }
 
-  const endpoint = rangerInfoEndpoint(character);
+  const endpoint = rangerInfoEndpoint(character, language);
   if (!endpoint) return;
 
-  state.rangerInfoPending.add(unitCode);
+  state.rangerInfoPending.add(cacheKey);
   try {
     const response = await fetch(endpoint, {
       headers: { Accept: "application/json" },
@@ -2433,16 +2449,16 @@ async function loadRangerInfo(character) {
     });
     if (!response.ok) throw new Error("Ranger skill information is unavailable.");
     const payload = await response.json();
-    if (!isValidRangerInfo(payload, unitCode)) {
+    if (!isValidRangerInfo(payload, unitCode, language)) {
       throw new Error("Invalid Ranger skill information.");
     }
-    state.rangerInfo.set(unitCode, payload);
-    state.rangerInfoFailed.delete(unitCode);
+    state.rangerInfo.set(cacheKey, payload);
+    state.rangerInfoFailed.delete(cacheKey);
   } catch (error) {
     console.warn("Ranger skill information is unavailable.", error);
-    state.rangerInfoFailed.set(unitCode, Date.now());
+    state.rangerInfoFailed.set(cacheKey, Date.now());
   } finally {
-    state.rangerInfoPending.delete(unitCode);
+    state.rangerInfoPending.delete(cacheKey);
     if (
       state.selectedCharacter?.unit_code === unitCode &&
       document.querySelector("#equipment-dialog")?.open
@@ -2466,7 +2482,8 @@ function renderCharacterSkillSummary(character) {
   details.className = "equipment-character-details";
 
   const unitCode = String(character?.unit_code || "");
-  const info = state.rangerInfo.get(unitCode);
+  const cacheKey = rangerInfoCacheKey(unitCode);
+  const info = state.rangerInfo.get(cacheKey);
   const displayName = info?.name || characterLabel(character);
   const detailUrl = rangerDetailUrl(character);
   const name = document.createElement(detailUrl ? "a" : "strong");
@@ -2492,15 +2509,19 @@ function renderCharacterSkillSummary(character) {
       const item = document.createElement("article");
       item.className = "equipment-skill-item";
       item.dataset.hasEffects = String(skill.effects.length > 0);
-      item.appendChild(createSkillIcon(skill));
 
       const body = document.createElement("div");
       body.className = "equipment-skill-body";
 
+      const header = document.createElement("div");
+      header.className = "equipment-skill-header";
+      header.appendChild(createSkillIcon(skill));
+
       const skillName = document.createElement("strong");
       skillName.className = "equipment-skill-name";
       skillName.textContent = skill.name;
-      body.appendChild(skillName);
+      header.appendChild(skillName);
+      body.appendChild(header);
 
       if (skill.description) {
         const description = document.createElement("p");
@@ -2535,7 +2556,7 @@ function renderCharacterSkillSummary(character) {
   } else {
     const status = document.createElement("p");
     status.className = "equipment-skill-status";
-    status.textContent = state.rangerInfoFailed.has(unitCode)
+    status.textContent = state.rangerInfoFailed.has(cacheKey)
       ? et("skillUnavailable")
       : et("skillLoading");
     details.appendChild(status);
