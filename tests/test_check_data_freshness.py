@@ -49,6 +49,48 @@ def test_stale_missing_and_future_data_are_due(tmp_path):
     assert check_freshness(path, 50, now=now).reason == "future_timestamp"
 
 
+def test_fresh_source_stale_public_metadata_error_is_immediately_due(tmp_path):
+    now = datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc)
+    path = tmp_path / "ranking.json"
+    write_timestamp(path, now - timedelta(minutes=5))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["comparison"]["source_stale"] = True
+    data["comparison"]["source_unchanged_since"] = (
+        now - timedelta(hours=5)
+    ).isoformat()
+    # Keep the raw 200/200 payload valid but make one derived public period
+    # ambiguous. This is safe to regenerate, so it must not wait 50 minutes.
+    data["comparison"]["periods"]["hour"] = {
+        "comparable": False,
+        "updated_at": None,
+        "calendar_date": None,
+    }
+    for character in data["characters"]:
+        character["change"]["periods"]["hour"] = {
+            "comparable": False,
+            "rank": None,
+            "occurrence_count": None,
+            "from_updated_at": None,
+            "interval_minutes": None,
+        }
+        for category in character["equipment_rankings"].values():
+            for item in category["items"]:
+                item["change"]["periods"]["hour"] = {
+                    "comparable": False,
+                    "rank": None,
+                    "occurrence_count": None,
+                    "from_updated_at": None,
+                    "interval_minutes": None,
+                }
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = check_freshness(path, 50, now=now)
+
+    assert result.due is True
+    assert result.reason == "repairable_public_comparison"
+    assert result.age_minutes == 5
+
+
 def test_force_always_collects(tmp_path):
     result = check_freshness(tmp_path / "missing.json", 50, force=True)
 
