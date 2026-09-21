@@ -157,6 +157,38 @@ jobs:
           npm test
           npm run lint
 
+      - name: Verify upstream English Ranger translations before production mutation
+        working-directory: copy-source
+        run: |
+          set -euo pipefail
+          translations="$RUNNER_TEMP/ranger-translations-en.json"
+          curl --location --fail --silent --show-error \
+            --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
+            'https://rangers.lerico.net/api/v2/translate?keys=en%3AUNIT%2Cen%3ASKILL' \
+            -o "$translations"
+          node - "$translations" <<'NODE'
+          const fs = require('node:fs');
+          const path = process.argv[2];
+          const payload = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const units = payload?.['en:UNIT'];
+          const skills = payload?.['en:SKILL'];
+          const values = [
+            units?.['u1556e-af_nm'],
+            skills?.['sk1555_af_nm'],
+            skills?.['sk1555_af_desc'],
+            skills?.['hsk1555_af_nm'],
+            skills?.['hsk1555_af_desc'],
+          ];
+          if (values.some((value) => typeof value !== 'string' || !value.trim())) {
+            throw new Error('Required English Ranger translation is missing.');
+          }
+          const japaneseScript = /[\u3040-\u30ff\u3400-\u9fff]/u;
+          if (values.some((value) => japaneseScript.test(value))) {
+            throw new Error('English Ranger translation unexpectedly contains Japanese script.');
+          }
+          console.log('Verified English Ranger translation source before production mutation.');
+          NODE
+
       - name: Build and validate production composite
         working-directory: copy-source
         run: |
