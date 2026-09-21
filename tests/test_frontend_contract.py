@@ -233,6 +233,8 @@ def test_static_rank_period_matches_the_javascript_default():
     assert f'<link rel="stylesheet" href="./assets/style.css?v={style_blob}">' in page
     assert "app.js?v=$GITHUB_SHA" in pages_workflow
     assert "community-entry.js?v=$GITHUB_SHA" in pages_workflow
+    assert "git hash-object docs/assets/community-entry.js" in pages_workflow
+    assert "community-entry.js?v=20260918-viewer-1" not in pages_workflow
     assert "path: ./pages-dist" in pages_workflow
     assert 'data.publication_mode === "partial_after_stale"' in app
     assert "PARTIAL_FALLBACK_AFTER_MINUTES = 180" in app
