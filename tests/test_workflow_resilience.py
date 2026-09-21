@@ -49,3 +49,17 @@ def test_worker_and_runbook_document_the_same_deduplicated_recovery_contract():
     assert "重複する復旧要求を追加しません" in runbook
     assert "1回だけ自動再試行" in runbook
     assert "正常な200人集計" in runbook
+
+
+def test_production_promotion_resolves_copy_sha_from_marker_at_runtime():
+    workflow = _read(".github/workflows/deploy-original-community-production.yml")
+
+    assert "COPY_SOURCE_SHA: 3790879c49c76b607e8ffe356f3606dd2ee6e6c1" not in workflow
+    assert "- name: Resolve currently promoted community source" in workflow
+    assert "source_sha=\"$(sed -n 's/^copy_source_sha=//p' .production-promotion-trigger | head -n1)\"" in workflow
+    assert '[[ "$source_sha" =~ ^[a-f0-9]{40}$ ]]' in workflow
+    assert 'echo "COPY_SOURCE_SHA=$source_sha" >> "$GITHUB_ENV"' in workflow
+    assert "ref: main" in workflow
+    assert "- name: Refuse stale production promotion" in workflow
+    assert 'EXPECTED_COPY_SOURCE_SHA: $' + '{{ env.COPY_SOURCE_SHA }}' in workflow
+    assert 'if [ "$latest_sha" != "$EXPECTED_COPY_SOURCE_SHA" ]; then' in workflow
