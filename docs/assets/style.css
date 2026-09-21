@@ -381,9 +381,10 @@ h1 {
 }
 
 .data-warning {
+  max-width: 48rem;
   justify-content: space-between;
   flex-wrap: wrap;
-  margin-bottom: 1rem;
+  margin: 0.85rem 0 0;
 }
 
 .data-warning-text {
@@ -578,12 +579,31 @@ button:focus-visible {
 }
 
 .ranking-tap-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
   margin: 1.25rem 0 0;
   color: #64b5ff;
   font-size: clamp(0.95rem, 3.8vw, 1.1rem);
   font-weight: 700;
   line-height: 1.35;
   letter-spacing: 0.01em;
+}
+
+.ranking-tap-new {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.45rem;
+  padding: 0.08rem 0.42rem;
+  border: 1px solid rgb(100 181 255 / 55%);
+  border-radius: 999px;
+  color: #bfe0ff;
+  background: rgb(100 181 255 / 12%);
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.06em;
 }
 
 table {
