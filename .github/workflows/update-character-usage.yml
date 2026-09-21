@@ -60,12 +60,11 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run collector-critical quality tests
+        if: github.event_name == 'push'
         run: |
           set -euo pipefail
-          # Keep the data pipeline protected by the tests that can actually
-          # invalidate a PvP collection. UI/visual/board regressions remain
-          # mandatory in pull-request CI, but they must not freeze fresh 200/200
-          # collection timestamps.
+          # Code changes still pass the full collector regression suite before
+          # they can collect or publish. PR CI separately runs the whole repo.
           PYTHONPATH=. pytest -q \
             tests/test_scrape_character_usage.py \
             tests/test_quality_checks.py \
@@ -74,6 +73,29 @@ jobs:
             tests/test_queued_collection_checkout.py \
             tests/test_comparison_guards.py \
             tests/test_cross_sample_comparisons.py
+
+      - name: Run scheduled collector preflight
+        if: github.event_name != 'push'
+        run: |
+          set -euo pipefail
+          # Scheduled/manual collection must not be frozen by an assertion
+          # about the already-published JSON. Verify executable code and hard
+          # invariants here; the newly fetched snapshot is validated strictly
+          # after comparison repair below.
+          python -m py_compile \
+            scripts/scrape_character_usage.py \
+            scripts/quality_checks.py \
+            scripts/check_data_freshness.py \
+            scripts/rebuild_cross_sample_comparisons.py \
+            scripts/validate_public_comparisons.py
+          PYTHONPATH=. python - <<'PY'
+          from scripts import scrape_character_usage as scraper
+          assert scraper.TARGET_PLAYER_COUNT == 200
+          assert scraper.RANK_COMPARISON_PERIODS["hour"] == 60 * 60
+          assert scraper.RANK_COMPARISON_PERIODS["day"] == 24 * 60 * 60
+          assert scraper.CALENDAR_CLOSE_START_HOUR == 22
+          assert scraper.CALENDAR_CLOSE_END_HOUR == 23
+          PY
 
       - name: Decide whether collection is due
         id: decision
