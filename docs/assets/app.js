@@ -2525,7 +2525,7 @@ async function loadRangerInfo(character, { finalAttempt = false } = {}) {
     state.rangerInfoDeferredRetry.delete(cacheKey);
   } catch (error) {
     console.warn("Ranger skill information is unavailable.", error);
-    if (!finalAttempt) {
+    if (!finalAttempt && rangerInfoRetryableError(error)) {
       state.rangerInfoDeferredRetry.add(cacheKey);
       window.setTimeout(() => {
         state.rangerInfoDeferredRetry.delete(cacheKey);
