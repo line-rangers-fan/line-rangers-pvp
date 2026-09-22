@@ -63,3 +63,11 @@ def test_visual_audit_allows_bounded_ranger_info_recovery():
     assert "Ranger skill information did not recover within 65 seconds" in workflow
     assert "skill-timeout.png" in workflow
     assert "if-no-files-found: warn" in workflow
+
+
+def test_pages_verification_requires_all_four_public_languages():
+    workflow = read(".github/workflows/deploy-github-pages.yml")
+    for language in ("ja", "en", "zh", "th"):
+        assert f'grep -q \'data-language="{language}"\' /tmp/index.html' in workflow
+    assert "! grep -q 'data-language=\"zh\"'" not in workflow
+
