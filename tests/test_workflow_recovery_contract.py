@@ -71,3 +71,15 @@ def test_pages_verification_requires_all_four_public_languages():
         assert f'grep -q \'data-language="{language}"\' /tmp/index.html' in workflow
     assert "! grep -q 'data-language=\"zh\"'" not in workflow
 
+
+def test_production_deploy_verifies_all_four_ranger_languages_and_localized_board_names():
+    workflow = read(".github/workflows/deploy-original-community-production.yml")
+    for language in ("ja", "en", "zh", "th"):
+        assert f"lang={language}&schema=3" in workflow
+    assert '.language == "zh"' in workflow
+    assert '.language == "th"' in workflow
+    assert '.nameZh == "巨蟹座 莎莉"' in workflow
+    assert '.nameTh == "แซลลี่ ราศีกรกฎ"' in workflow
+    assert 'ranger_zh_headers' in workflow
+    assert 'ranger_th_headers' in workflow
+
