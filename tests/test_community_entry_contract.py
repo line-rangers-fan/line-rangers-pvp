@@ -91,7 +91,7 @@ def test_featured_comment_is_live_clickable_and_shows_reaction_counts():
     assert 'helpful.dataset.communityHelpful = "true"' in ENTRY_JS
     assert 'helpful.dataset.helpfulCount = String(featured.helpful)' in ENTRY_JS
     assert 'rememberCommunityHref(wrapper, href)' in ENTRY_JS
-    assert 'url.searchParams.set("lang", communityEntryLanguage === "ja" ? "ja" : "en")' in ENTRY_JS
+    assert 'url.searchParams.set("lang", COMMUNITY_ENTRY_LANGUAGES.includes(communityEntryLanguage) ? communityEntryLanguage : "en")' in ENTRY_JS
     assert 'url.searchParams.set("board", topic.id)' in ENTRY_JS
     assert 'url.searchParams.set("month", topic.month)' in ENTRY_JS
     assert 'innerHTML' not in ENTRY_JS
