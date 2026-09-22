@@ -83,3 +83,17 @@ def test_production_deploy_verifies_all_four_ranger_languages_and_localized_boar
     assert 'ranger_zh_headers' in workflow
     assert 'ranger_th_headers' in workflow
 
+
+def test_transient_ranger_probe_is_bounded_and_does_not_fail_core_deploy():
+    workflow = read(".github/workflows/deploy-original-community-production.yml")
+    core = workflow.split("- name: Verify production Worker core end to end", 1)[1].split("- name: Probe Ranger info with bounded recovery", 1)[0]
+    probe = workflow.split("- name: Probe Ranger info with bounded recovery", 1)[1].split("- name: Verify Owner plus Viewer A/B unread isolation without posts", 1)[0]
+    assert "/api/ranger-info" not in core
+    assert "continue-on-error: true" in probe
+    assert "--max-time 20 --retry 1" in probe
+    assert "probe_ranger ja ja" in probe
+    assert "probe_ranger en en" in probe
+    assert "probe_ranger zh zh" in probe
+    assert "probe_ranger th en" in probe
+    assert "Production Visual Audit remains authoritative" in probe
+
