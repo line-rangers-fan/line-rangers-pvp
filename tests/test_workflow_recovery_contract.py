@@ -74,12 +74,24 @@ def test_pages_verification_requires_all_four_public_languages():
 
 def test_production_deploy_verifies_all_four_ranger_languages_and_localized_board_names():
     workflow = read(".github/workflows/deploy-original-community-production.yml")
-    for language in ("ja", "en", "zh", "th"):
-        assert f"lang={language}&schema=3" in workflow
-    assert '.language == "zh"' in workflow
-    assert '.language == "th"' in workflow
+    for language, source_language in (("ja", "ja"), ("en", "en"), ("zh", "zh"), ("th", "en")):
+        assert f"probe_ranger {language} {source_language}" in workflow
+    assert '/api/ranger-info?unit=u1556e-af&lang=$language&schema=3' in workflow
+    assert '.language == $language' in workflow
     assert '.nameZh == "巨蟹座 莎莉"' in workflow
     assert '.nameTh == "แซลลี่ ราศีกรกฎ"' in workflow
-    assert 'ranger_zh_headers' in workflow
-    assert 'ranger_th_headers' in workflow
+
+
+def test_transient_ranger_probe_is_bounded_and_does_not_fail_core_deploy():
+    workflow = read(".github/workflows/deploy-original-community-production.yml")
+    core = workflow.split("- name: Verify production Worker core end to end", 1)[1].split("- name: Probe Ranger info with bounded recovery", 1)[0]
+    probe = workflow.split("- name: Probe Ranger info with bounded recovery", 1)[1].split("- name: Verify Owner plus Viewer A/B unread isolation without posts", 1)[0]
+    assert "/api/ranger-info" not in core
+    assert "continue-on-error: true" in probe
+    assert "--max-time 20 --retry 1" in probe
+    assert "probe_ranger ja ja" in probe
+    assert "probe_ranger en en" in probe
+    assert "probe_ranger zh zh" in probe
+    assert "probe_ranger th en" in probe
+    assert "Production Visual Audit remains authoritative" in probe
 
