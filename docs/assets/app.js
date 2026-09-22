@@ -1073,7 +1073,8 @@ function applyTranslations() {
 
   setText("#source-label", tr.source);
   if (elements.sourceLink) {
-    elements.sourceLink.href = `https://rangers.lerico.net/${state.language}/pvp-tracker`;
+    const sourceLanguage = state.language === "th" ? "en" : state.language;
+    elements.sourceLink.href = `https://rangers.lerico.net/${sourceLanguage}/pvp-tracker`;
   }
   setText("#footer-text", tr.footer);
 
@@ -2379,10 +2380,14 @@ function rangerInfoCacheKey(unitCode, language = rangerInfoLanguage()) {
   return `${language}:${unitCode}`;
 }
 
+function rangerSourceLanguage(language = rangerInfoLanguage()) {
+  return language === "th" ? "en" : language;
+}
+
 function rangerDetailUrl(character) {
   const unitCode = String(character?.unit_code || "");
   if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return "";
-  const language = rangerInfoLanguage();
+  const language = rangerSourceLanguage();
   return `https://rangers.lerico.net/${language}/ranger/${encodeURIComponent(unitCode)}`;
 }
 
@@ -2454,7 +2459,7 @@ function isValidRangerInfo(payload, unitCode, language) {
   if (!payload || typeof payload !== "object" || payload.unitCode !== unitCode) return false;
   if (payload.language !== language) return false;
   if (typeof payload.name !== "string" || payload.name.trim().length < 1 || payload.name.length > 180) return false;
-  if (typeof payload.sourceUrl !== "string" || payload.sourceUrl !== `https://rangers.lerico.net/${language}/ranger/${encodeURIComponent(unitCode)}`) return false;
+  if (typeof payload.sourceUrl !== "string" || payload.sourceUrl !== `https://rangers.lerico.net/${rangerSourceLanguage(language)}/ranger/${encodeURIComponent(unitCode)}`) return false;
   if (!Array.isArray(payload.skills) || payload.skills.length < 1 || payload.skills.length > 3) return false;
   return payload.skills.every((skill) =>
     skill &&
