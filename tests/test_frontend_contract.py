@@ -246,21 +246,24 @@ def test_static_rank_period_matches_the_javascript_default():
     assert "PARTIAL_FALLBACK_AFTER_MINUTES = 180" in app
 
 
-def test_public_language_switcher_is_strictly_japanese_and_english():
+def test_public_language_switcher_supports_japanese_english_chinese_and_thai():
     index = (ROOT / "docs/index.html").read_text(encoding="utf-8")
     app = (ROOT / "docs/assets/app.js").read_text(encoding="utf-8")
     community = (ROOT / "docs/assets/community-entry.js").read_text(encoding="utf-8")
 
-    assert index.count('data-language="ja"') == 1
-    assert index.count('data-language="en"') == 1
-    for unsupported in ("zh", "th", "id", "vi", "ko"):
+    for supported in ("ja", "en", "zh", "th"):
+        assert index.count(f'data-language="{supported}"') == 1
+    for unsupported in ("id", "vi", "ko"):
         assert f'data-language="{unsupported}"' not in index
-    assert 'const LANGUAGES = ["ja", "en"];' in app
-    assert 'if (browser.startsWith("ja")) return "ja";' in app
-    for unsupported_prefix in ("th", "zh", "id", "vi", "ko"):
+    assert 'const LANGUAGES = ["ja", "en", "zh", "th"];' in app
+    for supported_prefix in ("ja", "zh", "th"):
+        assert f'if (browser.startsWith("{supported_prefix}")) return "{supported_prefix}";' in app
+    for unsupported_prefix in ("id", "vi", "ko"):
         assert f'if (browser.startsWith("{unsupported_prefix}"))' not in app
-    assert 'const COMMUNITY_ENTRY_LANGUAGES = Object.freeze(["ja", "en"]);' in community
-    for unsupported in ("zh", "th", "id", "vi", "ko"):
+    assert 'const COMMUNITY_ENTRY_LANGUAGES = Object.freeze(["ja", "en", "zh", "th"]);' in community
+    for supported in ("zh", "th"):
+        assert f"  {supported}: Object.freeze(" in community
+    for unsupported in ("id", "vi", "ko"):
         assert f"  {unsupported}: Object.freeze(" not in community
 
 
@@ -276,7 +279,7 @@ def test_english_mode_updates_metadata_accessibility_and_board_navigation():
     assert 'periodOptions.setAttribute("aria-label", tr.rankPeriodOptionsAria)' in app
     assert 'document.documentElement.lang = state.language;' in app
 
-    assert 'url.searchParams.set("lang", communityEntryLanguage === "ja" ? "ja" : "en")' in community
+    assert 'url.searchParams.set("lang", COMMUNITY_ENTRY_LANGUAGES.includes(communityEntryLanguage) ? communityEntryLanguage : "en")' in community
     assert 'function rememberCommunityHref(element, rawUrl)' in community
     assert 'element.dataset.communityHref = url.href' in community
     assert 'slot.querySelectorAll("[data-community-href]")' in community
@@ -302,8 +305,10 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert 'function rangerDetailUrl(character)' in app
     assert 'function isTrustedSkillIconUrl(value)' in app
     assert 'function createSkillIcon(skill)' in app
+    assert 'function rangerSourceLanguage(language = rangerInfoLanguage())' in app
+    assert 'return language === "th" ? "en" : language;' in app
     assert 'return `https://rangers.lerico.net/${language}/ranger/${encodeURIComponent(unitCode)}`;' in app
-    assert 'state.language === "ja" ? "ja" : "en"' in app
+    assert 'LANGUAGES.includes(state.language) ? state.language : "en"' in app
     assert 'url.pathname.startsWith("/res/skill_icon/")' in app
     assert 'RANGER_INFO_WORKER_URL' in app
     assert 'function loadRangerInfo(character, { finalAttempt = false } = {})' in app

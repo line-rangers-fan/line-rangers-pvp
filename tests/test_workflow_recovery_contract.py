@@ -59,7 +59,7 @@ def test_visual_audit_allows_bounded_ranger_info_recovery():
     workflow = read(".github/workflows/production-visual-audit.yml")
     assert "async function waitForRangerSkills" in workflow
     assert "timeout: 65000" in workflow
-    assert workflow.count("await waitForRangerSkills(page, target.name, viewport.name);") == 3
+    assert workflow.count("await waitForRangerSkills(page, target.name, viewport.name);") == 4
     assert "Ranger skill information did not recover within 65 seconds" in workflow
     assert "skill-timeout.png" in workflow
     assert "if-no-files-found: warn" in workflow

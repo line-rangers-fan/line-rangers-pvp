@@ -58,7 +58,7 @@ const CHARACTER_IMAGE_FALLBACKS = Object.freeze({
   }),
 });
 
-const LANGUAGES = ["ja", "en"];
+const LANGUAGES = ["ja", "en", "zh", "th"];
 
 // Browser time zone is preferred; these language zones are safe fallbacks.
 const TIMEZONES = {
@@ -150,6 +150,11 @@ const equipmentTranslations = {
     dialogTitle: "角色裝備排行",
     dialogDescription: "裝備數會計入重複編成；使用率則以每位玩家僅計一次。",
     characterPlayers: "角色使用人數",
+    skillInfo: "技能資訊",
+    skillEffects: "技能效果",
+    skillLoading: "正在載入技能資訊…",
+    skillUnavailable: "目前無法取得技能資訊。請稍候片刻後重新開啟角色。",
+    characterDetailHint: "點選角色名稱即可開啟詳細資訊",
     weapon: "武器",
     armor: "防具",
     accessory: "飾品",
@@ -165,6 +170,11 @@ const equipmentTranslations = {
     dialogTitle: "อันดับอุปกรณ์ตัวละคร",
     dialogDescription: "จำนวนอุปกรณ์นับตัวละครที่ซ้ำ ส่วนอัตราใช้จะนับผู้เล่นเพียงครั้งเดียว",
     characterPlayers: "ผู้ใช้ตัวละคร",
+    skillInfo: "ข้อมูลสกิล",
+    skillEffects: "เอฟเฟกต์สกิล",
+    skillLoading: "กำลังโหลดข้อมูลสกิล…",
+    skillUnavailable: "ไม่สามารถโหลดข้อมูลสกิลได้ โปรดรอสักครู่แล้วเปิดตัวละครอีกครั้ง",
+    characterDetailHint: "แตะชื่อตัวละครเพื่อเปิดข้อมูลโดยละเอียด",
     weapon: "อาวุธ",
     armor: "เกราะ",
     accessory: "เครื่องประดับ",
@@ -303,6 +313,8 @@ const STATUS_TEXT = {
     partialMessage: "目前顯示已驗證的實際人數，監控程序會繼續重試取得 200 人。",
     delayed: "更新稍有延遲，監控程序將嘗試重新收集。",
     stale: "更新已延遲超過2小時，目前顯示上次驗證成功的資料。",
+    sourceStale: "來源 PvP 資料長時間沒有變化，因此所有角色顯示 ±0。這不是本站發生錯誤。",
+    sourceStaleBadge: "等待來源更新",
     refresh: "立即重新載入",
     refreshing: "重新載入中…",
     refreshError: "無法取得最新資料，畫面上的已驗證資料仍會保留。",
@@ -319,6 +331,7 @@ const STATUS_TEXT = {
     rankMonth: "上月結算",
     rankComparison: "的角色數量比較",
     rankHistoryPending: "等待歷史資料",
+    rankSourcePending: "等待來源更新",
   },
   th: {
     healthy: "อัปเดตปกติ",
@@ -326,6 +339,8 @@ const STATUS_TEXT = {
     partialMessage: "กำลังแสดงจำนวนที่ตรวจสอบแล้ว และระบบจะลองเก็บให้ครบ 200 คนต่อไป",
     delayed: "การอัปเดตล่าช้า ระบบตรวจสอบจะลองรวบรวมใหม่",
     stale: "ล่าช้าเกิน 2 ชั่วโมง กำลังแสดงข้อมูลล่าสุดที่ผ่านการตรวจสอบ",
+    sourceStale: "ข้อมูล PvP จากแหล่งข้อมูลไม่มีการเปลี่ยนแปลงเป็นเวลานาน จึงแสดง ±0 สำหรับตัวละครทั้งหมด ซึ่งไม่ใช่ข้อผิดพลาดของเว็บไซต์นี้",
+    sourceStaleBadge: "รอแหล่งข้อมูลอัปเดต",
     refresh: "โหลดใหม่ตอนนี้",
     refreshing: "กำลังโหลดใหม่…",
     refreshError: "ดึงข้อมูลล่าสุดไม่ได้ แต่ยังคงข้อมูลที่ตรวจสอบแล้วบนหน้าจอ",
@@ -342,6 +357,7 @@ const STATUS_TEXT = {
     rankMonth: "ปิดยอดเดือนก่อน",
     rankComparison: "เปรียบเทียบจำนวนตัวละคร",
     rankHistoryPending: "รอประวัติข้อมูล",
+    rankSourcePending: "รอแหล่งข้อมูลอัปเดต",
   },
   id: {
     healthy: "Pembaruan normal",
@@ -594,6 +610,9 @@ const translations = {
     slots: "角色總編成數",
     characters: "角色種類數",
     updated: "最後更新",
+    summaryAria: "統計摘要",
+    rankPeriodSelectorAria: "角色數量比較基準",
+    rankPeriodOptionsAria: "選擇比較時間",
     ranking: "角色排名",
     rankingDescription: "依編成數由高至低排列。",
     rank: "排名",
@@ -644,6 +663,9 @@ const translations = {
     slots: "จำนวนตัวละครทั้งหมด",
     characters: "จำนวนประเภทตัวละคร",
     updated: "อัปเดตล่าสุด",
+    summaryAria: "สรุปสถิติ",
+    rankPeriodSelectorAria: "เกณฑ์เวลาเปรียบเทียบจำนวนตัวละคร",
+    rankPeriodOptionsAria: "เลือกช่วงเวลาสำหรับเปรียบเทียบ",
     ranking: "อันดับตัวละคร",
     rankingDescription: "เรียงตามจำนวนการจัดทีมจากมากไปน้อย",
     rank: "อันดับ",
@@ -1050,6 +1072,10 @@ function applyTranslations() {
   }
 
   setText("#source-label", tr.source);
+  if (elements.sourceLink) {
+    const sourceLanguage = state.language === "th" ? "en" : state.language;
+    elements.sourceLink.href = `https://rangers.lerico.net/${sourceLanguage}/pvp-tracker`;
+  }
   setText("#footer-text", tr.footer);
 
   document.querySelectorAll("[data-language]").forEach((button) => {
@@ -1129,6 +1155,8 @@ function detectLanguage() {
   const browser = String(navigator.language || "").toLowerCase();
 
   if (browser.startsWith("ja")) return "ja";
+  if (browser.startsWith("zh")) return "zh";
+  if (browser.startsWith("th")) return "th";
   return "en";
 }
 
@@ -2345,17 +2373,21 @@ function createEquipmentTab(type, label, isSelected, character) {
 const SAFE_RANGER_UNIT_CODE = /^[A-Za-z0-9_-]{1,80}$/;
 
 function rangerInfoLanguage() {
-  return state.language === "ja" ? "ja" : "en";
+  return LANGUAGES.includes(state.language) ? state.language : "en";
 }
 
 function rangerInfoCacheKey(unitCode, language = rangerInfoLanguage()) {
   return `${language}:${unitCode}`;
 }
 
+function rangerSourceLanguage(language = rangerInfoLanguage()) {
+  return language === "th" ? "en" : language;
+}
+
 function rangerDetailUrl(character) {
   const unitCode = String(character?.unit_code || "");
   if (!SAFE_RANGER_UNIT_CODE.test(unitCode)) return "";
-  const language = rangerInfoLanguage();
+  const language = rangerSourceLanguage();
   return `https://rangers.lerico.net/${language}/ranger/${encodeURIComponent(unitCode)}`;
 }
 
@@ -2427,7 +2459,7 @@ function isValidRangerInfo(payload, unitCode, language) {
   if (!payload || typeof payload !== "object" || payload.unitCode !== unitCode) return false;
   if (payload.language !== language) return false;
   if (typeof payload.name !== "string" || payload.name.trim().length < 1 || payload.name.length > 180) return false;
-  if (typeof payload.sourceUrl !== "string" || payload.sourceUrl !== `https://rangers.lerico.net/${language}/ranger/${encodeURIComponent(unitCode)}`) return false;
+  if (typeof payload.sourceUrl !== "string" || payload.sourceUrl !== `https://rangers.lerico.net/${rangerSourceLanguage(language)}/ranger/${encodeURIComponent(unitCode)}`) return false;
   if (!Array.isArray(payload.skills) || payload.skills.length < 1 || payload.skills.length > 3) return false;
   return payload.skills.every((skill) =>
     skill &&

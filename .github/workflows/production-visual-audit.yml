@@ -366,6 +366,84 @@ jobs:
                     );
                   }
                   await page.locator('#equipment-close').click();
+                  for (const locale of [
+                    {
+                      lang: 'zh',
+                      title: 'LINE Rangers 傳奇聯盟角色統計',
+                      hint: '點選角色即可查看裝備排名與角色資訊。',
+                      communityTitle: '新角色資訊討論區',
+                      summaryAria: '統計摘要',
+                      selectorAria: '角色數量比較基準',
+                      optionsAria: '選擇比較時間',
+                      effectLabel: '技能效果',
+                      rangerSource: 'zh',
+                    },
+                    {
+                      lang: 'th',
+                      title: 'สถิติตัวละคร LINE Rangers ระดับ Legend',
+                      hint: 'แตะตัวละครเพื่อดูอันดับอุปกรณ์และข้อมูลตัวละคร',
+                      communityTitle: 'กระดานข้อมูลตัวละครใหม่',
+                      summaryAria: 'สรุปสถิติ',
+                      selectorAria: 'เกณฑ์เวลาเปรียบเทียบจำนวนตัวละคร',
+                      optionsAria: 'เลือกช่วงเวลาสำหรับเปรียบเทียบ',
+                      effectLabel: 'เอฟเฟกต์สกิล',
+                      rangerSource: 'en',
+                    },
+                  ]) {
+                    await page.locator(`[data-language="${locale.lang}"]`).click();
+                    await page.waitForFunction((lang) => document.documentElement.lang === lang, locale.lang, { timeout: 10000 });
+                    const localizedUiState = await page.evaluate(() => ({
+                      title: document.querySelector('#page-title')?.textContent?.trim() || '',
+                      hint: document.querySelector('#ranking-tap-hint-text')?.textContent?.trim() || '',
+                      communityTitle: document.querySelector('#community-board-entry-title')?.textContent?.trim() || '',
+                      boardHref: document.querySelector('#community-board-entry-slot .community-board-entry-button')?.href || '',
+                      metaDescription: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+                      summaryAria: document.querySelector('#summary')?.getAttribute('aria-label') || '',
+                      selectorAria: document.querySelector('#rank-period-selector')?.getAttribute('aria-label') || '',
+                      optionsAria: document.querySelector('#rank-period-options')?.getAttribute('aria-label') || '',
+                    }));
+                    if (
+                      localizedUiState.title !== locale.title ||
+                      localizedUiState.hint !== locale.hint ||
+                      localizedUiState.communityTitle !== locale.communityTitle ||
+                      !new RegExp(`[?&]lang=${locale.lang}(?:&|$)`).test(localizedUiState.boardHref) ||
+                      !localizedUiState.metaDescription ||
+                      localizedUiState.summaryAria !== locale.summaryAria ||
+                      localizedUiState.selectorAria !== locale.selectorAria ||
+                      localizedUiState.optionsAria !== locale.optionsAria
+                    ) {
+                      throw new Error(
+                        `${target.name} rendered incomplete ${locale.lang} UI at ${viewport.name}: ${JSON.stringify(localizedUiState)}`,
+                      );
+                    }
+                    await page.locator('#ranking-body .character-button').first().click();
+                    await waitForRangerSkills(page, target.name, viewport.name);
+                    await page.waitForFunction(({ lang, unitCode, rangerSource }) => {
+                      const link = document.querySelector('#equipment-dialog[open] .equipment-character-name');
+                      const skills = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-name')];
+                      return (
+                        document.documentElement.lang === lang &&
+                        link instanceof HTMLAnchorElement &&
+                        link.href === `https://rangers.lerico.net/${rangerSource}/ranger/${encodeURIComponent(unitCode)}` &&
+                        skills.length > 0
+                      );
+                    }, { lang: locale.lang, unitCode: firstCharacterUnit, rangerSource: locale.rangerSource }, { timeout: 20000 });
+                    const localizedRangerState = await page.evaluate(() => ({
+                      effectLabels: [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-effects-label')].map(node => node.textContent?.trim() || ''),
+                      skillNames: [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-name')].map(node => node.textContent?.trim() || ''),
+                      descriptions: [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-description')].map(node => node.textContent?.trim() || ''),
+                    }));
+                    if (
+                      localizedRangerState.skillNames.length < 1 ||
+                      localizedRangerState.descriptions.length < 1 ||
+                      localizedRangerState.effectLabels.some(label => label !== locale.effectLabel)
+                    ) {
+                      throw new Error(
+                        `${target.name} rendered invalid ${locale.lang} Ranger detail at ${viewport.name}: ${JSON.stringify(localizedRangerState)}`,
+                      );
+                    }
+                    await page.locator('#equipment-close').click();
+                  }
                   await page.locator('[data-language="ja"]').click();
                   await page.waitForFunction(() => document.documentElement.lang === 'ja', undefined, { timeout: 10000 });
                   const japaneseBoardHref = await page.locator('#community-board-entry-slot .community-board-entry-button').getAttribute('href');
