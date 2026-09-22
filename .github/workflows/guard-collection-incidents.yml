@@ -125,6 +125,54 @@ jobs:
               return;
             }
 
+            if (retryableFailure) {
+              const recent = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: "update-character-usage.yml",
+                branch: "main",
+                status: "completed",
+                per_page: 8,
+              });
+              const currentCreatedAt = Date.parse(current.created_at || "");
+              const previous = recent.data.workflow_runs.find((run) => {
+                if (run.id === current.id || !failureConclusions.has(run.conclusion)) return false;
+                const previousCreatedAt = Date.parse(run.created_at || "");
+                if (!Number.isFinite(currentCreatedAt) || !Number.isFinite(previousCreatedAt)) return false;
+                return currentCreatedAt >= previousCreatedAt
+                  && currentCreatedAt - previousCreatedAt <= 2 * 60 * 60 * 1000;
+              });
+
+              let repeatedTransientFailure = false;
+              let previousFailedSteps = [];
+              if (previous) {
+                const previousJobs = await github.rest.actions.listJobsForWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: previous.id,
+                  per_page: 100,
+                });
+                previousFailedSteps = previousJobs.data.jobs.flatMap((job) =>
+                  (job.steps || [])
+                    .filter((step) => step.conclusion === "failure" || step.conclusion === "timed_out")
+                    .map((step) => step.name),
+                );
+                repeatedTransientFailure = failedSteps.some(
+                  (name) => retryableSteps.has(name) && previousFailedSteps.includes(name),
+                );
+              }
+
+              if (!repeatedTransientFailure) {
+                core.warning(
+                  "Retryable collection failure persisted after the bounded retry, but no matching independent failure was found in the previous two hours. Keeping the last known-good data and waiting for the next scheduled collection before escalating.",
+                );
+                return;
+              }
+              core.notice(
+                `Repeated transient collection failure confirmed across independent runs. Current: ${failedSteps.join(", ")}; previous: ${previousFailedSteps.join(", ")}`,
+              );
+            }
+
             if (existing) return;
 
             await github.rest.issues.create({
