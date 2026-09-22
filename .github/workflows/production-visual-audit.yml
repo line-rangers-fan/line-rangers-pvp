@@ -92,6 +92,28 @@ jobs:
           const results = [];
           let failed = false;
 
+          async function waitForRangerSkills(page, targetName, viewportName) {
+            try {
+              // The browser client can spend ~25s on its first bounded fetch
+              // cycle and then schedule one final retry. Give that recovery
+              // path time to finish before declaring the production UI broken.
+              await page.waitForSelector('#equipment-dialog[open] .equipment-skill-item', { timeout: 65000 });
+            } catch (error) {
+              const skillStatus = await page
+                .locator('#equipment-dialog[open] .equipment-skill-status')
+                .textContent()
+                .catch(() => '');
+              const diagnostic = path.join(
+                artifactDir,
+                `${targetName}-${viewportName}-skill-timeout.png`,
+              );
+              await page.screenshot({ path: diagnostic, fullPage: true }).catch(() => {});
+              throw new Error(
+                `${targetName} Ranger skill information did not recover within 65 seconds at ${viewportName}; status=${JSON.stringify((skillStatus || '').trim())}; cause=${String(error)}`,
+              );
+            }
+          }
+
           try {
             for (const viewport of viewports) {
               const context = await browser.newContext({
@@ -163,7 +185,7 @@ jobs:
                   await page.locator('#ranking-body .character-button').first().click();
                   await page.waitForSelector('#equipment-dialog[open] .equipment-table tbody tr', { timeout: 15000 });
                   await page.waitForSelector('#equipment-dialog[open] .equipment-character-name', { timeout: 15000 });
-                  await page.waitForSelector('#equipment-dialog[open] .equipment-skill-item', { timeout: 20000 });
+                  await waitForRangerSkills(page, target.name, viewport.name);
                   await page.waitForFunction(() => {
                     const images = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-image')];
                     return images.length > 0 && images.every((image) => image.complete);
@@ -301,7 +323,7 @@ jobs:
                     );
                   }
                   await page.locator('#ranking-body .character-button').first().click();
-                  await page.waitForSelector('#equipment-dialog[open] .equipment-skill-item', { timeout: 20000 });
+                  await waitForRangerSkills(page, target.name, viewport.name);
                   await page.waitForFunction((unitCode) => {
                     const link = document.querySelector('#equipment-dialog[open] .equipment-character-name');
                     const skills = [...document.querySelectorAll('#equipment-dialog[open] .equipment-skill-name')];
@@ -351,7 +373,7 @@ jobs:
                     throw new Error(`${target.name} did not restore Japanese board navigation at ${viewport.name}: ${japaneseBoardHref}`);
                   }
                   await page.locator('#ranking-body .character-button').first().click();
-                  await page.waitForSelector('#equipment-dialog[open] .equipment-skill-item', { timeout: 20000 });
+                  await waitForRangerSkills(page, target.name, viewport.name);
 
                   const equipmentComparisonStates = {};
                   for (const period of ['hour', 'day', 'week', 'month']) {
@@ -621,4 +643,6 @@ jobs:
           name: line-rangers-production-visual-audit-${{ github.run_id }}
           path: /tmp/lr-visual-audit/artifacts
           retention-days: 14
-          if-no-files-found: error
+          # Diagnostic upload is non-critical. The browser audit result above
+          # remains authoritative if a screenshot could not be written.
+          if-no-files-found: warn

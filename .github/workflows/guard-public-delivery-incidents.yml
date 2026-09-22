@@ -111,6 +111,8 @@ jobs:
               "Verify deployed Pages serves current comparison data",
               "Deploy PvP refresh without mutating board data",
               "Verify live PvP matches canonical snapshot",
+              "Wait for synchronized Pages and Worker snapshots",
+              "Audit production at mobile, iPad, and desktop viewports",
               "Run production browser audit",
             ]);
 
@@ -121,51 +123,104 @@ jobs:
               failedSteps.some((name) => transientSteps.has(name));
             const attempt = Number(current.run_attempt || 1);
 
+            const findRepeatedFailure = async (stepNames) => {
+              const recent = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: current.workflow_id,
+                branch: "main",
+                status: "completed",
+                per_page: 8,
+              });
+              const currentCreatedAt = Date.parse(current.created_at || "");
+              for (const run of recent.data.workflow_runs) {
+                if (run.id === current.id || !failureConclusions.has(run.conclusion)) continue;
+                const previousCreatedAt = Date.parse(run.created_at || "");
+                if (!Number.isFinite(currentCreatedAt) || !Number.isFinite(previousCreatedAt)) continue;
+                if (currentCreatedAt < previousCreatedAt) continue;
+                if (currentCreatedAt - previousCreatedAt > 2 * 60 * 60 * 1000) continue;
+
+                const previousJobs = await github.rest.actions.listJobsForWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: run.id,
+                  per_page: 100,
+                });
+                const previousFailedSteps = previousJobs.data.jobs.flatMap((job) =>
+                  (job.steps || [])
+                    .filter((step) =>
+                      step.conclusion === "failure" ||
+                      step.conclusion === "timed_out" ||
+                      step.conclusion === "action_required"
+                    )
+                    .map((step) => step.name),
+                );
+
+                const matches =
+                  stepNames.length === 0
+                    ? previousFailedSteps.length === 0
+                    : stepNames.some((name) => previousFailedSteps.includes(name));
+                if (matches) return { run, previousFailedSteps };
+              }
+              return null;
+            };
+
             if (dataRepairFailure) {
               if (existing) {
                 core.notice("A data-repair incident is already open; waiting for the next scheduled or repair collection.");
                 return;
               }
 
-              const issue = await github.rest.issues.create({
+              const repeated = await findRepeatedFailure(failedSteps);
+              if (!repeated) {
+                try {
+                  await github.rest.actions.createWorkflowDispatch({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    workflow_id: "update-character-usage.yml",
+                    ref: "main",
+                    inputs: { force_collection: "true" },
+                  });
+                  core.warning(
+                    "A publish-time comparison validation failure triggered one bounded fresh 200/200 collection. No incident is opened unless the same failure repeats on an independent publication.",
+                  );
+                } catch (error) {
+                  await github.rest.issues.create({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    title: incidentTitle,
+                    body: [
+                      `${label} の比較データ検証で停止し、自動修復の起動にも失敗しました。`,
+                      "",
+                      `実行: ${current.html_url}`,
+                      `失敗ステップ: ${failedSteps.join(", ") || "不明"}`,
+                      `自動修復起動エラー: ${error.message}`,
+                      "",
+                      "200/200、比較整合性、秘密情報検査、D1/R2保護条件は緩めません。",
+                    ].join("\n"),
+                  });
+                  throw error;
+                }
+                return;
+              }
+
+              await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: incidentTitle,
                 body: [
-                  `${label} の比較データ検証で停止しました。`,
+                  `${label} の比較データ検証が独立した公開実行でも連続して失敗しました。`,
                   "",
-                  `実行: ${current.html_url}`,
-                  `失敗ステップ: ${failedSteps.join(", ") || "不明"}`,
+                  `今回: ${current.html_url}`,
+                  `前回: ${repeated.run.html_url}`,
+                  `今回の失敗ステップ: ${failedSteps.join(", ") || "不明"}`,
+                  `前回の失敗ステップ: ${repeated.previousFailedSteps.join(", ") || "不明"}`,
                   "",
                   "auto-repair-kind:data",
-                  "最新mainから200/200を再取得し、派生比較を再構築して再公開する自動修復を1回だけ実行します。",
+                  "初回失敗時の強制200/200再収集でも解消しなかったため、ここで重大Incidentとして停止します。",
                   "生の順位・装備数、200/200条件、秘密情報、D1/R2保護条件は緩めません。",
                 ].join("\n"),
               });
-
-              try {
-                await github.rest.actions.createWorkflowDispatch({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  workflow_id: "update-character-usage.yml",
-                  ref: "main",
-                  inputs: { force_collection: "true" },
-                });
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.data.number,
-                  body: "自動修復用の強制200/200収集を起動しました。成功後、Pages/Worker公開も自動同期されます。",
-                });
-              } catch (error) {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.data.number,
-                  body: `自動修復の起動自体に失敗しました。次の定期収集でも再検証されます。\n\n${error.message}`,
-                });
-                throw error;
-              }
               return;
             }
 
@@ -185,6 +240,19 @@ jobs:
               }
               core.notice(`${label} had a retryable delivery failure; one automatic retry was requested.`);
               return;
+            }
+
+            if (transientFailure) {
+              const repeated = await findRepeatedFailure(failedSteps);
+              if (!repeated) {
+                core.warning(
+                  "Delivery failure persisted after the bounded retry, but no matching independent failure was found in the previous two hours. Keeping the last known-good publication and waiting for the next normal publication before escalating.",
+                );
+                return;
+              }
+              core.notice(
+                `Repeated delivery failure confirmed across independent runs. Current: ${failedSteps.join(", ") || "起動段階"}; previous: ${repeated.previousFailedSteps.join(", ") || "起動段階"}`,
+              );
             }
 
             if (existing) return;

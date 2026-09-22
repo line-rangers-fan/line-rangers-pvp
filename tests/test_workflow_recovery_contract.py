@@ -41,3 +41,25 @@ def test_truth_and_production_resource_guards_remain_strict():
     assert 'value.get("reason") == "source_stale"' in validator
     assert "D1_NAME: line-rangers-pvp-production-db" in production
     assert "R2_BUCKET: line-rangers-pvp-production-media" in production
+
+
+def test_public_delivery_guardian_escalates_only_after_independent_repeat():
+    workflow = read(".github/workflows/guard-public-delivery-incidents.yml")
+    assert "findRepeatedFailure" in workflow
+    assert "workflow_id: current.workflow_id" in workflow
+    assert "run.id === current.id" in workflow
+    assert "currentCreatedAt - previousCreatedAt > 2 * 60 * 60 * 1000" in workflow
+    assert "No incident is opened unless the same failure repeats on an independent publication." in workflow
+    assert "waiting for the next normal publication before escalating" in workflow
+    assert "Wait for synchronized Pages and Worker snapshots" in workflow
+    assert "Audit production at mobile, iPad, and desktop viewports" in workflow
+
+
+def test_visual_audit_allows_bounded_ranger_info_recovery():
+    workflow = read(".github/workflows/production-visual-audit.yml")
+    assert "async function waitForRangerSkills" in workflow
+    assert "timeout: 65000" in workflow
+    assert workflow.count("await waitForRangerSkills(page, target.name, viewport.name);") == 3
+    assert "Ranger skill information did not recover within 65 seconds" in workflow
+    assert "skill-timeout.png" in workflow
+    assert "if-no-files-found: warn" in workflow
