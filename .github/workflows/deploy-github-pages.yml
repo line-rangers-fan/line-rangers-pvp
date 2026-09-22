@@ -148,7 +148,8 @@ jobs:
               && curl -fsSL --retry 2 --retry-delay 1 "$SITE_URL/data/character_usage.json?deploy=$nonce" -o /tmp/data.json \
               && grep -q 'data-language="ja"' /tmp/index.html \
               && grep -q 'data-language="en"' /tmp/index.html \
-              && ! grep -q 'data-language="zh"' /tmp/index.html \
+              && grep -q 'data-language="zh"' /tmp/index.html \
+              && grep -q 'data-language="th"' /tmp/index.html \
               && [ "$(sha256sum /tmp/data.json | awk '{print $1}')" = "$EXPECTED_DATA_SHA256" ] \
               && python scripts/validate_public_comparisons.py /tmp/data.json >/dev/null; then
               success=true
