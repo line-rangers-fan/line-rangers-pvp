@@ -39,14 +39,21 @@ test("character and equipment changes preserve signs and units", () => {
   assert.equal(render(0, "個"), "±0");
 });
 
-test("unknown or non-comparable comparison values display the stable ±0 placeholder", () => {
-  for (const value of [null, undefined, false, true, "", "0", "8", NaN, Infinity, 1.5, {}, []]) {
-    assert.equal(render(value), "±0");
-    assert.equal(render(value, "個"), "±0");
-  }
-  assert.equal(render(0, "体", false), "±0");
+test("a missing comparison baseline displays history pending, not zero", () => {
+  assert.equal(render(0, "体", false), "履歴待ち");
 });
 
+test("invalid comparison deltas display a data error instead of zero", () => {
+  for (const value of [null, undefined, false, true, "", "0", "8", NaN, Infinity, 1.5, {}, []]) {
+    assert.equal(render(value), "比較データ不備");
+    assert.equal(render(value, "個"), "比較データ不備");
+  }
+});
+
+test("source-stale notices do not claim that comparisons are zero", () => {
+  const messages = vm.runInContext('["ja", "en", "zh", "th"].map(language => STATUS_TEXT[language].sourceStale)', context);
+  for (const message of messages) assert.equal(message.includes("±0"), false);
+});
 function historySample() {
   return {snapshots: [{updated_at: "2026-08-30T14:00:00Z", calendar_date: "2026-08-30", sampled_players: 200,
     characters: [{unit_code: "u-a", rank: 1, occurrence_count: 200, player_count: 200, adoption_rate: 100,
