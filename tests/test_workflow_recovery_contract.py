@@ -85,7 +85,7 @@ def test_production_deploy_verifies_all_four_ranger_languages_and_localized_boar
 def test_transient_ranger_probe_is_bounded_and_does_not_fail_core_deploy():
     workflow = read(".github/workflows/deploy-original-community-production.yml")
     core = workflow.split("- name: Verify production Worker core end to end", 1)[1].split("- name: Probe Ranger info with bounded recovery", 1)[0]
-    probe = workflow.split("- name: Probe Ranger info with bounded recovery", 1)[1].split("- name: Verify Owner plus Viewer A/B unread isolation without posts", 1)[0]
+    probe = workflow.split("- name: Probe Ranger info with bounded recovery", 1)[1].split("- name: Verify read-only Viewer token isolation", 1)[0]
     assert "/api/ranger-info" not in core
     assert "continue-on-error: true" in probe
     assert "--max-time 20 --retry 1" in probe
@@ -94,4 +94,26 @@ def test_transient_ranger_probe_is_bounded_and_does_not_fail_core_deploy():
     assert "probe_ranger zh zh" in probe
     assert "probe_ranger th en" in probe
     assert "Production Visual Audit remains authoritative" in probe
+
+def test_production_viewer_verification_is_read_only():
+    workflow = read(".github/workflows/deploy-original-community-production.yml")
+    lowered = workflow.lower()
+
+    for forbidden in (
+        "insert into visits",
+        "update visits",
+        "delete from visits",
+        '{action:"seen"',
+        'action: "seen"',
+        "cleanup_viewer",
+    ):
+        assert forbidden not in lowered, forbidden
+
+    viewer_step = workflow.split("- name: Verify read-only Viewer token isolation", 1)[1]
+    viewer_step = viewer_step.split("\n      - name:", 1)[0]
+    assert "api/activity?public=1" in viewer_step
+    assert 'test "$viewer_a" != "$viewer_b"' in viewer_step
+    assert 'test "$subject_a" != "$subject_b"' in viewer_step
+    assert "--data" not in viewer_step
+    assert "wrangler d1 execute" not in viewer_step
 
