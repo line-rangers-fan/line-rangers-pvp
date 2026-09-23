@@ -18,7 +18,7 @@ def test_production_promotion_pin_is_single_source_of_truth():
 
 def test_visual_audit_waits_for_pages_worker_parity():
     workflow = read(".github/workflows/production-visual-audit.yml")
-    assert 'workflows: ["deploy-github-pages", "sync-production-pvp"]' in workflow
+    assert 'workflows: ["deploy-github-pages", "sync-production-pvp", "deploy-original-community-production"]' in workflow
     assert "Wait for synchronized Pages and Worker snapshots" in workflow
     assert "cmp -s /tmp/pages-character-usage.json /tmp/worker-character-usage.json" in workflow
     assert ".target_players == 200 and .sampled_players == 200 and .complete_target == true" in workflow
