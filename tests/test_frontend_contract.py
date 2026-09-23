@@ -95,8 +95,12 @@ def test_history_and_equipment_change_contract_is_present():
     assert 'rankHistoryPending' in app
     assert 'rankSourcePending' in app
     assert 'sourceStale:' in app
-    assert 'const movement = !hasDelta' in app
-    assert '? "±0"' in app
+    assert "if (!isComparable)" in app
+    assert 'movement = st("rankHistoryPending")' in app
+    assert 'movement = st("rankComparisonInvalid")' in app
+    assert 'movement = "±0"' in app
+    stale_messages = [line for line in app.splitlines() if "sourceStale:" in line]
+    assert stale_messages and all("±0" not in line for line in stale_messages)
     assert 'rank-period-source-pending' not in app
     assert "fetchJsonWithLimits" in app
     assert "REQUEST_TIMEOUT_MS" in app
