@@ -127,6 +127,50 @@ jobs:
           # public snapshot itself must still satisfy the canonical validator.
           python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" public/pvp/data/character_usage.json
 
+      - name: Overlay audited monthly community registry without changing promoted code
+        run: |
+          set -euo pipefail
+          # An older promoted Worker cannot parse the new automatic topic
+          # fields. Until that exact code is promoted, leave boards pinned.
+          if [ ! -f copy-source/scripts/audit-community-release.mjs ]; then
+            echo '::notice::Community code promotion is pending; preserving the pinned board registry.'
+            exit 0
+          fi
+          if ! timeout 45s git -C copy-source fetch --no-tags origin main:refs/remotes/origin/community-candidate; then
+            echo '::warning::Community source could not be fetched; preserving pinned boards and continuing PvP sync.'
+            exit 0
+          fi
+          candidate_sha="$(git -C copy-source rev-parse refs/remotes/origin/community-candidate)"
+          if [ "$candidate_sha" = "$COPY_SOURCE_SHA" ]; then
+            echo 'Community registry already matches the promoted source.'
+            exit 0
+          fi
+          if ! git -C copy-source merge-base --is-ancestor "$COPY_SOURCE_SHA" "$candidate_sha"; then
+            echo '::warning::Community main diverged from promoted code; keeping the pinned board registry.'
+            exit 0
+          fi
+          if ! git -C copy-source worktree add --detach "$GITHUB_WORKSPACE/community-candidate" "$candidate_sha"; then
+            echo '::warning::Community candidate checkout failed; preserving pinned boards and continuing PvP sync.'
+            exit 0
+          fi
+          if ! python scripts/validate_community_registry_overlay.py copy-source community-candidate; then
+            echo '::warning::Unpromoted code or invalid board data; skipping community overlay while continuing PvP sync.'
+            exit 0
+          fi
+          if ! (cd community-candidate && node ../copy-source/scripts/audit-community-release.mjs); then
+            echo '::warning::Candidate source ranking or board audit failed; preserving pinned boards and continuing PvP sync.'
+            exit 0
+          fi
+          cp community-candidate/config/community-characters.json copy-source/config/community-characters.json
+          cp community-candidate/data/community-character-discovery.json copy-source/data/community-character-discovery.json
+          if ! (cd copy-source && node scripts/audit-community-release.mjs); then
+            git -C copy-source restore -- config/community-characters.json data/community-character-discovery.json
+            echo '::warning::Community registry audit failed; preserving pinned boards and continuing PvP sync.'
+            exit 0
+          fi
+          echo "Audited community registry from exact commit $candidate_sha on promoted code $COPY_SOURCE_SHA"
+          echo "Community registry: $candidate_sha" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build composite safely
         working-directory: copy-source
         run: |
@@ -171,3 +215,33 @@ jobs:
           curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3             "$PRODUCTION_BASE_URL/pvp/index.html" -o "$live_index"
           grep -q 'レジェンド帯 キャラ集計' "$live_index"
           echo "Production Worker PvP is synchronized with canonical docs data."
+
+      - name: Verify live monthly topics and four-language metadata without board writes
+        if: ${{ hashFiles('copy-source/app/api/community-topics/route.ts') != '' }}
+        run: |
+          set -euo pipefail
+          month="$(TZ=Asia/Tokyo date +%Y-%m)"
+          expected="$RUNNER_TEMP/expected-community-topics.json"
+          actual="$RUNNER_TEMP/live-community-topics.json"
+          jq -S --arg month "$month" '[.characters[] | select(.releaseMonth == $month) | {
+            id,name,nameEn:(.nameEn // null),nameZh:(.nameZh // null),nameTh:(.nameTh // null),
+            pvpRank:(.pvpRank // null),skillsVerified:(if .source == "pvp-auto" then (.skillsVerified == true) else null end)
+          }] | sort_by(.id)' copy-source/config/community-characters.json > "$expected"
+          matched=false
+          for attempt in $(seq 1 18); do
+            if curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+                "$PRODUCTION_BASE_URL/api/community-topics?month=$month&deploy=$attempt" -o "$actual" \
+              && jq -e --arg month "$month" '.month == $month and (.characters | type == "array")' "$actual" >/dev/null \
+              && jq -S '[.characters[] | {
+                id,name,nameEn,nameZh,nameTh,pvpRank,skillsVerified
+              }] | sort_by(.id)' "$actual" | cmp -s "$expected" -; then
+              matched=true
+              break
+            fi
+            sleep 5
+          done
+          if [ "$matched" != true ]; then
+            echo 'Production Worker monthly board manifest did not converge to the verified registry.'
+            exit 1
+          fi
+          echo "Read-only live board audit passed for $month ($(jq length "$expected") distinct character topics)."
