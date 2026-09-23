@@ -23,31 +23,44 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Check out audit assertions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22.13.0
 
-      - name: Wait for synchronized Pages and Worker snapshots
+      - name: Wait for synchronized Pages, Worker, and health snapshots
         run: |
           set -euo pipefail
           pages_url="https://line-rangers-fan.github.io/line-rangers-pvp/data/character_usage.json"
           worker_url="https://line-rangers-pvp-community-production.n-yu1791.workers.dev/pvp/data/character_usage.json"
+          pages_health_url="https://line-rangers-fan.github.io/line-rangers-pvp/data/character_usage_health.json"
+          worker_health_url="https://line-rangers-pvp-community-production.n-yu1791.workers.dev/pvp/data/character_usage_health.json"
           converged=false
           for attempt in $(seq 1 24); do
             nonce="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${attempt}"
-            if curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1                 "$pages_url?audit=$nonce" -o /tmp/pages-character-usage.json               && curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1                 "$worker_url?audit=$nonce" -o /tmp/worker-character-usage.json               && jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' /tmp/pages-character-usage.json >/dev/null               && jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' /tmp/worker-character-usage.json >/dev/null               && cmp -s /tmp/pages-character-usage.json /tmp/worker-character-usage.json; then
+            if curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1 "$pages_url?audit=$nonce" -o /tmp/pages-character-usage.json \
+              && curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1 "$worker_url?audit=$nonce" -o /tmp/worker-character-usage.json \
+              && curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1 "$pages_health_url?audit=$nonce" -o /tmp/pages-character-usage-health.json \
+              && curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1 "$worker_health_url?audit=$nonce" -o /tmp/worker-character-usage-health.json \
+              && jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' /tmp/pages-character-usage.json >/dev/null \
+              && jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' /tmp/worker-character-usage.json >/dev/null \
+              && jq -e '. as $health | all(["hour","day","week","month"][]; . as $period | ($health.comparison.periods[$period].comparable | type == "boolean"))' /tmp/pages-character-usage-health.json >/dev/null \
+              && jq -e '. as $health | all(["hour","day","week","month"][]; . as $period | ($health.comparison.periods[$period].comparable | type == "boolean"))' /tmp/worker-character-usage-health.json >/dev/null \
+              && cmp -s /tmp/pages-character-usage.json /tmp/worker-character-usage.json \
+              && cmp -s /tmp/pages-character-usage-health.json /tmp/worker-character-usage-health.json; then
               converged=true
               break
             fi
             sleep 5
           done
           if [ "$converged" != true ]; then
-            echo "::error::Pages and Worker PvP snapshots did not converge before visual audit."
+            echo "::error::Pages and Worker PvP snapshots or health states did not converge before visual audit."
             exit 1
           fi
-          echo "Pages and Worker PvP snapshots are synchronized at 200/200."
-
+          echo "Pages and Worker PvP snapshots are synchronized at 200/200 with matching health periods."
       - name: Install pinned Chromium harness
         run: |
           set -euo pipefail
@@ -56,6 +69,7 @@ jobs:
           npm init -y >/dev/null
           npm install --no-audit --no-fund --save-exact playwright@1.63.0
           npm audit --omit=dev --audit-level=high
+          cp "$GITHUB_WORKSPACE/scripts/visual-audit-comparisons.mjs" .
           npx playwright install --with-deps chromium
 
       - name: Audit production at mobile, iPad, and desktop viewports
@@ -72,6 +86,7 @@ jobs:
           import { chromium } from 'playwright';
           import fs from 'node:fs/promises';
           import path from 'node:path';
+          import { assertComparisonBadgeState } from './visual-audit-comparisons.mjs';
 
           const worker = 'https://line-rangers-pvp-community-production.n-yu1791.workers.dev';
           const pvp = 'https://line-rangers-fan.github.io/line-rangers-pvp/';
@@ -87,6 +102,7 @@ jobs:
             { name: 'boards', url: worker + '/boards', kind: 'boards', mustInclude: ['新キャラ情報掲示板', '運営'] },
           ];
           const artifactDir = path.resolve('artifacts');
+          const comparisonHealth = JSON.parse(await fs.readFile('/tmp/pages-character-usage-health.json', 'utf8'));
           await fs.mkdir(artifactDir, { recursive: true });
           const browser = await chromium.launch({ headless: true });
           const results = [];
@@ -169,16 +185,12 @@ jobs:
                       sourcePending: document.querySelectorAll('#ranking-body .rank-period-source-pending').length,
                     }));
                     comparisonStates[period] = comparisonState;
-                    if (
-                      comparisonState.rows === 0 ||
-                      comparisonState.badges !== comparisonState.rows ||
-                      comparisonState.pending !== 0 ||
-                      (comparisonState.sourcePending !== 0 && comparisonState.sourcePending !== comparisonState.rows)
-                    ) {
-                      throw new Error(
-                        `${target.name} rendered invalid ${period} comparison badges at ${viewport.name}: ${JSON.stringify(comparisonState)}`,
-                      );
-                    }
+                    assertComparisonBadgeState(
+                      period,
+                      comparisonHealth,
+                      comparisonState,
+                      `${target.name} at ${viewport.name}`,
+                    );
                   }
 
                   const firstCharacterUnit = await page.locator('#ranking-body .character-button').first().getAttribute('data-unit-code');
@@ -470,16 +482,12 @@ jobs:
                       sourcePending: document.querySelectorAll('#equipment-dialog[open] .equipment-table .rank-period-source-pending').length,
                     }));
                     equipmentComparisonStates[period] = equipmentState;
-                    if (
-                      equipmentState.rows === 0 ||
-                      equipmentState.badges !== equipmentState.rows ||
-                      equipmentState.pending !== 0 ||
-                      (equipmentState.sourcePending !== 0 && equipmentState.sourcePending !== equipmentState.rows)
-                    ) {
-                      throw new Error(
-                        `${target.name} rendered invalid equipment ${period} comparison badges at ${viewport.name}: ${JSON.stringify(equipmentState)}`,
-                      );
-                    }
+                    assertComparisonBadgeState(
+                      period,
+                      comparisonHealth,
+                      equipmentState,
+                      `${target.name} equipment at ${viewport.name}`,
+                    );
                   }
                   await page.locator('#equipment-close').click();
                   comparisonStates.equipment = equipmentComparisonStates;
