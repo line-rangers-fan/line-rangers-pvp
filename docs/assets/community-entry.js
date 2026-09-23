@@ -324,6 +324,7 @@ async function loadCommunityActivity() {
     const state = {topics:normalizeTopics(payload.topics), featured:normalizeFeatured(payload.featured), unread:normalizeUnread(payload.unread), videos:normalizeMetric(payload.videos), comments:normalizeMetric(payload.comments)};
     renderCommunityBoardEntry(state);
   } catch {
+    // Keep ranking visible when community activity metadata is unavailable.
   }
 }
 
