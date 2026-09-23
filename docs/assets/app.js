@@ -259,7 +259,7 @@ const STATUS_TEXT = {
     partialMessage: "200人に満たないため、取得できた人数で一時更新しています。監視処理が完全取得を再試行します。",
     delayed: "更新が少し遅れています。監視処理が再集\u2060計を試みます。",
     stale: "更新が2時間以上遅れています。前回の正常データを表示中です。",
-    sourceStale: "取得元のPvPデータが長時間同一のため、全キャラ±0です。こちらのサイトのエラーではございません。",
+    sourceStale: "取得元のPvPデータが長時間更新されていません。比較値は正常な履歴が確認できる期間のみ表示します。",
     sourceStaleBadge: "取得元更新待ち",
     refresh: "今すぐ再読込",
     refreshing: "再読込中…",
@@ -278,6 +278,7 @@ const STATUS_TEXT = {
     rankMonth: "先月締め",
     rankComparison: "とのキャラ数比較",
     rankHistoryPending: "履歴待ち",
+    rankComparisonInvalid: "比較データ不備",
     rankSourcePending: "更新待ち",
   },
   en: {
@@ -286,7 +287,7 @@ const STATUS_TEXT = {
     partialMessage: "A verified partial sample is shown while the watchdog retries all 200 players.",
     delayed: "The update is delayed. The watchdog will retry collection.",
     stale: "Over two hours late. Showing the last verified dataset.",
-    sourceStale: "The source PvP data has remained unchanged for an extended period, so all characters show ±0. This is not an error with this site.",
+    sourceStale: "The source PvP data has not changed for an extended period. Comparisons appear only when a verified baseline exists.",
     sourceStaleBadge: "Source update pending",
     refresh: "Refresh now",
     refreshing: "Refreshing…",
@@ -305,6 +306,7 @@ const STATUS_TEXT = {
     rankMonth: "Previous-month close",
     rankComparison: "character count comparison",
     rankHistoryPending: "History pending",
+    rankComparisonInvalid: "Comparison data error",
     rankSourcePending: "Source update pending",
   },
   zh: {
@@ -313,7 +315,7 @@ const STATUS_TEXT = {
     partialMessage: "目前顯示已驗證的實際人數，監控程序會繼續重試取得 200 人。",
     delayed: "更新稍有延遲，監控程序將嘗試重新收集。",
     stale: "更新已延遲超過2小時，目前顯示上次驗證成功的資料。",
-    sourceStale: "來源 PvP 資料長時間沒有變化，因此所有角色顯示 ±0。這不是本站發生錯誤。",
+    sourceStale: "來源 PvP 資料長時間未更新。只有存在已驗證的基準資料時才顯示比較值。",
     sourceStaleBadge: "等待來源更新",
     refresh: "立即重新載入",
     refreshing: "重新載入中…",
@@ -331,6 +333,7 @@ const STATUS_TEXT = {
     rankMonth: "上月結算",
     rankComparison: "的角色數量比較",
     rankHistoryPending: "等待歷史資料",
+    rankComparisonInvalid: "比較資料錯誤",
     rankSourcePending: "等待來源更新",
   },
   th: {
@@ -339,7 +342,7 @@ const STATUS_TEXT = {
     partialMessage: "กำลังแสดงจำนวนที่ตรวจสอบแล้ว และระบบจะลองเก็บให้ครบ 200 คนต่อไป",
     delayed: "การอัปเดตล่าช้า ระบบตรวจสอบจะลองรวบรวมใหม่",
     stale: "ล่าช้าเกิน 2 ชั่วโมง กำลังแสดงข้อมูลล่าสุดที่ผ่านการตรวจสอบ",
-    sourceStale: "ข้อมูล PvP จากแหล่งข้อมูลไม่มีการเปลี่ยนแปลงเป็นเวลานาน จึงแสดง ±0 สำหรับตัวละครทั้งหมด ซึ่งไม่ใช่ข้อผิดพลาดของเว็บไซต์นี้",
+    sourceStale: "ข้อมูล PvP ต้นทางไม่ได้อัปเดตเป็นเวลานาน จะแสดงค่าการเปรียบเทียบเฉพาะช่วงที่มีข้อมูลฐานซึ่งตรวจสอบแล้ว",
     sourceStaleBadge: "รอแหล่งข้อมูลอัปเดต",
     refresh: "โหลดใหม่ตอนนี้",
     refreshing: "กำลังโหลดใหม่…",
@@ -357,6 +360,7 @@ const STATUS_TEXT = {
     rankMonth: "ปิดยอดเดือนก่อน",
     rankComparison: "เปรียบเทียบจำนวนตัวละคร",
     rankHistoryPending: "รอประวัติข้อมูล",
+    rankComparisonInvalid: "ข้อมูลเปรียบเทียบผิดพลาด",
     rankSourcePending: "รอแหล่งข้อมูลอัปเดต",
   },
   id: {
@@ -1306,34 +1310,39 @@ function renderRankPeriodChanges(container, change, options = {}) {
     const isComparable = value?.comparable === true;
     const parsedDelta = metric === "occurrence" ? value?.occurrence_count : value?.rank;
     const hasDelta = isComparable && typeof parsedDelta === "number" && Number.isSafeInteger(parsedDelta);
-    const delta = hasDelta
-      ? parsedDelta
-      : 0;
+    const delta = hasDelta ? parsedDelta : null;
     const badge = document.createElement("span");
     badge.className =
-      !hasDelta
-        ? "rank-period-change rank-period-neutral"
-        : delta > 0
-        ? "rank-period-change rank-period-up"
-        : delta < 0
-          ? "rank-period-change rank-period-down"
-          : "rank-period-change rank-period-neutral";
-    // A missing comparison baseline is still retained as non-comparable in
-    // the data model. The compact ranking UI uses ±0 as its visual placeholder
-    // so cells remain stable and never expose "history pending" to visitors.
-    const movement = !hasDelta
-      ? "±0"
-      : metric === "occurrence"
-        ? delta > 0
-          ? `+${formatOccurrence(delta)}`
+      !isComparable
+        ? "rank-period-change rank-period-pending"
+        : !hasDelta
+          ? "rank-period-change rank-period-neutral"
+          : delta > 0
+          ? "rank-period-change rank-period-up"
           : delta < 0
-            ? `-${formatOccurrence(Math.abs(delta))}`
-            : "±0"
-        : delta > 0
-          ? `↑${delta}`
-          : delta < 0
-            ? `↓${Math.abs(delta)}`
-            : "0";
+            ? "rank-period-change rank-period-down"
+            : "rank-period-change rank-period-neutral";
+    // Zero is shown only when it comes from a verified comparable snapshot.
+    let movement;
+    if (!isComparable) {
+      movement = st("rankHistoryPending");
+    } else if (!hasDelta) {
+      movement = st("rankComparisonInvalid");
+    } else if (metric === "occurrence") {
+      if (delta > 0) {
+        movement = `+${formatOccurrence(delta)}`;
+      } else if (delta < 0) {
+        movement = `-${formatOccurrence(Math.abs(delta))}`;
+      } else {
+        movement = "±0";
+      }
+    } else if (delta > 0) {
+      movement = `↑${delta}`;
+    } else if (delta < 0) {
+      movement = `↓${Math.abs(delta)}`;
+    } else {
+      movement = "0";
+    }
     const visibleLabel = includePeriodLabel ? `${label} ${movement}` : movement;
     const detail = `${label}: ${movement}`;
     badge.textContent = visibleLabel;
