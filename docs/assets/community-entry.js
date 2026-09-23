@@ -328,6 +328,13 @@ async function loadCommunityActivity() {
   }
 }
 
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) void loadCommunityActivity();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void loadCommunityActivity();
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   communityEntryLanguage = detectCommunityLanguage();
   installCommunityLanguageSync();
