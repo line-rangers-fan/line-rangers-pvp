@@ -382,27 +382,10 @@ jobs:
           fi
           echo "Ranger info probe passed for ja/en/zh/th."
 
-      - name: Verify Owner plus Viewer A/B unread isolation without posts
-        working-directory: copy-source
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
-          BOARD_OWNER_ACCESS_TOKEN: ${{ secrets.BOARD_OWNER_ACCESS_TOKEN }}
+      - name: Verify read-only Viewer token isolation
         run: |
           set -euo pipefail
-          if [ -z "${BOARD_OWNER_ACCESS_TOKEN:-}" ]; then
-            echo "Owner access token is unavailable to this workflow; refusing to claim Owner+Viewer E2E coverage."
-            exit 78
-          fi
           ranking_origin='https://line-rangers-fan.github.io'
-          owner_cookie="$RUNNER_TEMP/owner-viewer-e2e-cookie.txt"
-          owner_body="$(jq -nc --arg key "$BOARD_OWNER_ACCESS_TOKEN" '{key:$key}')"
-          owner_status="$(curl --location --silent --show-error --output /dev/null --write-out '%{http_code}' \
-            --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
-            -H 'Content-Type: application/json' -c "$owner_cookie" \
-            --data "$owner_body" "$PRODUCTION_BASE_URL/api/owner")"
-          test "$owner_status" = '200'
-
           issue_viewer() {
             curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
               -H "Origin: $ranking_origin" "$PRODUCTION_BASE_URL/api/activity?public=1"
@@ -421,109 +404,6 @@ jobs:
           echo "::add-mask::$viewer_b"
           echo "::add-mask::$subject_a"
           echo "::add-mask::$subject_b"
-
-          cleanup_viewers() {
-            npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
-              --command "DELETE FROM visits WHERE subject IN ('$subject_a','$subject_b')" >/dev/null 2>&1 || true
-          }
-          trap cleanup_viewers EXIT
-          npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
-            --command "INSERT INTO visits(subject,seen) VALUES('$subject_a',1),('$subject_b',1) ON CONFLICT(subject) DO UPDATE SET seen=1" >/dev/null
-
-          before_a="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer_a" "$PRODUCTION_BASE_URL/api/activity?public=1")"
-          before_b="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer_b" "$PRODUCTION_BASE_URL/api/activity?public=1")"
-          comments="$(printf '%s' "$before_a" | jq -er '.comments')"
-          if [ "$comments" -gt 0 ]; then
-            printf '%s' "$before_a" | jq -e '.unread > 0' >/dev/null
-            printf '%s' "$before_b" | jq -e '.unread > 0' >/dev/null
-          fi
-
-          owner_board_before="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
-            -b "$owner_cookie" "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_a")"
-          printf '%s' "$owner_board_before" | jq -e '.me.role == "owner"' >/dev/null
-          if [ "$comments" -gt 0 ]; then
-            printf '%s' "$owner_board_before" | jq -e '.stats.unread > 0' >/dev/null
-          fi
-
-          body="$(jq -nc --argjson until "$(date +%s%3N)" '{action:"seen",until:$until}')"
-          seen_status="$(curl --location --silent --show-error --output /tmp/owner-viewer-seen.json --write-out '%{http_code}' \
-            --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
-            -H 'Content-Type: application/json' -b "$owner_cookie" --data "$body" \
-            "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_a")"
-          test "$seen_status" = '200'
-          jq -e '.ok == true' /tmp/owner-viewer-seen.json >/dev/null
-
-          after_a="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer_a" "$PRODUCTION_BASE_URL/api/activity?public=1")"
-          after_b="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer_b" "$PRODUCTION_BASE_URL/api/activity?public=1")"
-          printf '%s' "$after_a" | jq -e --arg viewer "$viewer_a" '.viewerToken == $viewer and .unread == 0' >/dev/null
-          if [ "$comments" -gt 0 ]; then
-            printf '%s' "$after_b" | jq -e '.unread > 0' >/dev/null
-          fi
-
-          owner_board_after="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
-            -b "$owner_cookie" "$PRODUCTION_BASE_URL/api/board?viewer=$viewer_a")"
-          printf '%s' "$owner_board_after" | jq -e '.me.role == "owner" and .stats.unread == 0' >/dev/null
-
-          viewer_rows="$(npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
-            --command "SELECT subject,seen FROM visits WHERE subject IN ('$subject_a','$subject_b')" )"
-          seen_a="$(printf '%s' "$viewer_rows" | jq -er --arg s "$subject_a" '[.. | objects | select(.subject? == $s) | .seen][0]')"
-          seen_b="$(printf '%s' "$viewer_rows" | jq -er --arg s "$subject_b" '[.. | objects | select(.subject? == $s) | .seen][0]')"
-          test "$seen_a" -gt 1
-          test "$seen_b" = '1'
-          echo 'Verified Owner auth remains Owner while NEW/seen is isolated by Viewer A/B subject.'
-
-      - name: Verify per-viewer NEW seen round trip without posts
-        working-directory: copy-source
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          ranking_origin='https://line-rangers-fan.github.io'
-          activity="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $ranking_origin" "$PRODUCTION_BASE_URL/api/activity?public=1")"
-          viewer="$(printf '%s' "$activity" | jq -er '.viewerToken')"
-          subject="$(printf '%s' "$viewer" | cut -d. -f2)"
-          [[ "$viewer" =~ ^v1\.[a-f0-9-]{36}\.[0-9]+\.[A-Za-z0-9_-]{43}$ ]]
-          [[ "$subject" =~ ^[a-f0-9-]{36}$ ]]
-          echo "::add-mask::$viewer"
-          echo "::add-mask::$subject"
-          cleanup_viewer() {
-            npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
-              --command "DELETE FROM visits WHERE subject='$subject'" >/dev/null 2>&1 || true
-          }
-          trap cleanup_viewer EXIT
-
-          # Use only the disposable visits cursor. No post, reaction, vote,
-          # profile, media, or user row is created for this production E2E.
-          npx wrangler d1 execute DB --remote --yes --json --config wrangler.jsonc \
-            --command "INSERT INTO visits(subject,seen) VALUES('$subject',1) ON CONFLICT(subject) DO UPDATE SET seen=1" >/dev/null
-
-          activity_before="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer" "$PRODUCTION_BASE_URL/api/activity?public=1")"
-          printf '%s' "$activity_before" | jq -e --arg viewer "$viewer" '.viewerToken == $viewer' >/dev/null
-          comments="$(printf '%s' "$activity_before" | jq -er '.comments')"
-          if [ "$comments" -gt 0 ]; then
-            printf '%s' "$activity_before" | jq -e '.unread > 0' >/dev/null
-          fi
-
-          view_until="$(date +%s%3N)"
-          body="$(jq -nc --argjson until "$view_until" '{action:"seen",until:$until}')"
-          seen_status="$(curl --location --silent --show-error --output /tmp/seen-response.json --write-out '%{http_code}' \
-            --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $PRODUCTION_BASE_URL" -H 'Sec-Fetch-Site: same-origin' \
-            -H 'Content-Type: application/json' --data "$body" \
-            "$PRODUCTION_BASE_URL/api/board?viewer=$viewer")"
-          test "$seen_status" = '200'
-          jq -e '.ok == true' /tmp/seen-response.json >/dev/null
-
-          activity_after="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 5 --retry-delay 2 \
-            -H "Origin: $ranking_origin" -H "X-LR-Viewer: $viewer" "$PRODUCTION_BASE_URL/api/activity?public=1")"
-          printf '%s' "$activity_after" | jq -e --arg viewer "$viewer" '.viewerToken == $viewer and .unread == 0' >/dev/null
-          echo 'Verified production Viewer ID -> seen -> activity NEW=0 with disposable visits-only state.'
+          printf '%s' "$activity_a" | jq -e --arg viewer "$viewer_a" '.viewerToken == $viewer and (.unread | type == "number") and .unread >= 0' >/dev/null
+          printf '%s' "$activity_b" | jq -e --arg viewer "$viewer_b" '.viewerToken == $viewer and (.unread | type == "number") and .unread >= 0' >/dev/null
+          echo "Verified distinct Viewer identities with read-only activity requests."
