@@ -51,7 +51,7 @@ def test_feature_flag_is_explicitly_enabled_and_fail_closed():
     assert "defaultState: true" in ENTRY_JS
     assert "state: true" in ENTRY_JS
     assert "return value === true" in ENTRY_JS
-    assert "if (!enabled) return" in ENTRY_JS
+    assert "if (!enabled || !state.topics?.length) return" in ENTRY_JS
     assert "slot.hidden = true" in ENTRY_JS
 
 
