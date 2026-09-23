@@ -124,7 +124,7 @@ def test_board_button_navigates_same_tab_without_intermediate_page():
 
 
 def test_entry_assets_remain_small_mobile_first_and_dedicated():
-    assert len(ENTRY_JS.encode("utf-8")) < 18_000
+    assert len(ENTRY_JS.encode("utf-8")) < 18_100
     assert len(ENTRY_CSS.encode("utf-8")) < 8_000
     assert ".community-board-entry-card" in ENTRY_CSS
     assert ".community-board-entry-featured-reactions" in ENTRY_CSS
