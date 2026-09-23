@@ -28,6 +28,9 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
     steps:
       - name: Check out current PvP source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -245,3 +248,17 @@ jobs:
             exit 1
           fi
           echo "Read-only live board audit passed for $month ($(jq length "$expected") distinct character topics)."
+
+      # Collector dispatches use GITHUB_TOKEN and do not produce the usual
+      # downstream workflow_run audit. User-started runs retain that trigger.
+      # Run the explicit audit only for the collector's bot dispatches.
+      - name: Dispatch production visual audit after Worker verification
+        if: github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/production-visual-audit.yml/dispatches" \
+            -f ref=main >/dev/null
+          echo 'Dispatched cross-surface production visual audit.'
