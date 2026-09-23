@@ -9,15 +9,6 @@ const COMMUNITY_BOARD_ENTRY_CONFIG = Object.freeze({
   allowedPath: "/boards",
 });
 
-const COMMUNITY_FALLBACK_TOPICS = Object.freeze([
-  Object.freeze({
-    id: "2026-09:u1631e-sally",
-    character: "u1631e-sally",
-    image: "./assets/characters/crab-sally-ultimate-fallback.jpg",
-    month: "2026-09",
-  }),
-]);
-
 const COMMUNITY_ENTRY_I18N = Object.freeze({
   ja: Object.freeze({title:"新キャラ情報掲示板",description:"投票・コメント・写真・動画で、今月の新キャラについて話そう。",newCharacter:"新キャラクター",imageAlt:"新キャラクターの画像",featuredLabel:"注目コメント",featuredEmpty:"まだ注目コメントはありません。掲示板で最初の感想を投稿できます。",helpful:"役に立った",viewBoard:"掲示板で見る →",openBoard:"掲示板を開く →",openBoardAria:"新キャラ情報掲示板を開く",featuredAria:"注目コメントの掲示板を開く",newCount:"NEW {count}件",videos:"動画 {count}本",comments:"コメント {count}件"}),
   en: Object.freeze({title:"New Character Community Board",description:"Share thoughts about this month's new character through polls, comments, photos, and videos.",newCharacter:"NEW CHARACTER",imageAlt:"New character image",featuredLabel:"Featured comment",featuredEmpty:"No featured comments yet. Share your first thoughts on the board.",helpful:"Helpful",viewBoard:"View on board →",openBoard:"Open board →",openBoardAria:"Open the new character community board",featuredAria:"Open the featured comment board",newCount:"NEW {count}",videos:"Videos {count}",comments:"Comments {count}"}),
@@ -64,6 +55,11 @@ function rememberCommunityHref(element, rawUrl) {
 function readCommunityBoardState(value) { return value === true; }
 function entryText(key) {
   return COMMUNITY_ENTRY_I18N[communityEntryLanguage]?.[key] ?? COMMUNITY_ENTRY_I18N.en[key] ?? key;
+}
+
+function topicDisplayName(names) {
+  const index = COMMUNITY_ENTRY_LANGUAGES.indexOf(communityEntryLanguage);
+  return (names[index]||names[1]||names[0]).trim();
 }
 
 function detectCommunityLanguage() {
@@ -178,7 +174,10 @@ function buildCharacter(topic, baseUrl) {
   image.decoding = "async";
   const copy = document.createElement("div");
   copy.className = "community-board-entry-character-copy";
-  copy.append(textElement("span", "community-board-entry-character-badge", entryText("newCharacter"), "newCharacter"));
+  const names = [topic.name,topic.nameEn,topic.nameZh,topic.nameTh];
+  const name = textElement("span", "community-board-entry-character-name", topicDisplayName(names));
+  name.dataset.communityNames = JSON.stringify(names);
+  copy.append(name);
   element.append(image, copy);
   return element;
 }
@@ -244,12 +243,11 @@ function buildCommunityBoardEntry(baseUrl, state) {
   headingText.append(titleRow, textElement("p", "community-board-entry-description", entryText("description"), "description"));
   headingRow.append(marker, headingText);
 
-  const topics = state.topics.length ? state.topics : COMMUNITY_FALLBACK_TOPICS;
   const characterList = document.createElement("div");
   characterList.className = "community-board-entry-character-list";
-  for (const topic of topics) characterList.append(buildCharacter(topic, baseUrl));
+  for (const topic of state.topics) characterList.append(buildCharacter(topic, baseUrl));
 
-  const firstTopicUrl = topicBoardUrl(topics[0], baseUrl) || withCommunityViewer(baseUrl.href);
+  const firstTopicUrl = topicBoardUrl(state.topics[0], baseUrl) || withCommunityViewer(baseUrl.href);
   const button = document.createElement("a");
   button.className = "community-board-entry-button";
   rememberCommunityHref(button, firstTopicUrl);
@@ -274,6 +272,10 @@ function updateCommunityEntryLanguage() {
     }
   }
   for (const element of slot.querySelectorAll("[data-community-alt]")) element.alt = entryText(element.dataset.communityAlt || "imageAlt");
+  for (const element of slot.querySelectorAll("[data-community-names]")) {
+    const names = JSON.parse(element.dataset.communityNames || "[]");
+    element.textContent = topicDisplayName(names) || entryText("newCharacter");
+  }
   for (const element of slot.querySelectorAll("[data-community-aria]")) element.setAttribute("aria-label", entryText(element.dataset.communityAria || "openBoardAria"));
   for (const element of slot.querySelectorAll("[data-community-href]")) {
     rememberCommunityHref(element, element.dataset.communityHref || "");
@@ -301,7 +303,7 @@ function renderCommunityBoardEntry(state) {
   slot.replaceChildren();
   slot.hidden = true;
   const enabled = readCommunityBoardState(COMMUNITY_BOARD_ENTRY_CONFIG.state) || readCommunityBoardState(COMMUNITY_BOARD_ENTRY_CONFIG.defaultState);
-  if (!enabled) return;
+  if (!enabled || !state.topics?.length) return;
   const baseUrl = getApprovedCommunityBoardUrl(COMMUNITY_BOARD_ENTRY_CONFIG.url, COMMUNITY_BOARD_ENTRY_CONFIG.allowedHosts, COMMUNITY_BOARD_ENTRY_CONFIG.allowedPath);
   if (!baseUrl) return;
   slot.append(buildCommunityBoardEntry(baseUrl, state));
@@ -322,13 +324,11 @@ async function loadCommunityActivity() {
     const state = {topics:normalizeTopics(payload.topics), featured:normalizeFeatured(payload.featured), unread:normalizeUnread(payload.unread), videos:normalizeMetric(payload.videos), comments:normalizeMetric(payload.comments)};
     renderCommunityBoardEntry(state);
   } catch {
-    // The ranking itself must remain usable if the community API is unavailable.
   }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   communityEntryLanguage = detectCommunityLanguage();
   installCommunityLanguageSync();
-  renderCommunityBoardEntry({topics:COMMUNITY_FALLBACK_TOPICS, featured:null, unread:0, videos:0, comments:0});
   void loadCommunityActivity();
 });
