@@ -7,7 +7,7 @@ on:
     paths:
       - .github/workflows/production-visual-audit.yml
   workflow_run:
-    workflows: ["deploy-github-pages", "sync-production-pvp"]
+    workflows: ["deploy-github-pages", "sync-production-pvp", "deploy-original-community-production"]
     types: [completed]
 
 permissions:
