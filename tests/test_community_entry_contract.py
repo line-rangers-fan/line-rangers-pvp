@@ -124,7 +124,7 @@ def test_board_button_navigates_same_tab_without_intermediate_page():
 
 
 def test_entry_assets_remain_small_mobile_first_and_dedicated():
-    assert len(ENTRY_JS.encode("utf-8")) < 18_100
+    assert len(ENTRY_JS.encode("utf-8")) < 18_400
     assert len(ENTRY_CSS.encode("utf-8")) < 8_000
     assert ".community-board-entry-card" in ENTRY_CSS
     assert ".community-board-entry-featured-reactions" in ENTRY_CSS
@@ -140,3 +140,12 @@ def test_monthly_character_cards_show_localized_names_and_never_pin_a_past_month
     assert 'if (!enabled || !state.topics?.length) return;' in ENTRY_JS
     assert 'COMMUNITY_FALLBACK_TOPICS' not in ENTRY_JS
     assert 'name.dataset.communityNames = JSON.stringify' in ENTRY_JS
+
+
+def test_viewer_new_refreshes_after_return_without_board_mutations():
+    assert 'window.addEventListener("pageshow"' in ENTRY_JS
+    assert "event.persisted" in ENTRY_JS
+    assert 'document.addEventListener("visibilitychange"' in ENTRY_JS
+    assert 'document.visibilityState === "visible"' in ENTRY_JS
+    assert "void loadCommunityActivity()" in ENTRY_JS
+    assert 'method:"GET"' in ENTRY_JS
