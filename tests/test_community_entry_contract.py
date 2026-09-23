@@ -130,3 +130,13 @@ def test_entry_assets_remain_small_mobile_first_and_dedicated():
     assert ".community-board-entry-featured-reactions" in ENTRY_CSS
     assert ".community-board-entry-button" in ENTRY_CSS
     assert "@media (min-width: 680px)" in ENTRY_CSS
+
+
+def test_monthly_character_cards_show_localized_names_and_never_pin_a_past_month():
+    assert "function topicDisplayName(names)" in ENTRY_JS
+    assert 'community-board-entry-character-name' in ENTRY_JS
+    assert 'topic.nameZh' in ENTRY_JS and 'topic.nameTh' in ENTRY_JS
+    assert 'topic.nameEn' in ENTRY_JS
+    assert 'if (!enabled || !state.topics?.length) return;' in ENTRY_JS
+    assert 'COMMUNITY_FALLBACK_TOPICS' not in ENTRY_JS
+    assert 'name.dataset.communityNames = JSON.stringify' in ENTRY_JS
