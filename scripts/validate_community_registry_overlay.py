@@ -9,7 +9,10 @@ import re
 import subprocess
 import sys
 from datetime import datetime
+from math import isfinite
 from pathlib import Path
+from unicodedata import normalize
+from zoneinfo import ZoneInfo
 
 
 ALLOWED = {
@@ -29,6 +32,8 @@ STATE = "data/community-character-discovery.json"
 SNAPSHOT = "public/pvp/data/character_usage.json"
 ID = re.compile(r"u\d+e-[a-z0-9_-]+", re.I)
 MONTH = re.compile(r"20\d\d-(?:0[1-9]|1[0-2])")
+OFFICIAL_NOTICE_URL = "https://notice2.line.me/LGRGS/ios/document/notice"
+OFFICIAL_NOTICE_SOURCE = "notice2.line.me/LGRGS/ios/document/notice"
 
 
 def read(root, path):
@@ -59,6 +64,50 @@ def topic_map(registry):
     return result
 
 
+def normalized_name(value):
+    if not isinstance(value, str):
+        return None
+    return " ".join(normalize("NFC", value).split()).casefold()
+
+
+def validate_release_evidence(topic, unit, month, snapshot_time):
+    evidence = topic.get("releaseEvidence")
+    if not isinstance(evidence, dict):
+        raise ValueError("new topic lacks official release evidence")
+    if (
+        evidence.get("catalogId") != unit
+        or evidence.get("releaseMonth") != month
+        or evidence.get("source") != OFFICIAL_NOTICE_SOURCE
+        or evidence.get("noticeUrl") != OFFICIAL_NOTICE_URL
+    ):
+        raise ValueError("new topic release evidence does not match its official catalog entry")
+    notice_id = evidence.get("noticeId")
+    title = evidence.get("noticeTitle")
+    matched_name = evidence.get("matchedName")
+    grade = evidence.get("grade")
+    if (
+        type(notice_id) is not int
+        or notice_id < 1
+        or not isinstance(title, str)
+        or len(title) > 240
+        or not re.search(r"\bnew rangers? are here!?(?=\W|$)", title, re.I)
+        or not isinstance(matched_name, str)
+        or len(matched_name) > 240
+        or normalized_name(matched_name) != normalized_name(topic.get("nameEn"))
+        or type(grade) is not int
+        or not 1 <= grade <= 20
+        or type(topic.get("verifiedGrade")) is not int
+        or topic.get("verifiedGrade") != grade
+    ):
+        raise ValueError("new topic release notice does not match its verified Ranger metadata")
+    published = date(evidence.get("publishedAt"))
+    if (
+        published.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m") != month
+        or published > snapshot_time
+    ):
+        raise ValueError("new topic release notice is outside the verified release month")
+
+
 def validate_overlay(pinned, candidate, changed_files):
     if not changed_files or set(changed_files) - ALLOWED:
         raise ValueError("copy main contains non-generated changes since the pinned code; promote code separately")
@@ -68,8 +117,19 @@ def validate_overlay(pinned, candidate, changed_files):
     if snapshot.get("target_players") != 200 or snapshot.get("sampled_players") != 200 or snapshot.get("complete_target") is not True:
         raise ValueError("candidate PvP snapshot is not 200/200")
     now = date(snapshot["updated_at"])
-    from zoneinfo import ZoneInfo
     release_month = now.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m")
+    rows = snapshot.get("characters")
+    if not isinstance(rows, list):
+        raise ValueError("candidate PvP snapshot is missing ranked characters")
+    ranked = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("invalid ranked character in candidate PvP snapshot")
+        unit = row.get("unit_code")
+        rank = row.get("rank")
+        if not isinstance(unit, str) or not unit or unit in ranked or type(rank) is not int or rank < 1:
+            raise ValueError("invalid or duplicate ranked character in candidate PvP snapshot")
+        ranked[unit] = row
     for key, original in old.items():
         replacement = new.get(key)
         if replacement is None:
@@ -88,6 +148,17 @@ def validate_overlay(pinned, candidate, changed_files):
             raise ValueError("invalid topic adoption rate")
     for key, topic in new.items():
         if key in old:
+            if key[0] == release_month:
+                row = ranked.get(key[1])
+                expected_rank = row.get("rank") if row else None
+                raw_rate = row.get("adoption_rate") if row else None
+                expected_rate = (
+                    raw_rate
+                    if type(raw_rate) in (int, float) and isfinite(raw_rate) and 0 <= raw_rate <= 100
+                    else None
+                )
+                if topic.get("pvpRank") != expected_rank or topic.get("adoptionRate") != expected_rate:
+                    raise ValueError("current month topic rank is not synchronized to the complete PvP snapshot")
             continue
         if key[0] != release_month or topic.get("source") != "pvp-auto" or topic.get("confirmed") is not True:
             raise ValueError("unverified monthly topic addition")
@@ -103,6 +174,17 @@ def validate_overlay(pinned, candidate, changed_files):
                 raise ValueError("new topic is missing a localized name")
         if topic.get("metadataSource") != "rangers.lerico.net/api/getRangersBasics" or topic.get("evolutionStage") != "e":
             raise ValueError("new topic lacks official Ranger verification")
+        validate_release_evidence(topic, key[1], key[0], now)
+        row = ranked.get(key[1])
+        expected_rank = row.get("rank") if row else None
+        raw_rate = row.get("adoption_rate") if row else None
+        expected_rate = (
+            raw_rate
+            if type(raw_rate) in (int, float) and isfinite(raw_rate) and 0 <= raw_rate <= 100
+            else None
+        )
+        if topic.get("pvpRank") != expected_rank or topic.get("adoptionRate") != expected_rate:
+            raise ValueError("new topic rank is not synchronized to the complete PvP snapshot")
     previous_state, next_state = read(pinned, STATE), read(candidate, STATE)
     if previous_state.get("initialized") is True and next_state.get("initialized") is not True:
         raise ValueError("community discovery state was reset")

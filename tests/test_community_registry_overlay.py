@@ -16,6 +16,14 @@ def topic(unit, month="2026-10"):
         "metadataSource": "rangers.lerico.net/api/getRangersBasics", "evolutionStage": "e",
         "skillsVerified": True, "skillCount": 2, "skillsVerifiedAt": "2026-10-02T00:00:00Z",
         "observationCount": 3, "pvpRank": None, "adoptionRate": None,
+        "verifiedGrade": 4,
+        "releaseEvidence": {
+            "catalogId": unit, "releaseMonth": month, "noticeId": 42,
+            "noticeTitle": "New Rangers are here!", "noticeUrl": "https://notice2.line.me/LGRGS/ios/document/notice",
+            "matchedName": "New ranger", "grade": 4,
+            "source": "notice2.line.me/LGRGS/ios/document/notice",
+            "publishedAt": f"{month}-02T00:00:00Z",
+        },
     }
 
 
@@ -37,7 +45,8 @@ def fixture(old_topics, new_topics):
     write(pinned, STATE, state)
     write(candidate, STATE, {**state, "lastSnapshotAt": "2026-10-02T00:00:00Z"})
     write(candidate, SNAPSHOT, {"target_players": 200, "sampled_players": 200,
-                                "complete_target": True, "updated_at": "2026-10-02T00:00:00Z"})
+                                "complete_target": True, "updated_at": "2026-10-02T00:00:00Z",
+                                "characters": []})
     return pinned_dir, candidate_dir, pinned, candidate
 
 
@@ -62,7 +71,7 @@ def test_schedule_workflow_and_static_test_changes_allow_safe_registry_overlay()
         ) == 1
 
 
-@pytest.mark.parametrize("alteration", ["remove", "metadata", "skills", "duplicate", "partial", "source_reset", "unknown_path"])
+@pytest.mark.parametrize("alteration", ["remove", "metadata", "skills", "duplicate", "partial", "source_reset", "unknown_path", "release_evidence"])
 def test_cannot_publish_unsafe_registry_or_other_code(alteration):
     original = topic("u1631e-sally", "2026-09")
     added = topic("u2000e-new")
@@ -88,6 +97,9 @@ def test_cannot_publish_unsafe_registry_or_other_code(alteration):
             state = json.loads((candidate / STATE).read_text())
             state["knownIds"] = []
             write(candidate, STATE, state)
+        elif alteration == "release_evidence":
+            added["releaseEvidence"]["matchedName"] = "A different ranger"
+            write(candidate, TOPICS, {"schemaVersion": 1, "characters": [original, added]})
         else:
             changes.append("app/api/board/route.ts")
         with pytest.raises((ValueError, KeyError)):
@@ -105,3 +117,30 @@ def test_sync_overlay_retains_pinned_code_and_preserves_pvp_when_board_source_is
     assert "api/community-topics?month=$month" in workflow
     assert "rm -rf copy-source/public/pvp" in workflow
     assert "wrangler d1 create" not in workflow and "wrangler r2 bucket create" not in workflow
+
+
+def test_overlay_rejects_pvp_rank_that_does_not_match_full_snapshot():
+    original = topic("u1631e-sally", "2026-09")
+    added = topic("u2000e-new")
+    added["pvpRank"] = 9
+    added["adoptionRate"] = 2.5
+    tmp_a, tmp_b, pinned, candidate = fixture([original], [deepcopy(original), added])
+    with tmp_a, tmp_b:
+        data = json.loads((candidate / SNAPSHOT).read_text())
+        data["characters"] = [{"unit_code": "u2000e-new", "rank": 8, "adoption_rate": 2.5}]
+        write(candidate, SNAPSHOT, data)
+        with pytest.raises(ValueError, match="rank"):
+            validate_overlay(pinned, candidate, [TOPICS, STATE, SNAPSHOT])
+
+
+def test_overlay_accepts_rank_and_adoption_rate_from_full_snapshot():
+    original = topic("u1631e-sally", "2026-09")
+    added = topic("u2000e-new")
+    added["pvpRank"] = 8
+    added["adoptionRate"] = 2.5
+    tmp_a, tmp_b, pinned, candidate = fixture([original], [deepcopy(original), added])
+    with tmp_a, tmp_b:
+        data = json.loads((candidate / SNAPSHOT).read_text())
+        data["characters"] = [{"unit_code": "u2000e-new", "rank": 8, "adoption_rate": 2.5}]
+        write(candidate, SNAPSHOT, data)
+        assert validate_overlay(pinned, candidate, [TOPICS, STATE, SNAPSHOT]) == 1
