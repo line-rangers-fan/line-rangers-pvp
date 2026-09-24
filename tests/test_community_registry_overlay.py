@@ -5,13 +5,15 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from scripts.validate_community_registry_overlay import validate_overlay, TOPICS, STATE, SNAPSHOT
+from scripts.validate_community_registry_overlay import (
+    validate_overlay, TOPICS, STATE, SNAPSHOT, DISCOVERY_SCRIPT, OLD_GAP, NEW_GAP, OLD_NAMES, NEW_NAMES,
+)
 
 
 def topic(unit, month="2026-10"):
     return {
         "id": unit, "releaseMonth": month, "confirmed": True,
-        "source": "pvp-auto", "name": "新キャラ", "nameEn": "New ranger", "nameZh": "新角色",
+        "source": "pvp-auto", "name": "新キャラ", "nameEn": "New ranger", "nameZh": "新角色", "nameTh": "ตัวละครใหม่",
         "image": f"https://rangers.lerico.net/res/{unit}/{unit}-thum.png",
         "metadataSource": "rangers.lerico.net/api/getRangersBasics", "evolutionStage": "e",
         "skillsVerified": True, "skillCount": 2, "skillsVerifiedAt": "2026-10-02T00:00:00Z",
@@ -71,7 +73,28 @@ def test_schedule_workflow_and_static_test_changes_allow_safe_registry_overlay()
         ) == 1
 
 
-@pytest.mark.parametrize("alteration", ["remove", "metadata", "skills", "duplicate", "partial", "source_reset", "unknown_path", "release_evidence"])
+def test_only_reviewed_discovery_gap_change_can_cross_the_pinned_code_gate():
+    old = topic("u1631e-sally", "2026-09")
+    newer = [deepcopy(old), topic("u2000e-new")]
+    tmp_a, tmp_b, pinned, candidate = fixture([old], newer)
+    with tmp_a, tmp_b:
+        original = "const REQUIRED_CONSECUTIVE=3;\n" + OLD_GAP + "\n" + OLD_NAMES + "\n"
+        (pinned / DISCOVERY_SCRIPT).parent.mkdir(parents=True, exist_ok=True)
+        (candidate / DISCOVERY_SCRIPT).parent.mkdir(parents=True, exist_ok=True)
+        (pinned / DISCOVERY_SCRIPT).write_text(original, encoding="utf-8")
+        reviewed = original.replace(OLD_GAP, NEW_GAP).replace(OLD_NAMES, NEW_NAMES)
+        (candidate / DISCOVERY_SCRIPT).write_text(reviewed, encoding="utf-8")
+        changes = [TOPICS, STATE, SNAPSHOT, DISCOVERY_SCRIPT,
+                   "tests/community-multi-character.test.mjs"]
+        assert validate_overlay(pinned, candidate, changes) == 1
+        (candidate / DISCOVERY_SCRIPT).write_text(
+            reviewed + "// unrelated code\n", encoding="utf-8"
+        )
+        with pytest.raises(ValueError, match="unreviewed community discovery code"):
+            validate_overlay(pinned, candidate, changes)
+
+
+@pytest.mark.parametrize("alteration", ["remove", "metadata", "skills", "thai_name", "duplicate", "partial", "source_reset", "unknown_path", "release_evidence"])
 def test_cannot_publish_unsafe_registry_or_other_code(alteration):
     original = topic("u1631e-sally", "2026-09")
     added = topic("u2000e-new")
@@ -86,6 +109,9 @@ def test_cannot_publish_unsafe_registry_or_other_code(alteration):
             write(candidate, TOPICS, {"schemaVersion": 1, "characters": [changed, added]})
         elif alteration == "skills":
             added["skillsVerified"] = False
+            write(candidate, TOPICS, {"schemaVersion": 1, "characters": [original, added]})
+        elif alteration == "thai_name":
+            added["nameTh"] = None
             write(candidate, TOPICS, {"schemaVersion": 1, "characters": [original, added]})
         elif alteration == "duplicate":
             write(candidate, TOPICS, {"schemaVersion": 1, "characters": [original, added, added]})
