@@ -50,6 +50,18 @@ def test_append_several_verified_unranked_topics_then_rank_them():
         assert validate_overlay(pinned, candidate, [TOPICS, STATE, SNAPSHOT]) == 4
 
 
+def test_schedule_only_copy_workflow_change_does_not_block_safe_registry_overlay():
+    old = topic("u1631e-sally", "2026-09")
+    newer = [deepcopy(old), topic("u2000e-new")]
+    tmp_a, tmp_b, pinned, candidate = fixture([old], newer)
+    with tmp_a, tmp_b:
+        assert validate_overlay(
+            pinned,
+            candidate,
+            [TOPICS, STATE, SNAPSHOT, ".github/workflows/refresh-pvp-data.yml"],
+        ) == 1
+
+
 @pytest.mark.parametrize("alteration", ["remove", "metadata", "skills", "duplicate", "partial", "source_reset", "unknown_path"])
 def test_cannot_publish_unsafe_registry_or_other_code(alteration):
     original = topic("u1631e-sally", "2026-09")

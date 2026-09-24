@@ -13,6 +13,10 @@ from pathlib import Path
 
 
 ALLOWED = {
+    # Schedule-only edits to Copy's automation are never copied into the
+    # pinned Worker source. Permit this exact path so safe registry/data
+    # overlays do not remain blocked after discovery cadence changes.
+    ".github/workflows/refresh-pvp-data.yml",
     "config/community-characters.json",
     "data/community-character-discovery.json",
     "public/pvp/data/character_usage.json",
