@@ -22,6 +22,11 @@ ALLOWED = {
     ".github/workflows/refresh-pvp-data.yml",
     # This exact Copy regression test is not part of the pinned Worker build.
     "tests/pvp-static.test.mjs",
+    # Regression-only tests are not shipped in the Worker bundle.
+    "tests/community-multi-character.test.mjs",
+    # This narrowly checked collector-only change tolerates missed GitHub
+    # schedule slots. The deployed Worker still comes from the pinned SHA.
+    "scripts/update-community-characters.mjs",
     "config/community-characters.json",
     "data/community-character-discovery.json",
     "public/pvp/data/character_usage.json",
@@ -30,6 +35,15 @@ ALLOWED = {
 TOPICS = "config/community-characters.json"
 STATE = "data/community-character-discovery.json"
 SNAPSHOT = "public/pvp/data/character_usage.json"
+DISCOVERY_SCRIPT = "scripts/update-community-characters.mjs"
+OLD_GAP = "const MAX_GAP_MS=3*60*60*1000;"
+NEW_GAP = (
+    "// GitHub may skip scheduled slots; require three distinct full snapshots in\n"
+    "// sequence while allowing the scheduled collector to recover within a day.\n"
+    "const MAX_GAP_MS=24*60*60*1000;"
+)
+OLD_NAMES = "if(!name||!nameEn||!nameZh||typeof value.unitNameCode"
+NEW_NAMES = "if(!name||!nameEn||!nameZh||!nameTh||typeof value.unitNameCode"
 ID = re.compile(r"u\d+e-[a-z0-9_-]+", re.I)
 MONTH = re.compile(r"20\d\d-(?:0[1-9]|1[0-2])")
 OFFICIAL_NOTICE_URL = "https://notice2.line.me/LGRGS/ios/document/notice"
@@ -111,6 +125,15 @@ def validate_release_evidence(topic, unit, month, snapshot_time):
 def validate_overlay(pinned, candidate, changed_files):
     if not changed_files or set(changed_files) - ALLOWED:
         raise ValueError("copy main contains non-generated changes since the pinned code; promote code separately")
+    if DISCOVERY_SCRIPT in changed_files:
+        previous = (pinned / DISCOVERY_SCRIPT).read_text(encoding="utf-8")
+        current = (candidate / DISCOVERY_SCRIPT).read_text(encoding="utf-8")
+        if (
+            previous.count(OLD_GAP) != 1
+            or previous.count(OLD_NAMES) != 1
+            or current != previous.replace(OLD_GAP, NEW_GAP).replace(OLD_NAMES, NEW_NAMES)
+        ):
+            raise ValueError("unreviewed community discovery code change; promote code separately")
     old = topic_map(read(pinned, TOPICS))
     new = topic_map(read(candidate, TOPICS))
     snapshot = read(candidate, SNAPSHOT)
@@ -169,7 +192,7 @@ def validate_overlay(pinned, candidate, changed_files):
         date(topic["skillsVerifiedAt"])
         if topic.get("image") != "https://rangers.lerico.net/res/" + key[1] + "/" + key[1] + "-thum.png":
             raise ValueError("new topic has an untrusted image")
-        for name in ("name", "nameEn", "nameZh"):
+        for name in ("name", "nameEn", "nameZh", "nameTh"):
             if not isinstance(topic.get(name), str) or not topic[name].strip():
                 raise ValueError("new topic is missing a localized name")
         if topic.get("metadataSource") != "rangers.lerico.net/api/getRangersBasics" or topic.get("evolutionStage") != "e":
