@@ -50,7 +50,7 @@ def test_append_several_verified_unranked_topics_then_rank_them():
         assert validate_overlay(pinned, candidate, [TOPICS, STATE, SNAPSHOT]) == 4
 
 
-def test_schedule_only_copy_workflow_change_does_not_block_safe_registry_overlay():
+def test_schedule_workflow_and_static_test_changes_allow_safe_registry_overlay():
     old = topic("u1631e-sally", "2026-09")
     newer = [deepcopy(old), topic("u2000e-new")]
     tmp_a, tmp_b, pinned, candidate = fixture([old], newer)
@@ -58,7 +58,7 @@ def test_schedule_only_copy_workflow_change_does_not_block_safe_registry_overlay
         assert validate_overlay(
             pinned,
             candidate,
-            [TOPICS, STATE, SNAPSHOT, ".github/workflows/refresh-pvp-data.yml"],
+            [TOPICS, STATE, SNAPSHOT, ".github/workflows/refresh-pvp-data.yml", "tests/pvp-static.test.mjs"],
         ) == 1
 
 
