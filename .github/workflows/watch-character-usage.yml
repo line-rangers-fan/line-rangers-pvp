@@ -82,3 +82,56 @@ jobs:
           steps.freshness.outputs.due == 'true' &&
           steps.active.outputs.active == 'true'
         run: echo "A collection is already queued or running; no duplicate was added."
+
+  reconcile-community-publication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Check out current canonical source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Compare verified monthly topics with the read-only Production manifest
+        id: manifest
+        run: |
+          python scripts/check_community_publication.py \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Dispatch guarded registry reconciliation when topics differ
+        if: steps.manifest.outputs.community_drift == 'true'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const activeStatuses = new Set([
+              "requested", "waiting", "pending", "queued", "in_progress",
+            ]);
+            const response = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "sync-production-pvp.yml",
+              branch: "main",
+              per_page: 20,
+            });
+            const active = response.data.workflow_runs.some((run) =>
+              activeStatuses.has(run.status),
+            );
+            if (active) {
+              core.notice("A guarded Production sync is already queued or running; no duplicate was dispatched.");
+              return;
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "sync-production-pvp.yml",
+              ref: "main",
+            });
+            core.warning("Verified monthly board registry differed from Production; dispatched the existing append-only, pinned-code sync gate.");
