@@ -17,6 +17,8 @@ ALLOWED = {
     # pinned Worker source. Permit this exact path so safe registry/data
     # overlays do not remain blocked after discovery cadence changes.
     ".github/workflows/refresh-pvp-data.yml",
+    # This exact Copy regression test is not part of the pinned Worker build.
+    "tests/pvp-static.test.mjs",
     "config/community-characters.json",
     "data/community-character-discovery.json",
     "public/pvp/data/character_usage.json",
