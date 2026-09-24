@@ -1,6 +1,13 @@
 name: ranking-freshness-watchdog
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".production-promotion-trigger"
+      - ".github/workflows/watch-character-usage.yml"
+      - "scripts/check_community_publication.py"
+      - "scripts/validate_community_registry_overlay.py"
   workflow_dispatch:
   schedule:
     # Hourly recovery check, offset from the :07 Cloudflare baseline and the
