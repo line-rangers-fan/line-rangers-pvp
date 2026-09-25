@@ -32,6 +32,18 @@ def read_object(path: Path) -> dict:
     return value
 
 
+def ordered_competition_ranks(rows: list[dict]) -> bool:
+    previous_count = None
+    previous_rank = 0
+    for index, row in enumerate(rows, start=1):
+        count = row["occurrence_count"]
+        expected_rank = previous_rank if count == previous_count else index
+        if (previous_count is not None and count > previous_count) or row["rank"] != expected_rank:
+            return False
+        previous_count, previous_rank = count, expected_rank
+    return True
+
+
 def checked_history(history: dict, current_time, label: str) -> dict[str, dict]:
     snapshots = history.get("snapshots")
     if not isinstance(snapshots, list):
@@ -40,6 +52,12 @@ def checked_history(history: dict, current_time, label: str) -> dict[str, dict]:
     for snapshot in snapshots:
         if not scraper._usable_history_snapshot(snapshot, current_time, 200):
             raise ValueError(f"{label} contains an invalid or partial comparison baseline")
+        if not ordered_competition_ranks(snapshot["characters"]):
+            raise ValueError(f"{label} contains inconsistent character ranks")
+        for character in snapshot["characters"]:
+            for category in (character.get("equipment_rankings") or {}).values():
+                if not ordered_competition_ranks(category["items"]):
+                    raise ValueError(f"{label} contains inconsistent equipment ranks")
         instant = scraper._parse_history_time(snapshot["updated_at"]).astimezone(timezone.utc)
         if instant in by_time:
             raise ValueError(f"{label} has a duplicate comparison baseline")
