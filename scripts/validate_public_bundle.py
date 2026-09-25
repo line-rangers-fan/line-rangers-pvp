@@ -101,6 +101,22 @@ def verify_deltas(data: dict, references: dict[str, dict]) -> None:
                         raise ValueError(f"{period} equipment occurrence delta differs from history")
 
 
+def verify_shared_history(public: dict[str, dict], cross: dict[str, dict]) -> None:
+    for timestamp in public.keys() & cross.keys():
+        left = {row["unit_code"]: row for row in public[timestamp]["characters"]}
+        right = {row["unit_code"]: row for row in cross[timestamp]["characters"]}
+        if left.keys() != right.keys():
+            raise ValueError("public and cross-sample histories disagree on character identities")
+        for code in left:
+            for key in ("rank", "occurrence_count", "player_count", "adoption_rate"):
+                if left[code][key] != right[code][key]:
+                    raise ValueError("public and cross-sample histories disagree on character counts")
+            first = left[code].get("equipment_rankings")
+            second = right[code].get("equipment_rankings")
+            if isinstance(first, dict) and isinstance(second, dict) and first != second:
+                raise ValueError("public and cross-sample histories disagree on equipment counts")
+
+
 def validate_bundle(data: dict, health: dict, public_history: dict, cross_history: dict) -> None:
     if (
         data.get("target_players") != 200
@@ -116,6 +132,7 @@ def validate_bundle(data: dict, health: dict, public_history: dict, cross_histor
     current_time = scraper._parse_history_time(data["updated_at"])
     public = checked_history(public_history, current_time, "public history")
     cross = checked_history(cross_history, current_time, "cross-sample history")
+    verify_shared_history(public, cross)
     verify_deltas(data, {**public, **cross})
 
 
