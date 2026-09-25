@@ -23,5 +23,6 @@ jobs:
           set -euo pipefail
           python -m pip install -r requirements.txt
           PYTHONPATH=. python -m pytest -q
+          python scripts/validate_public_bundle.py
           node --check docs/assets/app.js
           node --test tests/*.mjs
