@@ -50,6 +50,12 @@ class PublicBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid or partial comparison baseline"):
             validate_bundle(*bundle)
 
+    def test_inconsistent_competition_ranks_are_not_trusted_as_history(self):
+        bundle = list(verified_bundle())
+        bundle[2]["snapshots"][0]["characters"][0]["rank"] = 2
+        with self.assertRaisesRegex(ValueError, "inconsistent character ranks"):
+            validate_bundle(*bundle)
+
     def test_health_must_derive_from_the_same_snapshot(self):
         bundle = list(verified_bundle())
         bundle[1]["updated_at"] = "2026-08-27T03:00:00+00:00"
