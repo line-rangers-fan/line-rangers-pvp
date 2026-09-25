@@ -129,6 +129,7 @@ jobs:
           # Derived comparison state may be repaired by the collector, but the
           # public snapshot itself must still satisfy the canonical validator.
           python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" public/pvp/data/character_usage.json
+          (cd "$GITHUB_WORKSPACE" && python scripts/validate_public_bundle.py)
 
       - name: Overlay audited monthly community registry without changing promoted code
         run: |

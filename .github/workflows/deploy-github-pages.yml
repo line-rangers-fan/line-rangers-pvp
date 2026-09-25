@@ -56,6 +56,7 @@ jobs:
           set -euo pipefail
           jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
+          python scripts/validate_public_bundle.py
 
       - name: Prepare cache-busted Pages artifact
         run: |

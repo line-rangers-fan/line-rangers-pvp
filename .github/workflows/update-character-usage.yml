@@ -88,7 +88,8 @@ jobs:
             scripts/quality_checks.py \
             scripts/check_data_freshness.py \
             scripts/rebuild_cross_sample_comparisons.py \
-            scripts/validate_public_comparisons.py
+            scripts/validate_public_comparisons.py \
+            scripts/validate_public_bundle.py
           PYTHONPATH=. python - <<'PY'
           from scripts import scrape_character_usage as scraper
           assert scraper.TARGET_PLAYER_COUNT == 200
@@ -150,6 +151,7 @@ jobs:
           set -euo pipefail
           jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
+          python scripts/validate_public_bundle.py
 
       - name: Save collected data
         if: steps.decision.outputs.due == 'true'
@@ -173,6 +175,7 @@ jobs:
           python scripts/rebuild_cross_sample_comparisons.py
           jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
+          python scripts/validate_public_bundle.py
           git add docs/data/character_usage.json docs/data/character_usage_history.json docs/data/character_usage_cross_sample_history.json docs/data/character_usage_health.json
           if ! git diff --cached --quiet; then
             git commit --amend --no-edit
