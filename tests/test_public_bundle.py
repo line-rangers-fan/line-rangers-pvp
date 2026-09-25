@@ -56,6 +56,14 @@ class PublicBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "inconsistent character ranks"):
             validate_bundle(*bundle)
 
+    def test_two_saved_histories_cannot_disagree_on_player_counts(self):
+        bundle = list(verified_bundle())
+        row = bundle[3]["snapshots"][0]["characters"][0]
+        row["player_count"] = 2
+        row["adoption_rate"] = 1.0
+        with self.assertRaisesRegex(ValueError, "histories disagree"):
+            validate_bundle(*bundle)
+
     def test_health_must_derive_from_the_same_snapshot(self):
         bundle = list(verified_bundle())
         bundle[1]["updated_at"] = "2026-08-27T03:00:00+00:00"
