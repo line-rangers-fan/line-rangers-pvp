@@ -151,31 +151,53 @@ jobs:
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
           python scripts/validate_public_bundle.py
 
+      - name: Synchronize git base before saving collection
+        if: steps.decision.outputs.due == 'true'
+        run: |
+          set -euo pipefail
+          # Collection changes are generated locally. Never run pull/rebase while
+          # those changes are dirty: that caused the previous exit-128 failure.
+          git fetch --prune origin main
+          stash_created=false
+          if [ -n "$(git status --porcelain)" ]; then
+            git stash push --include-untracked --message "collector-generated-data-before-rebase"
+            stash_created=true
+          fi
+          git rebase origin/main
+          if [ "$stash_created" = "true" ]; then
+            git stash pop
+          fi
+
       - name: Save collected data
         if: steps.decision.outputs.due == 'true'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/data/character_usage.json docs/data/character_usage_history.json docs/data/character_usage_cross_sample_history.json docs/data/character_usage_health.json
-          while IFS= read -r -d '' image; do
-            git add -- "$image"
-          done < <(find docs/assets/characters -maxdepth 1 -type f -name '*.png' -print0)
+          # Add all collector-owned data and cached character images. This also
+          # catches newly generated files that were previously left unstaged.
+          git add -A docs/data docs/assets/characters
           if git diff --cached --quiet; then
+            echo "No collector data changes to publish."
             exit 0
           fi
           git commit -m "Update PvP ranking data"
-          git pull --rebase origin main
-          python scripts/rebuild_cross_sample_comparisons.py
-          jq -e '(
-            (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
-            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
-          )' docs/data/character_usage.json >/dev/null
-          python scripts/validate_public_comparisons.py docs/data/character_usage.json
-          python scripts/validate_public_bundle.py
-          git add docs/data/character_usage.json docs/data/character_usage_history.json docs/data/character_usage_cross_sample_history.json docs/data/character_usage_health.json
-          if ! git diff --cached --quiet; then git commit --amend --no-edit; fi
-          git push
+
+          # The branch was synchronized before the commit. If another main push
+          # lands during collection, rebase the committed snapshot automatically;
+          # there should be no dirty tree at this point.
+          for push_attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            if [ "$push_attempt" -lt 3 ]; then
+              echo "Push attempt ${push_attempt} rejected; rebasing onto latest main."
+              git fetch --prune origin main
+              git rebase origin/main
+            fi
+          done
+          echo "Unable to publish the collected snapshot after 3 push attempts."
+          exit 1
 
       - name: Dispatch synchronized PvP publication
         if: steps.decision.outputs.due == 'true'
