@@ -194,9 +194,8 @@ jobs:
               exit 0
             fi
             if [ "$push_attempt" -lt 3 ]; then
-              echo "Push attempt ${push_attempt} rejected; rebasing onto latest main."
-              git fetch --prune origin main
-              git rebase origin/main
+              echo "Push attempt ${push_attempt} rejected; rebasing clean committed snapshot onto latest main."
+              git pull --rebase origin main
             fi
           done
           echo "Unable to publish the collected snapshot after 3 push attempts."
