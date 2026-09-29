@@ -63,17 +63,29 @@ def test_collector_rebuilds_only_derived_comparisons_then_revalidates():
     workflow = read(".github/workflows/update-character-usage.yml")
     rebuild = workflow.index("Rebuild verified comparisons")
     validate = workflow.index("Validate publishable snapshot after repair")
+    synchronize = workflow.index("Synchronize git base before saving collection")
+    post_sync = workflow.index("Rebuild and revalidate after synchronization")
     save = workflow.index("Save collected data")
-    assert rebuild < validate < save
-    assert "scripts/rebuild_cross_sample_comparisons.py" in workflow
+    assert rebuild < validate < synchronize < post_sync < save
+    assert workflow.count("scripts/rebuild_cross_sample_comparisons.py") >= 2
     assert "scripts/validate_public_comparisons.py docs/data/character_usage.json" in workflow
     assert ".target_players == 200 and .sampled_players == 200 and .complete_target == true" in workflow
+    assert ".target_players == 200 and .sampled_players == 199 and .complete_target == false" in workflow
 
 
-def test_publication_still_fails_closed_on_core_invariants():
+def test_publication_allows_only_bounded_199_partial_beside_complete_200():
     pages = read(".github/workflows/deploy-github-pages.yml")
     worker = read(".github/workflows/sync-production-pvp.yml")
-    assert ".target_players == 200 and .sampled_players == 200 and .complete_target == true" in pages
+    policy = read("scripts/prepare_partial_collection_runtime.py")
+
+    assert "python scripts/prepare_partial_collection_runtime.py" in pages
+    assert "python scripts/prepare_partial_collection_runtime.py" in worker
+    assert "players == target_players - 1" in policy
+    assert "missing_players != 1" in policy
+    assert "len(players) != TARGET_PLAYER_COUNT - 1" in policy
+    assert "detail_failures != 0" in policy
+    assert "diagnostic unit/equipment corruption present" in policy
+
     assert "scripts/validate_public_comparisons.py docs/data/character_usage.json" in pages
     assert "BOARD_OWNER_ACCESS_TOKEN|BOARD_OWNER_SUBJECT|BOARD_ANON_COOKIE_SECRET|CLOUDFLARE_.*TOKEN" in pages
 
