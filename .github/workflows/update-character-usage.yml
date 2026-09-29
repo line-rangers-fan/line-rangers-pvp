@@ -19,9 +19,6 @@ permissions:
   contents: write
   actions: write
 
-# Keep only one collector/publisher active. Do not cancel an active collection;
-# a later trigger waits for it, which is critical when the collector is doing
-# 200-player detail fetches.
 concurrency:
   group: pvp-collection-and-pages
   cancel-in-progress: false
@@ -111,23 +108,23 @@ jobs:
         if: steps.decision.outputs.due == 'true'
         env:
           DEBUG: "1"
-          PLAYER_FETCH_WORKERS: "3"
-          REQUEST_ATTEMPTS: "5"
-          REQUEST_TIMEOUT_SECONDS: "15"
-          DETAIL_FETCH_ROUNDS: "2"
-          DETAIL_CONTENT_RECHECKS: "1"
+          # Four concurrent detail requests is the collector's safe maximum.
+          # Keep the normal target at 200 while avoiding unnecessary serial waits.
+          PLAYER_FETCH_WORKERS: "4"
+          REQUEST_ATTEMPTS: "3"
+          REQUEST_TIMEOUT_SECONDS: "10"
+          DETAIL_FETCH_ROUNDS: "1"
+          DETAIL_CONTENT_RECHECKS: "0"
         run: |
           set -euo pipefail
-          # Normal target: 200. If upstream has fewer usable players, preserve and
-          # validate the available sample instead of aborting merely because sampled_players < 200.
           for attempt in 1 2 3; do
             echo "Collection attempt ${attempt}/3"
             if python scripts/scrape_character_usage.py; then
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then
-              echo "Collection attempt ${attempt} incomplete/failed; retrying after 20s."
-              sleep 20
+              echo "Collection attempt ${attempt} incomplete/failed; retrying after 10s."
+              sleep 10
             fi
           done
           echo "All collection attempts failed; preserving last known-good snapshot."
@@ -197,4 +194,4 @@ jobs:
           path: .artifacts/debug/
           if-no-files-found: ignore
 
-# [collect-now] Final manual collection trigger. No further commits are being made while this run executes.
+# [collect-now] Manual collection trigger marker.
