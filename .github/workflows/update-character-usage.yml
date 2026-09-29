@@ -176,6 +176,12 @@ jobs:
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
           python scripts/validate_public_bundle.py
 
+      - name: Restore runner-local policy source
+        if: steps.decision.outputs.due == 'true'
+        run: |
+          set -euo pipefail
+          git restore -- scripts/scrape_character_usage.py scripts/quality_checks.py
+
       - name: Save collected data
         if: steps.decision.outputs.due == 'true'
         run: |
@@ -196,6 +202,19 @@ jobs:
             if [ "$push_attempt" -lt 3 ]; then
               echo "Push attempt ${push_attempt} rejected; rebasing clean committed snapshot onto latest main."
               git pull --rebase origin main
+              python scripts/prepare_partial_collection_runtime.py
+              python scripts/rebuild_cross_sample_comparisons.py
+              jq -e '(
+                (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
+                (.target_players == 200 and .sampled_players == 199 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+              )' docs/data/character_usage.json >/dev/null
+              python scripts/validate_public_comparisons.py docs/data/character_usage.json
+              python scripts/validate_public_bundle.py
+              git restore -- scripts/scrape_character_usage.py scripts/quality_checks.py
+              git add -A docs/data docs/assets/characters
+              if ! git diff --cached --quiet; then
+                git commit --amend --no-edit
+              fi
             fi
           done
           echo "Unable to publish the collected snapshot after 3 push attempts."
