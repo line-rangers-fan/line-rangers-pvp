@@ -23,8 +23,6 @@ permissions:
   contents: write
   actions: write
 
-# A collection must never be cancelled by a UI deployment or a later timer.
-# Queue overlapping runs so the last known-good JSON always remains publishable.
 concurrency:
   group: pvp-collection-and-pages
   cancel-in-progress: false
@@ -32,8 +30,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Retries and structural rechecks remain available, but an upstream outage
-    # must not block the next update window.
     timeout-minutes: 20
     outputs:
       should_deploy: ${{ steps.decision.outputs.should_deploy }}
@@ -41,11 +37,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # A queued dispatch retains its event SHA even after the preceding
-          # run publishes new data. Start from current main so comparisons and
-          # the data-only rebase include that successful publication. Keep a
-          # bounded recent history so the first cross-sample run can recover
-          # previously published 199-player snapshots from git immediately.
           ref: main
           fetch-depth: 32
 
@@ -64,8 +55,6 @@ jobs:
         if: github.event_name == 'push'
         run: |
           set -euo pipefail
-          # Code changes still pass the full collector regression suite before
-          # they can collect or publish. PR CI separately runs the whole repo.
           PYTHONPATH=. pytest -q \
             tests/test_scrape_character_usage.py \
             tests/test_quality_checks.py \
@@ -79,10 +68,6 @@ jobs:
         if: github.event_name != 'push'
         run: |
           set -euo pipefail
-          # Scheduled/manual collection must not be frozen by an assertion
-          # about the already-published JSON. Verify executable code and hard
-          # invariants here; the newly fetched snapshot is validated strictly
-          # after comparison repair below.
           python -m py_compile \
             scripts/scrape_character_usage.py \
             scripts/quality_checks.py \
@@ -122,27 +107,37 @@ jobs:
         if: steps.decision.outputs.due == 'true'
         env:
           DEBUG: "1"
-          # Prefer a patient, complete collection over the old quick-fail pass.
           PLAYER_FETCH_WORKERS: "3"
           REQUEST_ATTEMPTS: "5"
           REQUEST_TIMEOUT_SECONDS: "15"
           DETAIL_FETCH_ROUNDS: "2"
           DETAIL_CONTENT_RECHECKS: "1"
-        run: python scripts/scrape_character_usage.py
+        run: |
+          set -euo pipefail
+          # A transient missing player/detail response must be retried at the
+          # workflow level as well as inside the collector. Never publish a
+          # 199/200 snapshot; only a successful complete collection continues.
+          for attempt in 1 2 3; do
+            echo "Collection attempt ${attempt}/3"
+            if python scripts/scrape_character_usage.py; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Collection attempt ${attempt} was incomplete/failed; retrying after 20s."
+              sleep 20
+            fi
+          done
+          echo "All collection attempts failed; preserving the last known-good snapshot."
+          exit 1
 
       - name: Cache verified character images
         if: steps.decision.outputs.due == 'true'
-        # Images are optional presentation assets. Keep complete statistics
-        # publishable even if the source image server is temporarily unavailable.
         continue-on-error: true
         timeout-minutes: 3
         run: python scripts/cache_character_images.py
 
       - name: Rebuild verified comparisons
         if: steps.decision.outputs.due == 'true'
-        # Derived comparison metadata is safe to recompute from verified 200/200
-        # history. This is the only automatic repair class in the data path.
-        # Raw player/equipment counts are never synthesized or relaxed here.
         run: python scripts/rebuild_cross_sample_comparisons.py
 
       - name: Validate publishable snapshot after repair
@@ -167,10 +162,6 @@ jobs:
             exit 0
           fi
           git commit -m "Update PvP ranking data"
-          # A manual/site-code fix may land while this run is collecting. Rebase
-          # first, then rebuild derived comparison metadata with the newest main
-          # code before push. This prevents an older in-flight collector from
-          # publishing data that violates a newer comparison contract.
           git pull --rebase origin main
           python scripts/rebuild_cross_sample_comparisons.py
           jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
@@ -188,9 +179,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Commits pushed by this workflow use GITHUB_TOKEN, so GitHub does
-          # not recursively trigger other push workflows. Explicitly publish
-          # the verified snapshot to both public surfaces.
           gh api --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-github-pages.yml/dispatches" \
             -f ref=main >/dev/null
@@ -207,9 +195,6 @@ jobs:
           path: .artifacts/debug/
           if-no-files-found: ignore
 
-      # GitHub Pages is intentionally disabled while the repository is private
-      # and the site is being reviewed through the no-login Cloudflare preview.
-      # Re-enable only after an explicit owner-approved public reopening.
       - name: Upload Pages artifact
         if: ${{ false }}
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
@@ -217,7 +202,6 @@ jobs:
           path: ./docs
 
   deploy:
-    # Fail closed: never publish GitHub Pages during private development.
     if: ${{ false }}
     environment:
       name: github-pages
