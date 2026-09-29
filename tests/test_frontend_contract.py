@@ -26,6 +26,8 @@ def test_frontend_assets_keep_strict_csp_and_required_controls():
     parser.feed(index)
 
     assert "script-src 'self';" in index
+    assert "style-src 'self';" in index
+    assert "'unsafe-inline'" not in index
     # frame-ancestors is ignored when CSP is delivered through a meta element
     # and causes a browser console error. Framing policy belongs in HTTP headers.
     assert "frame-ancestors" not in index
@@ -184,23 +186,25 @@ def test_reviewed_new_character_fallback_is_bounded_and_present():
 def test_workflows_pin_external_actions_and_fail_shell_scripts_safely():
     workflows = (ROOT / ".github/workflows")
     update = (workflows / "update-character-usage.yml").read_text(encoding="utf-8")
+    pages = (workflows / "deploy-github-pages.yml").read_text(encoding="utf-8")
     watcher = (workflows / "watch-character-usage.yml").read_text(encoding="utf-8")
     tests = (workflows / "test-comparison-guards.yml").read_text(encoding="utf-8")
     cloudflare = (workflows / "deploy-cloudflare-watchdog.yml").read_text(
         encoding="utf-8"
     )
 
-    for content in (update, watcher, tests, cloudflare):
+    for content in (update, pages, watcher, tests, cloudflare):
         assert "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in content
         assert "uses: actions/checkout@v4" not in content
     for content in (update, watcher, tests):
         assert "uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in content
     assert "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in update
-    assert "uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9" in update
-    assert "uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128" in update
+    assert "uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9" in pages
+    assert "uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128" in pages
     assert "uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b" in watcher
     assert "uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd" in cloudflare
     assert "set -euo pipefail" in update
+    assert "set -euo pipefail" in pages
     assert "set -euo pipefail" in cloudflare
 
 
@@ -210,7 +214,9 @@ def test_queued_collection_checks_out_latest_main():
     assert "with:" in checkout
     assert "ref: main" in checkout
     assert "cancel-in-progress: false" in update
-    assert "git pull --rebase origin main" in update
+    assert "git stash push --include-untracked" in update
+    assert "git fetch --prune origin main" in update
+    assert "git rebase origin/main" in update
     assert "python scripts/cache_character_images.py" in update
     assert "docs/assets/characters" in update
     cache_script = (ROOT / "scripts/cache_character_images.py").read_text(
@@ -225,6 +231,9 @@ def test_static_rank_period_matches_the_javascript_default():
     pages_workflow = (
         ROOT / ".github/workflows/deploy-github-pages.yml"
     ).read_text(encoding="utf-8")
+    partial_compat = (ROOT / "docs/assets/partial-validation-compat.js").read_text(
+        encoding="utf-8"
+    )
 
     assert 'selectedRankPeriod: "day"' in app
     assert '<span id="rank-period-current">前日締め</span>' in page
@@ -248,6 +257,9 @@ def test_static_rank_period_matches_the_javascript_default():
     assert "path: ./pages-dist" in pages_workflow
     assert 'data.publication_mode === "partial_after_stale"' in app
     assert "PARTIAL_FALLBACK_AFTER_MINUTES = 180" in app
+    assert "data.sampled_players === 199" in partial_compat
+    assert "Number(detailFailures) !== 0" in partial_compat
+    assert "Number(invalidRecords) > 1" in partial_compat
 
 
 def test_public_language_switcher_supports_japanese_english_chinese_and_thai():
