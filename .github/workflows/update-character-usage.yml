@@ -114,9 +114,10 @@ jobs:
           DETAIL_CONTENT_RECHECKS: "1"
         run: |
           set -euo pipefail
-          # A transient missing player/detail response must be retried at the
-          # workflow level as well as inside the collector. Never publish a
-          # 199/200 snapshot; only a successful complete collection continues.
+          # Always try for the normal 200-player target first. If the upstream
+          # currently exposes fewer players, the collector may still build a
+          # partial snapshot; publication is allowed only when the collector's
+          # stale-fallback evidence proves the partial is safe to expose.
           for attempt in 1 2 3; do
             echo "Collection attempt ${attempt}/3"
             if python scripts/scrape_character_usage.py; then
@@ -144,7 +145,14 @@ jobs:
         if: steps.decision.outputs.due == 'true'
         run: |
           set -euo pipefail
-          jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
+          # Complete 200/200 is the normal path. A smaller sample is also a
+          # valid publication when the collector explicitly marked it as the
+          # stale partial fallback and quality_checks.py supplied the required
+          # last-complete evidence. Never publish an arbitrary 199/200 file.
+          jq -e '(
+            (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
+            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+          )' docs/data/character_usage.json >/dev/null
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
           python scripts/validate_public_bundle.py
 
@@ -164,7 +172,10 @@ jobs:
           git commit -m "Update PvP ranking data"
           git pull --rebase origin main
           python scripts/rebuild_cross_sample_comparisons.py
-          jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
+          jq -e '(
+            (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
+            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+          )' docs/data/character_usage.json >/dev/null
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
           python scripts/validate_public_bundle.py
           git add docs/data/character_usage.json docs/data/character_usage_history.json docs/data/character_usage_cross_sample_history.json docs/data/character_usage_health.json
