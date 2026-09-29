@@ -86,8 +86,6 @@ def verify_deltas(data: dict, references: dict[str, dict]) -> None:
             for kind, category in character["equipment_rankings"].items():
                 old_rankings = old.get("equipment_rankings") if old else None
                 old_category = old_rankings.get(kind) if isinstance(old_rankings, dict) else None
-                # Character-only legacy snapshots do not prove equipment
-                # counts; a missing character, however, proves zero use.
                 if old and old_category is None:
                     continue
                 old_items = {item["item_code"]: item["occurrence_count"]
@@ -117,14 +115,33 @@ def verify_shared_history(public: dict[str, dict], cross: dict[str, dict]) -> No
                 raise ValueError("public and cross-sample histories disagree on equipment counts")
 
 
+def _publication_mode_is_valid(data: dict) -> bool:
+    target = data.get("target_players")
+    sampled = data.get("sampled_players")
+    complete = data.get("complete_target")
+    mode = data.get("publication_mode")
+    if target != 200:
+        return False
+    if sampled == 200 and complete is True and mode == "complete":
+        return True
+    if not (isinstance(sampled, int) and 0 < sampled < 200):
+        return False
+    if complete is not False or mode != "partial_after_stale":
+        return False
+    fallback = data.get("partial_fallback")
+    if not isinstance(fallback, dict):
+        return False
+    return scraper._parse_history_time(fallback.get("last_complete_updated_at")) is not None
+
+
 def validate_bundle(data: dict, health: dict, public_history: dict, cross_history: dict) -> None:
-    if (
-        data.get("target_players") != 200
-        or data.get("sampled_players") != 200
-        or data.get("complete_target") is not True
-        or data.get("publication_mode") != "complete"
-    ):
-        raise ValueError("public aggregation requires a complete 200/200 snapshot")
+    # Complete 200/200 remains the normal publication path. An explicitly
+    # authorized stale partial snapshot is also a valid public ranking: the
+    # collector has already recorded the last complete baseline and quality
+    # checks have verified the subset. The old validator incorrectly rejected
+    # that valid partial mode here, undoing the collector's policy.
+    if not _publication_mode_is_valid(data):
+        raise ValueError("public aggregation requires a valid complete or stale-partial snapshot")
     validate_data(data)
     validate_payload(data)
     if health != scraper.health_summary(data):
@@ -143,7 +160,7 @@ def main() -> None:
         read_object(DATA), read_object(HEALTH),
         read_object(HISTORIES[0]), read_object(HISTORIES[1]),
     )
-    print("Public 200/200 aggregation, health, and comparison history validated.")
+    print("Public PvP aggregation, health, and comparison history validated.")
 
 
 if __name__ == "__main__":
