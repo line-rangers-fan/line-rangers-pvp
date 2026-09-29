@@ -7,6 +7,7 @@ on:
     paths:
       - "docs/**"
       - ".github/workflows/sync-production-pvp.yml"
+      - "scripts/prepare_partial_collection_runtime.py"
 
 permissions:
   contents: read
@@ -122,12 +123,25 @@ jobs:
           ' wrangler.jsonc > "$tmp"
           mv "$tmp" wrangler.jsonc
 
+      - name: Apply exact 199/200 validation policy
+        run: |
+          set -euo pipefail
+          # Pages and collection already validate through this runner-local
+          # policy. Worker sync must use the identical gate so an exact 199/200
+          # snapshot is not rejected only on this publication path.
+          python scripts/prepare_partial_collection_runtime.py
+          python -m py_compile \
+            scripts/quality_checks.py \
+            scripts/scrape_character_usage.py \
+            scripts/prepare_partial_collection_runtime.py
+
       - name: Validate current PvP snapshot
         working-directory: copy-source
         run: |
           set -euo pipefail
-          # Derived comparison state may be repaired by the collector, but the
-          # public snapshot itself must still satisfy the canonical validator.
+          # Exact 199/200 partial publication is permitted by the canonical
+          # validator after the runner-local policy above. 198-or-lower samples,
+          # detail-fetch failures and malformed unit/equipment data still fail.
           python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" public/pvp/data/character_usage.json
           (cd "$GITHUB_WORKSPACE" && python scripts/validate_public_bundle.py)
 
@@ -216,7 +230,8 @@ jobs:
           fi
           python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" "$live"
           live_index="$RUNNER_TEMP/production-pvp-index.html"
-          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3             "$PRODUCTION_BASE_URL/pvp/index.html" -o "$live_index"
+          curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 \
+            "$PRODUCTION_BASE_URL/pvp/index.html" -o "$live_index"
           grep -q 'レジェンド帯 キャラ集計' "$live_index"
           echo "Production Worker PvP is synchronized with canonical docs data."
 
