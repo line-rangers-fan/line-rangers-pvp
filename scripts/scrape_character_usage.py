@@ -40,7 +40,7 @@ try:
         equipment_rankings,
         validate_data,
     )
-except ImportError:
+except ImportError:  # Allows importing this module from the test suite.
     from scripts.quality_checks import (
         CALENDAR_CLOSE_REFERENCE_MODE,
         COMPLETE_PUBLICATION_MODE,
@@ -66,7 +66,13 @@ SOURCE_HOST = "rangers.lerico.net"
 SOURCE_STALE_AFTER_MINUTES = 180
 
 
-def read_bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+def read_bounded_env_int(
+    name: str,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int:
+    """Read a numeric setting without letting a bad environment stop the run."""
     raw_value = os.environ.get(name, "")
     try:
         value = int(str(raw_value).strip()) if str(raw_value).strip() else default
@@ -76,21 +82,47 @@ def read_bounded_env_int(name: str, default: int, minimum: int, maximum: int) ->
 
 
 TARGET_PLAYER_COUNT = read_bounded_env_int("TARGET_PLAYER_COUNT", 200, 1, 500)
+# Deliberately modest concurrency gives the source time to answer and leaves
+# room for a full retry/verification pass when one detail response is bad.
 PLAYER_FETCH_WORKERS = read_bounded_env_int("PLAYER_FETCH_WORKERS", 3, 1, 4)
 MIN_CHARACTERS_PER_PLAYER = 1
 MAX_CHARACTERS_PER_PLAYER = 10
-REQUEST_TIMEOUT_SECONDS = read_bounded_env_int("REQUEST_TIMEOUT_SECONDS", 15, 5, 30)
+# Normal responses arrive in seconds.  A 15-second request bound still gives
+# five attempts and structural rechecks time to recover, without letting one
+# stalled connection block an entire update window.
+REQUEST_TIMEOUT_SECONDS = read_bounded_env_int(
+    "REQUEST_TIMEOUT_SECONDS", 15, 5, 30
+)
+# The public APIs are expected to return compact JSON.  A firm cap prevents a
+# malformed upstream response from exhausting the runner while still allowing
+# the translation catalogue to grow substantially.
 MAX_JSON_RESPONSE_BYTES = 4 * 1024 * 1024
+# Five total attempts and one verification pass favour a complete, consistent
+# snapshot over the previous quick-fail behaviour.  The collection deadline
+# below keeps an upstream outage bounded.
 REQUEST_ATTEMPTS = read_bounded_env_int("REQUEST_ATTEMPTS", 5, 1, 6)
 DETAIL_FETCH_ROUNDS = read_bounded_env_int("DETAIL_FETCH_ROUNDS", 2, 1, 3)
-DETAIL_CONTENT_RECHECKS = read_bounded_env_int("DETAIL_CONTENT_RECHECKS", 1, 0, 2)
+DETAIL_CONTENT_RECHECKS = read_bounded_env_int(
+    "DETAIL_CONTENT_RECHECKS", 1, 0, 2
+)
 OUTPUT_PATH = Path("docs/data/character_usage.json")
 HISTORY_PATH = Path("docs/data/character_usage_history.json")
+# The watchdog must not repeatedly download the full ranking (which includes
+# every character and equipment row) just to decide whether a collection is
+# healthy. This small sidecar is written only after the full public payload
+# has passed validate_data().
 HEALTH_PATH = Path("docs/data/character_usage_health.json")
+# Retain only the short rolling window needed for the one-hour comparison, plus
+# one verified close per JST date. Keeping every half-hour snapshot for a
+# month would eventually discard the month-end baseline (or bloat the public
+# history file); these values make the monthly close durable and bounded.
 HISTORY_RECENT_HOURS = 6
 HISTORY_CLOSE_RETENTION_DAYS = 40
 HISTORY_LIMIT = 96
 HISTORY_TIME_ZONE = ZoneInfo("Asia/Tokyo")
+# Daily, weekly, and monthly comparisons all use a verified Japanese evening
+# closing snapshot. We prefer the latest 23:xx result, while 22:xx safely
+# covers a missed 23:00 collection.
 CALENDAR_CLOSE_START_HOUR = 22
 CALENDAR_CLOSE_END_HOUR = 23
 RANK_COMPARISON_PERIODS = {
@@ -99,17 +131,2190 @@ RANK_COMPARISON_PERIODS = {
     "week": 7 * 24 * 60 * 60,
     "month": 31 * 24 * 60 * 60,
 }
+# A normal verified run may finish a little before or after the nominal hour.
+# Choose the closest usable sample rather than requiring it to be strictly
+# older than exactly one hour; otherwise a healthy hourly series can show
+# "history pending" for much of every hour.
 RANK_COMPARISON_MIN_RATIO = 0.50
 RANK_COMPARISON_MAX_RATIO = 1.50
 DEBUG_DIR = Path(".artifacts/debug")
+# Set immediately before scrape() by main(). Keeping scrape's no-argument
+# interface preserves existing recovery tests and makes accidental callers use
+# the strict full-sample mode.
 ALLOW_PARTIAL_FOR_RUN = False
 LAST_COMPLETE_FOR_RUN: datetime | None = None
+
+# IDs are only used in known source URLs. Strict validation avoids publishing a
+# made-up path if the upstream response is malformed.
 UNIT_CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 PLAYER_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
-# ---------------------------------------------------------------------------
-# Existing collector implementation continues below. The recovery-specific
-# behavior is intentionally kept fail-closed: complete 200/200 is preferred,
-# but a validated stale partial may be published when the source cannot supply
-# every player detail.
-# ---------------------------------------------------------------------------
+
+def is_trusted_source_url(url: str) -> bool:
+    """Allow only the handbook API host, including after any redirect."""
+    try:
+        parsed = urlparse(url)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname == SOURCE_HOST
+            and parsed.port in (None, 443)
+            and not parsed.username
+            and not parsed.password
+        )
+    except ValueError:
+        return False
+
+
+class SourceOnlyRedirectHandler(HTTPRedirectHandler):
+    """Refuse an API redirect to a different host before making the request."""
+
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        if not is_trusted_source_url(newurl):
+            raise RuntimeError("Source API redirected outside the trusted host.")
+        return super().redirect_request(request, fp, code, msg, headers, newurl)
+
+
+class _DeadlineSocketReader(io.RawIOBase):
+    """Apply a phase deadline to every socket read, including HTTP framing."""
+
+    def __init__(self, raw, sock, timeout: float):
+        super().__init__()
+        self.raw = raw
+        self.sock = sock
+        self.timeout = timeout
+        self.deadline = monotonic() + timeout
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer):
+        remaining = self.deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Source response read timed out.")
+        # Buffered readline/safe_read may call this repeatedly. Never restart
+        # the full idle timeout when another byte of framing arrives.
+        self.sock.settimeout(min(self.timeout, remaining))
+        count = self.raw.readinto(buffer)
+        if monotonic() >= self.deadline:
+            raise TimeoutError("Source response read timed out.")
+        return count
+
+    def close(self) -> None:
+        if self.closed:
+            return
+        try:
+            # A successful CONNECT tunnel reuses this socket for TLS. Do not
+            # leave the last read's shortened timeout on the following phase.
+            try:
+                self.sock.settimeout(self.timeout)
+            except OSError:
+                pass  # The owning connection may already have closed it.
+        finally:
+            try:
+                self.raw.close()
+            finally:
+                super().close()
+
+
+class SourceHTTPResponse(HTTPResponse):
+    def __init__(self, sock, *args, **kwargs):
+        super().__init__(sock, *args, **kwargs)
+        timeout = sock.gettimeout() or REQUEST_TIMEOUT_SECONDS
+        self._deadline_reader = _DeadlineSocketReader(self.fp.detach(), sock, timeout)
+        self.fp = io.BufferedReader(self._deadline_reader)
+
+    def begin(self) -> None:
+        if self.headers is not None:
+            return
+        super().begin()
+        # Give the body its full existing allowance, independently of time
+        # spent receiving headers. Header and body waits are both bounded.
+        self._deadline_reader.deadline = monotonic() + self._deadline_reader.timeout
+
+
+class SourceHTTPSConnection(HTTPSConnection):
+    response_class = SourceHTTPResponse
+
+
+class SourceHTTPSHandler(HTTPSHandler):
+    def https_open(self, request):
+        # Keep the standard verified TLS context and hostname verification.
+        return self.do_open(SourceHTTPSConnection, request, context=self._context)
+
+
+SOURCE_OPENER = build_opener(SourceOnlyRedirectHandler(), SourceHTTPSHandler())
+
+
+def save_json(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as file:
+        json.dump(value, file, ensure_ascii=False, indent=2)
+        file.write("\n")
+        file.flush()
+        os.fsync(file.fileno())
+
+
+def load_json(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            value = json.load(file)
+    except (OSError, ValueError, RecursionError):
+        # A previous local file is only comparison context.  Treating a damaged
+        # copy as absent lets a fully validated fresh collection repair itself;
+        # the new result still must pass every publication quality gate.
+        return None
+    return value if isinstance(value, dict) else None
+
+
+class MalformedJsonResponse(RuntimeError):
+    """A bounded response that can be retried without trusting its contents."""
+
+
+def _read_json_response(
+    response: object,
+    label: str,
+    timeout_seconds: int | None = None,
+) -> object:
+    """Read a bounded JSON response and make size failures explicit."""
+    headers = getattr(response, "headers", None)
+    content_length = headers.get("Content-Length") if headers else None
+    if getattr(response, "chunked", False):
+        # Follow HTTPResponse framing: chunked transfer overrides this header.
+        content_length = None
+    expected_length = None
+    if content_length:
+        try:
+            parsed_length = int(content_length)
+            if parsed_length > MAX_JSON_RESPONSE_BYTES:
+                raise RuntimeError(f"{label} response exceeds the safety limit.")
+            if parsed_length >= 0:
+                expected_length = parsed_length
+        except ValueError:
+            # A malformed header is not trusted; the bounded body read below is
+            # still authoritative.
+            pass
+
+    # Socket timeouts cover idle reads, not a body that trickles in forever.
+    # read1 yields between transport reads so the existing request timeout
+    # can also bound body consumption without reducing the retry allowance.
+    body_timeout = timeout_seconds or REQUEST_TIMEOUT_SECONDS
+    deadline = monotonic() + body_timeout
+    read = getattr(response, "read1", response.read)
+    body = bytearray()
+    while len(body) <= MAX_JSON_RESPONSE_BYTES:
+        if monotonic() >= deadline:
+            raise TimeoutError(f"{label} response body timed out.")
+        chunk = read(min(64 * 1024, MAX_JSON_RESPONSE_BYTES + 1 - len(body)))
+        if monotonic() >= deadline:
+            raise TimeoutError(f"{label} response body timed out.")
+        if not chunk:
+            break
+        body.extend(chunk)
+    if len(body) > MAX_JSON_RESPONSE_BYTES:
+        raise RuntimeError(f"{label} response exceeds the safety limit.")
+    if expected_length is not None and len(body) != expected_length:
+        raise MalformedJsonResponse(f"{label} response body was incomplete.")
+    try:
+        return json.loads(body.decode("utf-8"))
+    except (ValueError, RecursionError) as error:
+        raise MalformedJsonResponse(f"{label} did not return valid UTF-8 JSON.") from error
+
+
+def fetch_json(
+    url: str,
+    label: str,
+    *,
+    attempts: int | None = None,
+    timeout_seconds: int | None = None,
+    cache_bust: bool = False,
+) -> object:
+    """Fetch a bounded, trusted JSON response with patient retry handling."""
+    if not is_trusted_source_url(url):
+        raise ValueError("Refusing to request an untrusted source URL.")
+    request_attempts = REQUEST_ATTEMPTS if attempts is None else max(1, attempts)
+    request_timeout = (
+        REQUEST_TIMEOUT_SECONDS if timeout_seconds is None else max(1, timeout_seconds)
+    )
+    last_error: Exception | None = None
+    for attempt in range(1, request_attempts + 1):
+        request_url = url
+        if cache_bust:
+            separator = "&" if "?" in url else "?"
+            request_url = f"{url}{separator}_lr_fresh={time_ns()}-{attempt}"
+            if not is_trusted_source_url(request_url):
+                raise ValueError("Refusing to request an untrusted cache-busted URL.")
+        request = Request(
+            request_url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "line-rangers-pvp-stats/1.2",
+                "Cache-Control": "no-cache, no-store, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
+        try:
+            with SOURCE_OPENER.open(request, timeout=request_timeout) as response:
+                status = getattr(response, "status", 200)
+                if status >= 400:
+                    raise RuntimeError(f"{label} returned HTTP {status}.")
+                return _read_json_response(response, label, request_timeout)
+        except MalformedJsonResponse as error:
+            # A brief proxy/upstream failure may return truncated JSON with
+            # HTTP 200. Retry within the same existing attempt/time bounds.
+            last_error = error
+        except HTTPError as error:
+            last_error = RuntimeError(f"{label} returned HTTP {error.code}.")
+            if error.code < 500 and error.code != 429:
+                break
+        except (URLError, TimeoutError, OSError, HTTPException) as error:
+            # Do not expose raw URL, response, or player information in CI
+            # logs.  The error class is sufficient to diagnose retry policy.
+            last_error = RuntimeError(
+                f"{label} request failed ({type(error).__name__})."
+            )
+        if attempt < request_attempts:
+            # Bounded exponential backoff gives a rate-limited source time to
+            # recover while still fitting within the collection time budget.
+            sleep(min(5.0, 0.75 * (2 ** (attempt - 1))))
+
+    raise last_error or RuntimeError(f"{label} request failed.")
+
+
+def fetch_rank_data(league: str = LEAGUE) -> dict:
+    url = API_URL_TEMPLATE.format(league=quote(league, safe=""))
+    payload = fetch_json(url, "PvP ranking API", cache_bust=True)
+    if not isinstance(payload, dict):
+        raise RuntimeError("PvP ranking API response has an invalid root structure.")
+    return payload
+
+
+def fetch_player_detail(mid: str) -> dict:
+    if not PLAYER_ID_PATTERN.fullmatch(mid):
+        raise ValueError(f"Invalid player id: {mid!r}")
+    url = PLAYER_API_URL_TEMPLATE.format(mid=quote(mid, safe=""))
+    payload = fetch_json(url, "Player detail API", cache_bust=True)
+    if not isinstance(payload, dict):
+        raise RuntimeError("Player detail API has an invalid structure.")
+    returned_mid = str(payload.get("mid") or "").strip()
+    if returned_mid and returned_mid != mid:
+        raise RuntimeError("Player detail API returned a mismatched player id.")
+    return payload
+
+
+def character_image_url(unit_code: str) -> str:
+    """Return the canonical thumbnail URL for a validated unit code."""
+    if not UNIT_CODE_PATTERN.fullmatch(unit_code):
+        raise ValueError(f"Invalid unit code: {unit_code!r}")
+    encoded = quote(unit_code, safe="-_")
+    return f"https://rangers.lerico.net/res/{encoded}/{encoded}-thum.png"
+
+
+def equipment_image_url(item_code: str) -> str:
+    """Return the canonical equipment icon URL for a validated item code."""
+    if not UNIT_CODE_PATTERN.fullmatch(item_code):
+        raise ValueError(f"Invalid equipment code: {item_code!r}")
+    encoded = quote(item_code, safe="-_")
+    return f"https://rangers.lerico.net/res/gear_icon/{encoded}_icon.png"
+
+
+def team_group_sort_key(item: tuple[object, object]) -> tuple[int, int | str]:
+    key = str(item[0])
+    return (0, int(key)) if key.isdecimal() else (1, key)
+
+
+def extract_ranked_mids(payload: dict, target_players: int) -> tuple[list[str], dict]:
+    """Read the first requested unique player IDs in leaderboard order."""
+    rankings = payload.get("top100")
+    if not isinstance(rankings, list):
+        raise RuntimeError("PvP ranking API response is missing top100.")
+
+    mids: list[str] = []
+    seen_mids: set[str] = set()
+    diagnostics = {
+        "ranked_players_available": len(rankings),
+        "invalid_rank_records": [],
+    }
+
+    for rank_record in rankings:
+        if len(mids) >= target_players:
+            break
+        if not isinstance(rank_record, dict):
+            diagnostics["invalid_rank_records"].append("ranking entry is not an object")
+            continue
+
+        mid = str(rank_record.get("mid") or "").strip()
+        if not PLAYER_ID_PATTERN.fullmatch(mid) or mid in seen_mids:
+            diagnostics["invalid_rank_records"].append(
+                f"missing, malformed, or duplicate player id: {mid or '<empty>'}"
+            )
+            continue
+        seen_mids.add(mid)
+        mids.append(mid)
+
+    return mids, diagnostics
+
+
+def fetch_ranked_player_details(
+    mids: list[str],
+    collection_started_clock: float | None = None,
+) -> tuple[dict[str, dict], list[dict]]:
+    """Fetch every ranked player and retry only the transient failures.
+
+    A failure for one player must not stop collection of the other ranked
+    players.  After each full pass, only failures are retried, giving the API
+    time to recover without duplicating successful work or publishing a
+    partial sample.
+    """
+    unique_mids = list(dict.fromkeys(mids))
+    details: dict[str, dict] = {}
+    failure_types: dict[str, str] = {}
+    pending = unique_mids
+    batch_size = PLAYER_FETCH_WORKERS * 4
+
+    for round_number in range(1, DETAIL_FETCH_ROUNDS + 1):
+        if not pending:
+            break
+        if collection_started_clock is not None:
+            ensure_collection_within_budget(collection_started_clock)
+        next_pending: list[str] = []
+        for start in range(0, len(pending), batch_size):
+            if collection_started_clock is not None:
+                ensure_collection_within_budget(collection_started_clock)
+            batch = pending[start : start + batch_size]
+            with ThreadPoolExecutor(max_workers=PLAYER_FETCH_WORKERS) as executor:
+                future_by_mid = {
+                    executor.submit(fetch_player_detail, mid): mid for mid in batch
+                }
+                for future in as_completed(future_by_mid):
+                    mid = future_by_mid[future]
+                    try:
+                        detail = future.result()
+                        if not isinstance(detail, dict):
+                            raise TypeError("detail response is not an object")
+                        details[mid] = detail
+                        failure_types.pop(mid, None)
+                    except Exception as error:
+                        next_pending.append(mid)
+                        failure_types[mid] = type(error).__name__
+            if collection_started_clock is not None:
+                ensure_collection_within_budget(collection_started_clock)
+        failed_mids = set(next_pending)
+        pending = [mid for mid in pending if mid in failed_mids]
+        if pending and round_number < DETAIL_FETCH_ROUNDS:
+            sleep(1.5 * round_number)
+
+    failures = [
+        {"mid": mid, "error_type": failure_types.get(mid, "UnknownError")}
+        for mid in unique_mids
+        if mid in pending
+    ]
+    return details, failures
+
+
+def extract_unit_equipment(unit: dict, mid: str, diagnostics: dict) -> dict[str, str]:
+    """Extract the three equipment slots attached to one character occurrence."""
+    missing_slots = diagnostics.setdefault(
+        "missing_equipment_slots",
+        {equipment_type: 0 for equipment_type in EQUIPMENT_TYPES},
+    )
+    equip_map = unit.get("equipMap")
+    if equip_map is None:
+        diagnostics["units_without_equipment"] += 1
+        for equipment_type in EQUIPMENT_TYPES:
+            missing_slots[equipment_type] += 1
+        return {}
+    if not isinstance(equip_map, dict):
+        raise ValueError(f"{mid}: equipMap is not an object")
+
+    equipment: dict[str, str] = {}
+    for equipment_type in EQUIPMENT_TYPES:
+        slot = equip_map.get(equipment_type)
+        if slot is None:
+            missing_slots[equipment_type] += 1
+            continue
+        if not isinstance(slot, dict):
+            raise ValueError(f"{mid}: {equipment_type} slot is not an object")
+        item_code = str(slot.get("itemCode") or "").strip()
+        if not UNIT_CODE_PATTERN.fullmatch(item_code):
+            raise ValueError(f"{mid}: invalid {equipment_type} item code {item_code!r}")
+        equipment[equipment_type] = item_code
+    return equipment
+
+
+def extract_ranked_players(
+    payload: dict,
+    target_players: int,
+    player_details: dict[str, dict] | None = None,
+) -> tuple[list[dict], dict]:
+    """Extract current defence teams and enrich them with detail equipment.
+
+    The ranking payload is authoritative for the current Legend membership and
+    defence-team unit codes. /api/getPlayer is used only to enrich matching
+    character occurrences with equipment, because that detail endpoint can lag
+    behind the live ranking payload. If the ranking payload is unavailable in a
+    deterministic test/legacy fixture, details remain a compatibility fallback.
+    """
+    rankings = payload.get("top100")
+    if not isinstance(rankings, list):
+        raise RuntimeError("PvP API response is missing top100.")
+
+    ranking_info = payload.get("playerInfo")
+    ranking_info_by_mid = {
+        str(record.get("mid")): record
+        for record in ranking_info
+        if isinstance(record, dict) and str(record.get("mid") or "").strip()
+    } if isinstance(ranking_info, list) else {}
+
+    if ranking_info_by_mid:
+        current_info_by_mid = ranking_info_by_mid
+    elif isinstance(player_details, dict):
+        # Compatibility for tests/legacy fixtures that omit playerInfo.
+        current_info_by_mid = player_details
+    else:
+        raise RuntimeError("PvP API response is missing playerInfo.")
+
+    detail_by_mid = (
+        player_details
+        if isinstance(player_details, dict)
+        else current_info_by_mid
+    )
+
+    players: list[dict] = []
+    seen_mids: set[str] = set()
+    diagnostics: dict = {
+        "ranked_players_available": len(rankings),
+        "player_info_available": len(current_info_by_mid),
+        "ranking_player_info_available": len(ranking_info_by_mid),
+        "detail_player_info_available": len(detail_by_mid),
+        "detail_team_mismatch_players": 0,
+        "_detail_recheck_mids": [],
+        "missing_player_info": [],
+        "invalid_players": [],
+        "invalid_unit_codes": [],
+        "invalid_equipment": [],
+        "units_without_equipment": 0,
+        "missing_equipment_slots": {
+            equipment_type: 0 for equipment_type in EQUIPMENT_TYPES
+        },
+    }
+
+    for rank_record in rankings:
+        if len(players) >= target_players:
+            break
+        if not isinstance(rank_record, dict):
+            diagnostics["invalid_players"].append("ranking entry is not an object")
+            continue
+
+        mid = str(rank_record.get("mid") or "").strip()
+        if not PLAYER_ID_PATTERN.fullmatch(mid) or mid in seen_mids:
+            diagnostics["invalid_players"].append(
+                f"missing, malformed, or duplicate player id: {mid or '<empty>'}"
+            )
+            continue
+        seen_mids.add(mid)
+
+        current_info = current_info_by_mid.get(mid)
+        if not isinstance(current_info, dict):
+            diagnostics["missing_player_info"].append(mid)
+            diagnostics["_detail_recheck_mids"].append(mid)
+            continue
+
+        current_team_map = current_info.get("playerUnitTeamGroupMap")
+        current_team_map = current_team_map if isinstance(current_team_map, dict) else {}
+        current_groups = current_team_map.get("pvpteam")
+        if not isinstance(current_groups, dict):
+            diagnostics["invalid_players"].append(f"{mid}: no pvpteam map")
+            diagnostics["_detail_recheck_mids"].append(mid)
+            continue
+
+        # Build equipment queues by unit code from the detail endpoint. Matching
+        # by code instead of raw slot position tolerates harmless group ordering
+        # differences while refusing to attach equipment from a stale character.
+        detail_queues: dict[str, list[dict]] = defaultdict(list)
+        detail_codes: list[str] = []
+        detail_complete = True
+        detail_info = detail_by_mid.get(mid)
+        detail_team_map = (
+            detail_info.get("playerUnitTeamGroupMap")
+            if isinstance(detail_info, dict)
+            else None
+        )
+        detail_groups = (
+            detail_team_map.get("pvpteam")
+            if isinstance(detail_team_map, dict)
+            else None
+        )
+        if isinstance(detail_groups, dict):
+            for _, detail_group in sorted(detail_groups.items(), key=team_group_sort_key):
+                if not isinstance(detail_group, list):
+                    detail_complete = False
+                    continue
+                for detail_unit in detail_group:
+                    detail_code = (
+                        str(detail_unit.get("unitCode") or "").strip()
+                        if isinstance(detail_unit, dict)
+                        else ""
+                    )
+                    if not UNIT_CODE_PATTERN.fullmatch(detail_code):
+                        detail_complete = False
+                        continue
+                    detail_codes.append(detail_code)
+                    detail_queues[detail_code].append(detail_unit)
+        else:
+            detail_complete = False
+
+        units: list[str] = []
+        unit_records: list[dict] = []
+        invalid_player = False
+        for _, group in sorted(current_groups.items(), key=team_group_sort_key):
+            if not isinstance(group, list):
+                invalid_player = True
+                break
+            for unit in group:
+                code = str(unit.get("unitCode") or "").strip() if isinstance(unit, dict) else ""
+                if not UNIT_CODE_PATTERN.fullmatch(code):
+                    diagnostics["invalid_unit_codes"].append(
+                        {"mid": mid, "unit_code": code}
+                    )
+                    invalid_player = True
+                    break
+
+                matching_details = detail_queues.get(code)
+                equipment_source = (
+                    matching_details.pop(0)
+                    if matching_details
+                    else unit if player_details is None else {}
+                )
+                try:
+                    equipment = extract_unit_equipment(
+                        equipment_source, mid, diagnostics
+                    )
+                except ValueError as error:
+                    diagnostics["invalid_equipment"].append(str(error))
+                    equipment = {}
+                    detail_complete = False
+
+                units.append(code)
+                unit_records.append({"unit_code": code, "equipment": equipment})
+            if invalid_player:
+                break
+
+        if invalid_player or not (
+            MIN_CHARACTERS_PER_PLAYER <= len(units) <= MAX_CHARACTERS_PER_PLAYER
+        ):
+            diagnostics["invalid_players"].append(f"{mid}: character count={len(units)}")
+            diagnostics["_detail_recheck_mids"].append(mid)
+            continue
+
+        if isinstance(player_details, dict) and (
+            not detail_complete or Counter(detail_codes) != Counter(units)
+        ):
+            diagnostics["detail_team_mismatch_players"] += 1
+            diagnostics["_detail_recheck_mids"].append(mid)
+
+        players.append({"mid": mid, "units": units, "unit_records": unit_records})
+
+    diagnostics["valid_players"] = len(players)
+    diagnostics["team_size_distribution"] = dict(
+        sorted(Counter(len(player["units"]) for player in players).items())
+    )
+    diagnostics["_detail_recheck_mids"] = list(
+        dict.fromkeys(diagnostics["_detail_recheck_mids"])
+    )
+    return players, diagnostics
+
+
+def fetch_character_names(unit_codes: set[str]) -> dict[str, str]:
+    """Load concise Japanese character names, without their preceding titles."""
+    if not unit_codes:
+        return {}
+
+    url = f"{TRANSLATE_API_URL}?{urlencode({'keys': UNIT_TRANSLATE_KEY})}"
+    # Names are presentation metadata, not part of the 200-player completeness
+    # contract. Keep this optional request short so a catalogue outage cannot
+    # consume the retry budget reserved for ranking and player details.
+    payload = fetch_json(
+        url,
+        "Character translation API",
+        attempts=min(2, REQUEST_ATTEMPTS),
+        timeout_seconds=min(8, REQUEST_TIMEOUT_SECONDS),
+    )
+    if not isinstance(payload, dict):
+        raise RuntimeError("Character translation API has an invalid root structure.")
+    catalog = payload.get(UNIT_TRANSLATE_KEY)
+    if not isinstance(catalog, dict):
+        raise RuntimeError("Character translation API is missing the character catalog.")
+
+    names: dict[str, str] = {}
+    for unit_code in unit_codes:
+        value = catalog.get(f"{unit_code}_snm") or catalog.get(f"{unit_code}_nm")
+        if isinstance(value, str) and value.strip():
+            names[unit_code] = " ".join(value.replace("\n", " ").split())
+        else:
+            names[unit_code] = unit_code
+    return names
+
+
+def _clean_character_name(value: object, unit_code: str) -> str | None:
+    """Return safe reusable display metadata without inventing a new name."""
+    if not isinstance(value, str):
+        return None
+    name = " ".join(value.replace("\n", " ").split())
+    if not name or name == unit_code or len(name) > 160:
+        return None
+    return name
+
+
+def previous_character_names(unit_codes: set[str]) -> dict[str, str]:
+    """Reuse only previously published names when optional metadata is down."""
+    previous = load_json(OUTPUT_PATH)
+    rows = previous.get("characters") if isinstance(previous, dict) else None
+    if not isinstance(rows, list):
+        return {}
+    names: dict[str, str] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        unit_code = str(row.get("unit_code") or "")
+        if unit_code not in unit_codes or not UNIT_CODE_PATTERN.fullmatch(unit_code):
+            continue
+        name = _clean_character_name(row.get("name"), unit_code)
+        if name:
+            names[unit_code] = name
+    return names
+
+
+def resolve_character_names(
+    unit_codes: set[str],
+) -> tuple[dict[str, str], dict[str, int | bool]]:
+    """Resolve optional names without ever blocking a valid core collection."""
+    previous_names = previous_character_names(unit_codes)
+    fetched_names: dict[str, str] = {}
+    fetch_failed = False
+    try:
+        fetched_names = fetch_character_names(unit_codes)
+    except (RuntimeError, ValueError) as error:
+        fetch_failed = True
+        print(
+            "[WARN] Character name metadata was unavailable; "
+            f"preserving known names ({type(error).__name__}).",
+            file=sys.stderr,
+        )
+
+    resolved: dict[str, str] = {}
+    source_count = previous_count = pending_count = 0
+    for unit_code in unit_codes:
+        source_name = _clean_character_name(fetched_names.get(unit_code), unit_code)
+        if source_name:
+            resolved[unit_code] = source_name
+            source_count += 1
+            continue
+        previous_name = previous_names.get(unit_code)
+        if previous_name:
+            resolved[unit_code] = previous_name
+            previous_count += 1
+            continue
+        resolved[unit_code] = unit_code
+        pending_count += 1
+
+    return resolved, {
+        "source_names": source_count,
+        "preserved_names": previous_count,
+        "pending_names": pending_count,
+        "translation_fetch_failed": fetch_failed,
+    }
+
+
+def build_statistics(
+    players: list[dict],
+    diagnostics: dict,
+    character_names: dict[str, str] | None = None,
+    target_players: int = TARGET_PLAYER_COUNT,
+) -> dict:
+    """Build character and per-character equipment rankings."""
+    character_names = character_names or {}
+    character_counts = defaultdict(lambda: {"occurrence_count": 0, "player_count": 0})
+    character_equipment_records: dict[str, list[dict]] = defaultdict(list)
+    category_occurrences = defaultdict(lambda: Counter())
+    category_players = defaultdict(lambda: defaultdict(set))
+    player_sizes: list[int] = []
+
+    for player in players:
+        mid = str(player["mid"])
+        records = player.get("unit_records")
+        if not isinstance(records, list):
+            records = [
+                {"unit_code": unit_code, "equipment": {}}
+                for unit_code in player.get("units", [])
+            ]
+
+        player_sizes.append(len(records))
+        seen_units: set[str] = set()
+        equipment_by_character: dict[str, list[dict]] = defaultdict(list)
+
+        for record in records:
+            unit_code = str(record.get("unit_code") or "")
+            if not UNIT_CODE_PATTERN.fullmatch(unit_code):
+                raise RuntimeError(f"Invalid unit code while building statistics: {unit_code!r}")
+
+            character_counts[unit_code]["occurrence_count"] += 1
+            seen_units.add(unit_code)
+            equipment = record.get("equipment")
+            equipment = equipment if isinstance(equipment, dict) else {}
+
+            for equipment_type, item_code in equipment.items():
+                if equipment_type not in EQUIPMENT_TYPES:
+                    continue
+                if not UNIT_CODE_PATTERN.fullmatch(str(item_code)):
+                    raise RuntimeError(
+                        f"Invalid equipment code while building statistics: {item_code!r}"
+                    )
+                item_code = str(item_code)
+                equipment_by_character[unit_code].append(
+                    {
+                        "type": equipment_type,
+                        "item_code": item_code,
+                        "image": equipment_image_url(item_code),
+                    }
+                )
+                category_occurrences[unit_code][equipment_type] += 1
+                category_players[unit_code][equipment_type].add(mid)
+
+        for unit_code in seen_units:
+            character_counts[unit_code]["player_count"] += 1
+        for unit_code, equipment in equipment_by_character.items():
+            character_equipment_records[unit_code].append({"equipment": equipment})
+
+    sampled_players = len(players)
+    total_slots = sum(player_sizes)
+    if not sampled_players or not total_slots:
+        raise RuntimeError("No character slots were found in the ranked players.")
+
+    characters: list[dict] = []
+    for unit_code, counts in character_counts.items():
+        ranked_equipment = equipment_rankings(character_equipment_records[unit_code])
+        rankings: dict[str, dict] = {}
+        for equipment_type in EQUIPMENT_TYPES:
+            items = ranked_equipment[equipment_type]
+            for item in items:
+                item["image"] = equipment_image_url(item["item_code"])
+                item["adoption_rate"] = round(
+                    item["player_count"] / counts["player_count"] * 100, 1
+                )
+            rankings[equipment_type] = {
+                "equipped_occurrence_count": int(
+                    category_occurrences[unit_code][equipment_type]
+                ),
+                "equipped_player_count": len(
+                    category_players[unit_code][equipment_type]
+                ),
+                "items": items,
+            }
+
+        characters.append(
+            {
+                "unit_code": unit_code,
+                "name": character_names.get(unit_code, unit_code),
+                "image": character_image_url(unit_code),
+                "occurrence_count": int(counts["occurrence_count"]),
+                "player_count": int(counts["player_count"]),
+                "adoption_rate": round(
+                    counts["player_count"] / sampled_players * 100, 1
+                ),
+                "slot_rate": round(
+                    counts["occurrence_count"] / total_slots * 100, 2
+                ),
+                "equipment_rankings": rankings,
+            }
+        )
+
+    characters.sort(
+        key=lambda item: (
+            -item["occurrence_count"],
+            -item["player_count"],
+            item["unit_code"],
+        )
+    )
+    assign_competition_ranks(characters)
+
+    calculated_slots = sum(item["occurrence_count"] for item in characters)
+    if calculated_slots != total_slots:
+        raise RuntimeError(
+            "Character totals do not match team totals: "
+            f"{calculated_slots} != {total_slots}"
+        )
+
+    diagnostics["equipment_items_collected"] = sum(
+        len(category["items"])
+        for character in characters
+        for category in character["equipment_rankings"].values()
+    )
+    equipment_slots_collected = sum(
+        int(category["equipped_occurrence_count"])
+        for character in characters
+        for category in character["equipment_rankings"].values()
+    )
+    equipment_slots_expected = total_slots * len(EQUIPMENT_TYPES)
+    return {
+        # Version 11 identifies the fixed Japanese calendar-close baselines,
+        # in addition to the complete hour/day/week/month comparison contract.
+        "schema_version": SCHEMA_VERSION,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "source": {"name": SOURCE_NAME, "url": TARGET_URL},
+        "league": "レジェンド",
+        "target_players": target_players,
+        "sampled_players": sampled_players,
+        "character_slots": total_slots,
+        "unique_characters": len(characters),
+        "median_characters_per_player": median(player_sizes),
+        "pages_scanned": 1,
+        "termination_reason": "api_target_reached",
+        "complete_target": sampled_players >= target_players,
+        "collection_quality": {
+            "sample_coverage": round(sampled_players / target_players * 100, 1),
+            "equipment_slots_collected": equipment_slots_collected,
+            "equipment_slots_expected": equipment_slots_expected,
+            "equipment_slots_missing": (
+                equipment_slots_expected - equipment_slots_collected
+            ),
+            "equipment_fill_rate": round(
+                equipment_slots_collected / equipment_slots_expected * 100,
+                1,
+            ),
+            "detail_fetch_failures": len(
+                diagnostics.get("detail_fetch_failures", [])
+            ),
+            "invalid_player_records": sum(
+                len(diagnostics.get(key, []))
+                for key in (
+                    "missing_player_info",
+                    "invalid_players",
+                    "invalid_unit_codes",
+                    "invalid_equipment",
+                    "invalid_rank_records",
+                )
+            ),
+        },
+        "characters": characters,
+        "diagnostics": diagnostics,
+    }
+
+
+def ensure_collection_within_budget(collection_started_clock: float) -> None:
+    """Stop cleanly before an unusually slow source can publish stale work."""
+    if monotonic() - collection_started_clock > MAX_COLLECTION_DURATION_SECONDS:
+        raise RuntimeError(
+            "Collection exceeded the verification time budget; "
+            "retained the last known-good data."
+        )
+
+
+def _last_complete_timestamp(previous: dict | None) -> datetime | None:
+    """Return the trusted full-sample timestamp carried by public data."""
+    if not isinstance(previous, dict):
+        return None
+    if (
+        previous.get("complete_target") is True
+        and previous.get("sampled_players") == previous.get("target_players")
+    ):
+        return _parse_history_time(previous.get("updated_at"))
+    fallback = previous.get("partial_fallback")
+    if isinstance(fallback, dict):
+        return _parse_history_time(fallback.get("last_complete_updated_at"))
+    return None
+
+
+def partial_fallback_context(
+    previous: dict | None,
+    now: datetime | None = None,
+) -> tuple[bool, datetime | None]:
+    """Enable partial publication only after three hours without a full sample."""
+    try:
+        validate_data(previous)
+    except (ValueError, TypeError, AttributeError):
+        return False, None
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    current = current.astimezone(timezone.utc)
+    last_complete = _last_complete_timestamp(previous)
+    if last_complete is None or last_complete.tzinfo is None:
+        return False, None
+    age = (current - last_complete.astimezone(timezone.utc)).total_seconds()
+    return age >= PARTIAL_FALLBACK_AFTER_MINUTES * 60, last_complete
+
+
+def scrape() -> dict:
+    if TARGET_PLAYER_COUNT < 1:
+        raise RuntimeError("TARGET_PLAYER_COUNT must be at least 1.")
+
+    collection_started_at = datetime.now(timezone.utc)
+    collection_started_clock = monotonic()
+
+    payload = fetch_rank_data()
+    mids, ranking_diagnostics = extract_ranked_mids(payload, TARGET_PLAYER_COUNT)
+    if not mids:
+        raise RuntimeError("PvP ranking API did not provide any ranked players.")
+    if len(mids) != TARGET_PLAYER_COUNT and not ALLOW_PARTIAL_FOR_RUN:
+        raise RuntimeError(
+            "PvP ranking API did not provide the requested number of unique players: "
+            f"{len(mids)} != {TARGET_PLAYER_COUNT}"
+        )
+
+    detail_started_clock = monotonic()
+    details, detail_failures = fetch_ranked_player_details(
+        mids, collection_started_clock=collection_started_clock
+    )
+    ensure_collection_within_budget(collection_started_clock)
+    if detail_failures:
+        dump_detail_failure_summary(len(mids), len(details), detail_failures)
+        raise RuntimeError(
+            "Player detail collection failed after bounded retries; "
+            f"aborted without publishing ({len(detail_failures)} failures)."
+        )
+    players, diagnostics = extract_ranked_players(
+        payload, TARGET_PLAYER_COUNT, player_details=details
+    )
+    diagnostics.update(ranking_diagnostics)
+    diagnostics["detail_fetches_requested"] = len(mids)
+    diagnostics["detail_fetch_failures"] = detail_failures
+
+    # A valid JSON response can still contain an incomplete defence team.
+    # Re-fetch only the players rejected by structural validation, then repeat
+    # the extraction.  This is deliberately separate from network retries so
+    # a transient partial payload cannot become a misleading published count.
+    content_rechecks = 0
+    content_recheck_failures: list[dict] = []
+    valid_mids = {str(player.get("mid")) for player in players}
+    pending_content_recheck = list(
+        dict.fromkeys(
+            [mid for mid in mids if mid not in valid_mids]
+            + list(diagnostics.pop("_detail_recheck_mids", []))
+        )
+    )
+    while pending_content_recheck and content_rechecks < DETAIL_CONTENT_RECHECKS:
+        content_rechecks += 1
+        sleep(1.5 * content_rechecks)
+        confirmed_details, recheck_failures = fetch_ranked_player_details(
+            pending_content_recheck, collection_started_clock=collection_started_clock
+        )
+        details.update(confirmed_details)
+        ensure_collection_within_budget(collection_started_clock)
+        content_recheck_failures.extend(recheck_failures)
+        players, diagnostics = extract_ranked_players(
+            payload, TARGET_PLAYER_COUNT, player_details=details
+        )
+        diagnostics.update(ranking_diagnostics)
+        diagnostics["detail_fetches_requested"] = len(mids)
+        diagnostics["detail_fetch_failures"] = []
+        valid_mids = {str(player.get("mid")) for player in players}
+        pending_content_recheck = list(
+            dict.fromkeys(
+                [mid for mid in mids if mid not in valid_mids]
+                + list(diagnostics.pop("_detail_recheck_mids", []))
+            )
+        )
+    diagnostics.pop("_detail_recheck_mids", None)
+    diagnostics["detail_content_rechecks"] = content_rechecks
+
+    expected_players = len(mids)
+    if len(players) != expected_players:
+        dump_detail_failure_summary(
+            len(mids),
+            len(players),
+            content_recheck_failures + [{"error_type": "InvalidDetailContent"}],
+        )
+        raise RuntimeError(
+            "Some requested ranked players had incomplete team or equipment data; "
+            f"refusing to publish missing player details ({len(players)} != {expected_players})."
+        )
+
+    unit_codes = {
+        record["unit_code"]
+        for player in players
+        for record in player["unit_records"]
+    }
+    character_names, name_metadata = resolve_character_names(unit_codes)
+    diagnostics["character_name_metadata"] = name_metadata
+    ensure_collection_within_budget(collection_started_clock)
+    data = build_statistics(
+        players,
+        diagnostics,
+        character_names=character_names,
+        target_players=TARGET_PLAYER_COUNT,
+    )
+    if len(players) == TARGET_PLAYER_COUNT:
+        data["publication_mode"] = COMPLETE_PUBLICATION_MODE
+    else:
+        if LAST_COMPLETE_FOR_RUN is None:
+            raise RuntimeError("Partial publication has no verified full-sample baseline.")
+        data["publication_mode"] = PARTIAL_PUBLICATION_MODE
+        data["termination_reason"] = "api_partial_after_stale"
+        data["partial_fallback"] = {
+            "trigger_after_minutes": PARTIAL_FALLBACK_AFTER_MINUTES,
+            "last_complete_updated_at": LAST_COMPLETE_FOR_RUN.isoformat(),
+            "missing_players": TARGET_PLAYER_COUNT - len(players),
+        }
+    data["collection_quality"].update(
+        {
+            "collection_started_at": collection_started_at.isoformat(),
+            "collection_duration_seconds": round(
+                monotonic() - collection_started_clock,
+                2,
+            ),
+            "detail_fetch_duration_seconds": round(
+                monotonic() - detail_started_clock,
+                2,
+            ),
+        }
+    )
+    return data
+
+
+def _parse_history_time(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _history_date_key(value: datetime | None) -> str | None:
+    """Return the calendar date used by the Japanese-facing daily comparison.
+
+    Stored timestamps are UTC, but the site is operated and read primarily in
+    Japan.  Keeping an explicit date key prevents a snapshot around 00:00 JST
+    from being assigned to the wrong comparison day.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(HISTORY_TIME_ZONE).date().isoformat()
+
+
+def _as_japan_time(value: datetime) -> datetime:
+    """Normalize an aware or legacy-naive timestamp to Japan Standard Time."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(HISTORY_TIME_ZONE)
+
+
+def _calendar_close_date(current_time: datetime, period_name: str):
+    """Return the completed JST date used by a fixed period close.
+
+    Daily changes always compare against yesterday's close. Weekly changes use
+    the preceding Sunday close (Monday-based weeks), and monthly changes use
+    the final close of the preceding calendar month. These dates deliberately
+    do not move with the time at which a visitor opens the page.
+    """
+    local_date = _as_japan_time(current_time).date()
+    if period_name == "day":
+        return local_date - timedelta(days=1)
+    if period_name == "week":
+        return local_date - timedelta(days=local_date.weekday() + 1)
+    if period_name == "month":
+        return local_date.replace(day=1) - timedelta(days=1)
+    raise ValueError(f"Unsupported calendar close period: {period_name}")
+
+
+def _calendar_close_reference(
+    history: dict,
+    current_time: datetime,
+    period_name: str,
+) -> dict | None:
+    """Return the latest verified 22:xx/23:xx JST snapshot for a fixed close."""
+    snapshots = history.get("snapshots")
+    if not isinstance(snapshots, list):
+        return None
+
+    close_date = _calendar_close_date(current_time, period_name)
+    candidates: list[tuple[float, dict]] = []
+    for snapshot in snapshots:
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("characters"), list):
+            continue
+        timestamp = _parse_history_time(snapshot.get("updated_at"))
+        if timestamp is None:
+            continue
+        local_time = _as_japan_time(timestamp)
+        if (
+            local_time.date() == close_date
+            and CALENDAR_CLOSE_START_HOUR <= local_time.hour <= CALENDAR_CLOSE_END_HOUR
+        ):
+            candidates.append((timestamp.timestamp(), snapshot))
+    if not candidates:
+        return None
+    # The 23:xx snapshot wins when available; otherwise a valid 22:xx result
+    # remains a trustworthy close baseline instead of delaying the comparison.
+    return max(candidates, key=lambda item: item[0])[1]
+
+
+def _period_reference(
+    history: dict | None,
+    current_time: datetime | None,
+    period_seconds: int,
+    period_name: str | None = None,
+) -> dict | None:
+    """Return the earlier verified snapshot required for a public period.
+
+    Hourly comparisons use the nearest verified snapshot around one hour ago.
+    Day/week/month comparisons instead use fixed JST closing snapshots, so the
+    baseline never changes merely because the page was read an hour later.
+    """
+    if current_time is None or not isinstance(history, dict):
+        return None
+    snapshots = history.get("snapshots")
+    if not isinstance(snapshots, list):
+        return None
+
+    if period_name in {"day", "week", "month"}:
+        return _calendar_close_reference(history, current_time, period_name)
+
+    target_time = current_time.timestamp() - period_seconds
+    candidates: list[tuple[float, float, dict]] = []
+    for snapshot in snapshots:
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("characters"), list):
+            continue
+        timestamp = _parse_history_time(snapshot.get("updated_at"))
+        if timestamp is None:
+            continue
+        age = current_time.timestamp() - timestamp.timestamp()
+        if (
+            age >= period_seconds * RANK_COMPARISON_MIN_RATIO
+            and age <= period_seconds * RANK_COMPARISON_MAX_RATIO
+        ):
+            # Prefer the verified sample closest to one hour ago.  A sample
+            # that finished a few minutes after the exact target is still a
+            # more truthful comparison than silently dropping all history.
+            candidates.append((abs(timestamp.timestamp() - target_time), -timestamp.timestamp(), snapshot))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda item: (item[0], item[1]))[2]
+
+
+def _find_history_character(reference: dict | None, unit_code: str) -> dict | None:
+    if not isinstance(reference, dict):
+        return None
+    for row in reference.get("characters", []):
+        if isinstance(row, dict) and str(row.get("unit_code")) == str(unit_code):
+            return row
+    return None
+
+
+def _find_history_equipment(
+    reference_character: dict | None,
+    equipment_type: str,
+    item_code: str,
+) -> dict | None:
+    if not isinstance(reference_character, dict):
+        return None
+    rankings = reference_character.get("equipment_rankings")
+    category = rankings.get(equipment_type) if isinstance(rankings, dict) else None
+    items = category.get("items") if isinstance(category, dict) else None
+    if not isinstance(items, list):
+        return None
+    for item in items:
+        if isinstance(item, dict) and str(item.get("item_code")) == str(item_code):
+            return item
+    return None
+
+
+def _exact_int(value: object) -> int | None:
+    """Return an integer value while excluding booleans and malformed data."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _occurrence_delta(current_value: object, previous_value: object | None) -> int | None:
+    """Return a count delta, using zero only for an item absent from a valid snapshot.
+
+    A missing item in an otherwise valid reference snapshot means it was used zero
+    times.  A malformed count is different: it remains unavailable so the page
+    does not quietly turn uncertain data into a false zero.
+    """
+    current_count = _exact_int(current_value)
+    if current_count is None or current_count < 0:
+        return None
+    previous_count = _exact_int(previous_value)
+    if previous_count is None or previous_count < 0:
+        return None
+    return current_count - previous_count
+
+
+def _period_change(
+    current_row: dict,
+    reference: dict | None,
+    current_time: datetime | None,
+) -> dict:
+    """Build one period result with an explicit comparable flag."""
+    result = {
+        "comparable": False,
+        "rank": None,
+        "occurrence_count": None,
+        "from_updated_at": None,
+        "interval_minutes": None,
+    }
+    if not reference:
+        return result
+
+    reference_time = _parse_history_time(reference.get("updated_at"))
+    old_rows = {
+        str(row.get("unit_code")): row
+        for row in reference.get("characters", [])
+        if isinstance(row, dict) and row.get("unit_code")
+    }
+    old = old_rows.get(str(current_row.get("unit_code")))
+    if reference_time is None or current_time is None:
+        return result
+
+    old_rank = _exact_int(old.get("rank")) if isinstance(old, dict) else None
+    current_rank = _exact_int(current_row.get("rank"))
+    # Only an absent character in an existing snapshot means zero. A present
+    # row with a missing/null count is unknown, never a fabricated increase.
+    old_count = old.get("occurrence_count") if isinstance(old, dict) else 0
+    delta = _occurrence_delta(current_row.get("occurrence_count"), old_count)
+    if delta is None:
+        return result
+
+    result.update(
+        {
+            "comparable": True,
+            # Ranks cannot be inferred for a character absent from a snapshot.
+            "rank": old_rank - current_rank if old_rank is not None and current_rank is not None else None,
+            # Positive means this character is used in more defence-team slots.
+            "occurrence_count": delta,
+            "from_updated_at": reference.get("updated_at"),
+            "interval_minutes": round(
+                (current_time - reference_time).total_seconds() / 60,
+                1,
+            ),
+        }
+    )
+    return result
+
+
+def _equipment_period_change(
+    current_item: dict,
+    reference: dict | None,
+    unit_code: str,
+    equipment_type: str,
+    current_time: datetime | None,
+) -> dict:
+    """Compare one equipment item with the verified period snapshot.
+
+    Missing snapshots are deliberately represented as non-comparable.  The
+    frontend labels that state as waiting for history, which is distinct from a
+    real unchanged count (0).  An item missing from a valid snapshot, however,
+    has a known prior count of zero and therefore has a real positive delta.
+    """
+    result = {
+        "comparable": False,
+        "rank": None,
+        "occurrence_count": None,
+        "from_updated_at": None,
+        "interval_minutes": None,
+    }
+    reference_time = _parse_history_time(reference.get("updated_at")) if reference else None
+    if reference_time is None or current_time is None:
+        return result
+
+    reference_character = _find_history_character(reference, unit_code)
+    if reference_character is None:
+        # A character absent from a valid snapshot proves all of its equipment
+        # counts were zero at that baseline, just like the character count.
+        old_item = None
+    else:
+        rankings = reference_character.get("equipment_rankings")
+        category = rankings.get(equipment_type) if isinstance(rankings, dict) else None
+        if not isinstance(category, dict) or not isinstance(category.get("items"), list):
+            # Older character-only snapshots contain no equipment evidence.
+            return result
+
+        old_item = _find_history_equipment(
+            reference_character,
+            equipment_type,
+            str(current_item.get("item_code") or ""),
+        )
+    old_rank = _exact_int(old_item.get("rank")) if isinstance(old_item, dict) else None
+    current_rank = _exact_int(current_item.get("rank"))
+    old_count = old_item.get("occurrence_count") if isinstance(old_item, dict) else 0
+    delta = _occurrence_delta(current_item.get("occurrence_count"), old_count)
+    if delta is None:
+        return result
+
+    result.update(
+        {
+            "comparable": True,
+            "rank": old_rank - current_rank if old_rank is not None and current_rank is not None else None,
+            "occurrence_count": delta,
+            "from_updated_at": reference.get("updated_at"),
+            "interval_minutes": round(
+                (current_time - reference_time).total_seconds() / 60,
+                1,
+            ),
+        }
+    )
+    return result
+
+
+def _attach_equipment_comparison(
+    current_row: dict,
+    previous_row: dict | None,
+    period_references: dict[str, dict | None],
+    current_time: datetime | None,
+) -> None:
+    """Attach hourly and day/week/month rank changes to every equipment item."""
+    previous_rankings = previous_row.get("equipment_rankings", {}) if isinstance(previous_row, dict) else {}
+    current_rankings = current_row.get("equipment_rankings", {})
+    for equipment_type in EQUIPMENT_TYPES:
+        category = current_rankings.get(equipment_type)
+        items = category.get("items") if isinstance(category, dict) else None
+        if not isinstance(items, list):
+            continue
+        previous_category = (
+            previous_rankings.get(equipment_type)
+            if isinstance(previous_rankings, dict)
+            else None
+        )
+        previous_items = previous_category.get("items", []) if isinstance(previous_category, dict) else []
+        previous_by_code = {
+            str(item.get("item_code")): item
+            for item in previous_items
+            if isinstance(item, dict) and item.get("item_code")
+        }
+        for item in items:
+            item_code = str(item.get("item_code") or "")
+            old_item = previous_by_code.get(item_code)
+            item["change"] = {
+                "new": old_item is None,
+                "rank": (
+                    int(old_item.get("rank", 0)) - int(item.get("rank", 0))
+                    if old_item is not None
+                    else 0
+                ),
+                "occurrence_count": (
+                    int(item.get("occurrence_count", 0))
+                    - int(old_item.get("occurrence_count", 0))
+                    if old_item is not None
+                    else 0
+                ),
+                "periods": {
+                    name: _equipment_period_change(
+                        item,
+                        reference,
+                        str(current_row.get("unit_code") or ""),
+                        equipment_type,
+                        current_time,
+                    )
+                    for name, reference in period_references.items()
+                },
+            }
+
+
+def add_previous_comparison(
+    data: dict,
+    previous: dict | None,
+    history: dict | None = None,
+) -> dict:
+    """Attach hour-over-hour and period rank changes without player IDs."""
+    current_time = _parse_history_time(data.get("updated_at"))
+    period_references = {
+        name: _period_reference(history, current_time, seconds, name)
+        for name, seconds in RANK_COMPARISON_PERIODS.items()
+    }
+    period_summary = {
+        name: {
+            "comparable": reference is not None,
+            "updated_at": reference.get("updated_at") if reference else None,
+            "calendar_date": _history_date_key(
+                _parse_history_time(reference.get("updated_at"))
+            )
+            if reference
+            else None,
+        }
+        for name, reference in period_references.items()
+    }
+    if not previous or not isinstance(previous.get("characters"), list):
+        data["comparison"] = {
+            "reference_mode": CALENDAR_CLOSE_REFERENCE_MODE,
+            "previous_updated_at": None,
+            "calendar_date": _history_date_key(current_time),
+            "interval_minutes": None,
+            "comparable": False,
+            "new_characters": 0,
+            "removed_characters": 0,
+            "periods": period_summary,
+        }
+        for row in data.get("characters", []):
+            row["change"] = {"new": True}
+            if history is not None:
+                row["change"]["periods"] = {
+                    name: _period_change(row, reference, current_time)
+                    for name, reference in period_references.items()
+                }
+                _attach_equipment_comparison(
+                    row,
+                    None,
+                    period_references,
+                    current_time,
+                )
+        return data
+
+    previous_rows = {
+        str(row.get("unit_code")): row
+        for row in previous["characters"]
+        if isinstance(row, dict) and row.get("unit_code")
+    }
+    current_codes: set[str] = set()
+    new_characters = 0
+    for row in data["characters"]:
+        unit_code = str(row["unit_code"])
+        current_codes.add(unit_code)
+        old = previous_rows.get(unit_code)
+        if old is None:
+            row["change"] = {"new": True}
+            new_characters += 1
+            continue
+        row["change"] = {
+            "new": False,
+            # Positive means the character moved up the ranking.
+            "rank": int(old.get("rank", 0)) - int(row["rank"]),
+            "occurrence_count": int(row["occurrence_count"])
+            - int(old.get("occurrence_count", 0)),
+            "player_count": int(row["player_count"])
+            - int(old.get("player_count", 0)),
+            "adoption_rate": round(
+                float(row["adoption_rate"])
+                - float(old.get("adoption_rate", 0)),
+                1,
+            ),
+        }
+        if history is not None:
+            row["change"]["periods"] = {
+                name: _period_change(row, reference, current_time)
+                for name, reference in period_references.items()
+            }
+            _attach_equipment_comparison(
+                row,
+                old,
+                period_references,
+                current_time,
+            )
+
+    # New characters still carry explicit period entries so consumers can
+    # distinguish "new" from a missing or malformed field.
+    for row in data["characters"]:
+        if row.get("change", {}).get("new") is True:
+            if history is not None:
+                row["change"]["periods"] = {
+                    name: _period_change(row, reference, current_time)
+                    for name, reference in period_references.items()
+                }
+                _attach_equipment_comparison(
+                    row,
+                    previous_rows.get(str(row.get("unit_code"))),
+                    period_references,
+                    current_time,
+                )
+
+    try:
+        previous_time = datetime.fromisoformat(
+            str(previous.get("updated_at")).replace("Z", "+00:00")
+        )
+        current_time = datetime.fromisoformat(
+            str(data.get("updated_at")).replace("Z", "+00:00")
+        )
+        interval_minutes = round(
+            (current_time - previous_time).total_seconds() / 60,
+            1,
+        )
+    except ValueError:
+        interval_minutes = None
+
+    data["comparison"] = {
+        "reference_mode": CALENDAR_CLOSE_REFERENCE_MODE,
+        "previous_updated_at": previous.get("updated_at"),
+        "calendar_date": _history_date_key(current_time),
+        "interval_minutes": interval_minutes,
+        "comparable": (
+            int(previous.get("sampled_players", 0))
+            == int(data.get("sampled_players", 0))
+        ),
+        "new_characters": new_characters,
+        "removed_characters": len(set(previous_rows) - current_codes),
+        "periods": period_summary,
+    }
+    return data
+
+
+def history_snapshot(data: dict) -> dict:
+    """Keep only compact, non-identifying values needed for future trends."""
+    timestamp = _parse_history_time(data["updated_at"])
+
+    def compact_equipment_rankings(row: dict) -> dict[str, dict[str, list[dict]]]:
+        rankings = row.get("equipment_rankings")
+        rankings = rankings if isinstance(rankings, dict) else {}
+        compact: dict[str, dict[str, list[dict]]] = {}
+        for equipment_type in EQUIPMENT_TYPES:
+            category = rankings.get(equipment_type)
+            items = category.get("items") if isinstance(category, dict) else []
+            compact[equipment_type] = {
+                "items": [
+                    {
+                        "item_code": item["item_code"],
+                        "rank": item["rank"],
+                        "occurrence_count": item["occurrence_count"],
+                    }
+                    for item in items
+                    if isinstance(item, dict)
+                    and item.get("item_code")
+                    and isinstance(item.get("rank"), int)
+                ]
+            }
+        return compact
+
+    return {
+        "updated_at": data["updated_at"],
+        "calendar_date": _history_date_key(timestamp),
+        "sampled_players": data["sampled_players"],
+        "character_slots": data["character_slots"],
+        "unique_characters": data["unique_characters"],
+        "collection_duration_seconds": data.get("collection_quality", {}).get(
+            "collection_duration_seconds"
+        ),
+        "characters": [
+            {
+                "unit_code": row["unit_code"],
+                "rank": row["rank"],
+                "occurrence_count": row["occurrence_count"],
+                "player_count": row["player_count"],
+                "adoption_rate": row["adoption_rate"],
+                "equipment_rankings": compact_equipment_rankings(row),
+            }
+            for row in data["characters"]
+        ],
+    }
+
+
+def _usable_history_snapshot(snapshot: object, current_time: datetime, sampled: int) -> bool:
+    """Check compact evidence without requiring fields absent in old snapshots."""
+    if not isinstance(snapshot, dict):
+        return False
+    timestamp = _parse_history_time(snapshot.get("updated_at"))
+    rows = snapshot.get("characters")
+    if timestamp is None or timestamp.tzinfo is None or timestamp > current_time:
+        return False
+    if snapshot.get("sampled_players") != sampled or not isinstance(rows, list) or not rows:
+        return False
+    slots = _exact_int(snapshot.get("character_slots"))
+    if slots is None or not sampled <= slots <= sampled * MAX_CHARACTERS_PER_PLAYER:
+        return False
+    if snapshot.get("unique_characters") != len(rows):
+        return False
+    if "calendar_date" in snapshot and snapshot["calendar_date"] != _history_date_key(timestamp):
+        return False
+    duration = snapshot.get("collection_duration_seconds")
+    if duration is not None and (
+        isinstance(duration, bool) or not isinstance(duration, (int, float))
+        or not math.isfinite(duration) or not 0 <= duration <= MAX_COLLECTION_DURATION_SECONDS
+    ):
+        return False
+    codes = set()
+    total = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            return False
+        code = row.get("unit_code")
+        count = _exact_int(row.get("occurrence_count"))
+        players = _exact_int(row.get("player_count"))
+        rank = _exact_int(row.get("rank"))
+        rate = row.get("adoption_rate")
+        if (
+            not isinstance(code, str) or not UNIT_CODE_PATTERN.fullmatch(code) or code in codes
+            or count is None or not 1 <= count <= slots
+            or players is None or not 1 <= players <= min(sampled, count)
+            or rank is None or not 1 <= rank <= len(rows)
+            or isinstance(rate, bool) or not isinstance(rate, (int, float))
+            or not math.isfinite(rate) or abs(rate - round(players / sampled * 100, 1)) > 0.001
+        ):
+            return False
+        codes.add(code)
+        total += count
+        # Character-only legacy history is still valid character evidence.
+        if "equipment_rankings" not in row:
+            continue
+        rankings = row["equipment_rankings"]
+        if not isinstance(rankings, dict):
+            return False
+        for kind in EQUIPMENT_TYPES:
+            category = rankings.get(kind)
+            if not isinstance(category, dict) or not isinstance(category.get("items"), list):
+                return False
+            item_codes = set()
+            item_total = 0
+            for item in category["items"]:
+                if not isinstance(item, dict):
+                    return False
+                item_code = item.get("item_code")
+                item_count = _exact_int(item.get("occurrence_count"))
+                item_rank = _exact_int(item.get("rank"))
+                if (
+                    not isinstance(item_code, str) or not UNIT_CODE_PATTERN.fullmatch(item_code)
+                    or item_code in item_codes or item_count is None or not 1 <= item_count <= count
+                    or item_rank is None or not 1 <= item_rank <= len(category["items"])
+                ):
+                    return False
+                item_codes.add(item_code)
+                item_total += item_count
+            if item_total > count:
+                return False
+    return total == slots
+
+
+
+def _character_comparison_signature(value: object) -> tuple | None:
+    """Return aggregate team fields used by public character comparisons."""
+    if not isinstance(value, dict):
+        return None
+    rows = value.get("characters")
+    if not isinstance(rows, list) or not rows:
+        return None
+    signature = []
+    for row in rows:
+        if not isinstance(row, dict):
+            return None
+        code = row.get("unit_code")
+        rank = _exact_int(row.get("rank"))
+        occurrence = _exact_int(row.get("occurrence_count"))
+        players = _exact_int(row.get("player_count"))
+        if (
+            not isinstance(code, str)
+            or rank is None
+            or occurrence is None
+            or players is None
+        ):
+            return None
+        signature.append((code, rank, occurrence, players))
+    return tuple(signature)
+
+
+def repeated_source_context(
+    data: dict,
+    history: dict | None,
+    threshold_minutes: int = SOURCE_STALE_AFTER_MINUTES,
+) -> dict:
+    """Detect a long consecutive suffix of identical aggregate team snapshots."""
+    current_time = _parse_history_time(data.get("updated_at"))
+    current_signature = _character_comparison_signature(data)
+    result = {
+        "stale": False,
+        "unchanged_since": None,
+        "unchanged_minutes": 0.0,
+        "matching_snapshots": 0,
+    }
+    if (
+        current_time is None
+        or current_time.tzinfo is None
+        or current_signature is None
+        or threshold_minutes < 1
+    ):
+        return result
+
+    snapshots = history.get("snapshots") if isinstance(history, dict) else None
+    if not isinstance(snapshots, list):
+        return result
+
+    candidates = []
+    for snapshot in snapshots:
+        timestamp = _parse_history_time(
+            snapshot.get("updated_at") if isinstance(snapshot, dict) else None
+        )
+        if timestamp is None or timestamp.tzinfo is None or timestamp >= current_time:
+            continue
+        try:
+            usable = _usable_history_snapshot(
+                snapshot, current_time, data["sampled_players"]
+            )
+        except (KeyError, TypeError, ValueError, OverflowError):
+            usable = False
+        if usable:
+            candidates.append((timestamp, snapshot))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+
+    earliest = None
+    matches = 0
+    for timestamp, snapshot in candidates:
+        if _character_comparison_signature(snapshot) != current_signature:
+            break
+        earliest = timestamp
+        matches += 1
+
+    if earliest is None:
+        return result
+
+    unchanged_minutes = max(0.0, (current_time - earliest).total_seconds() / 60)
+    result.update(
+        {
+            "stale": unchanged_minutes >= threshold_minutes,
+            "unchanged_since": earliest.isoformat(),
+            "unchanged_minutes": round(unchanged_minutes, 1),
+            "matching_snapshots": matches,
+        }
+    )
+    return result
+
+
+def quarantine_repeated_source_history(
+    data: dict,
+    history: dict | None,
+    threshold_minutes: int = SOURCE_STALE_AFTER_MINUTES,
+) -> tuple[dict, dict]:
+    """Drop later synthetic timestamps from a detected frozen-source suffix."""
+    clean = dict(history) if isinstance(history, dict) else {}
+    snapshots = clean.get("snapshots")
+    snapshots = list(snapshots) if isinstance(snapshots, list) else []
+    clean["snapshots"] = snapshots
+    context = repeated_source_context(data, clean, threshold_minutes)
+    if not context["stale"]:
+        return clean, context
+
+    stale_since = _parse_history_time(context["unchanged_since"])
+    signature = _character_comparison_signature(data)
+    retained = []
+    quarantined = []
+    for snapshot in snapshots:
+        timestamp = _parse_history_time(
+            snapshot.get("updated_at") if isinstance(snapshot, dict) else None
+        )
+        if (
+            stale_since is not None
+            and timestamp is not None
+            and timestamp > stale_since
+            and _character_comparison_signature(snapshot) == signature
+        ):
+            quarantined.append(snapshot)
+            continue
+        retained.append(snapshot)
+    clean["snapshots"] = retained
+
+    # Record exactly which public period baselines became unavailable because
+    # of quarantine. This prevents source_stale from masking an unrelated
+    # history gap while still handling a frozen source that crosses Sunday or
+    # month-end.
+    current_time = _parse_history_time(data.get("updated_at"))
+    context["quarantined_periods"] = [
+        period
+        for period, seconds in RANK_COMPARISON_PERIODS.items()
+        if _period_reference(
+            {"snapshots": quarantined}, current_time, seconds, period
+        )
+        is not None
+    ]
+
+    # Once a source has been frozen long enough, we intentionally stop
+    # extending history with duplicate snapshots. If that frozen interval then
+    # crosses a JST day/week/month close, there may be no duplicate snapshot to
+    # quarantine at the required close even though the source itself prevented
+    # a trustworthy baseline from being created. Record those covered closes
+    # explicitly so deployment validators can distinguish source staleness
+    # from an unrelated missing-history defect.
+    stale_covered_periods: list[str] = []
+    if current_time is not None and stale_since is not None:
+        stale_local = stale_since.astimezone(HISTORY_TIME_ZONE)
+        for period in ("day", "week", "month"):
+            close_date = _calendar_close_date(current_time, period)
+            close_start = datetime(
+                close_date.year,
+                close_date.month,
+                close_date.day,
+                CALENDAR_CLOSE_START_HOUR,
+                tzinfo=HISTORY_TIME_ZONE,
+            )
+            if stale_local <= close_start:
+                stale_covered_periods.append(period)
+    context["stale_covered_periods"] = stale_covered_periods
+    return clean, context
+
+
+def mark_source_stale_comparison(data: dict, context: dict) -> None:
+    """Expose source freshness uncertainty instead of fabricated zero deltas."""
+    if context.get("stale") is not True:
+        return
+    comparison = data.get("comparison")
+    if not isinstance(comparison, dict):
+        return
+    comparison["source_stale"] = True
+    comparison["source_unchanged_since"] = context.get("unchanged_since")
+    comparison["source_unchanged_minutes"] = context.get("unchanged_minutes")
+
+    # Quarantining a frozen upstream suffix can remove the fixed close for
+    # any period. Hour/day are the common case, but a stale interval crossing
+    # Sunday or month-end can also make week/month honestly non-comparable.
+    # Only periods that are actually missing are annotated; valid retained
+    # week/month closes remain fully comparable.
+    stale_candidates = (
+        {"hour", "day"}
+        | set(context.get("quarantined_periods", []))
+        | set(context.get("stale_covered_periods", []))
+    )
+    stale_periods = {
+        period
+        for period in stale_candidates
+        if period in RANK_COMPARISON_PERIODS
+        and isinstance((comparison.get("periods") or {}).get(period), dict)
+        and comparison["periods"][period].get("comparable") is False
+    }
+    for period in stale_periods:
+        comparison["periods"][period]["reason"] = "source_stale"
+
+    def annotate(row: object) -> None:
+        if not isinstance(row, dict):
+            return
+        periods = row.get("change", {}).get("periods")
+        if not isinstance(periods, dict):
+            return
+        for period in stale_periods:
+            value = periods.get(period)
+            if isinstance(value, dict) and value.get("comparable") is False:
+                value["reason"] = "source_stale"
+
+    for row in data.get("characters", []):
+        annotate(row)
+        if not isinstance(row, dict):
+            continue
+        for category in row.get("equipment_rankings", {}).values():
+            if not isinstance(category, dict):
+                continue
+            for item in category.get("items", []):
+                annotate(item)
+
+
+def prepare_comparison_context(data: dict, previous: dict | None, history: dict | None):
+    """Quarantine bad past context; never relax validation of the new sample.
+
+    Otherwise the watchdog can repeatedly fetch 200 valid players but fail on
+    the same corrupt previous count, future timestamp, or malformed history.
+    A verified previous publication is also a real missing history baseline.
+    """
+    current_time = _parse_history_time(data.get("updated_at"))
+    if current_time is None or current_time.tzinfo is None:
+        raise ValueError("invalid current collection timestamp")
+    try:
+        validate_data(previous)
+        previous_time = _parse_history_time(previous.get("updated_at"))
+        if (
+            previous_time is None or previous_time.tzinfo is None or previous_time >= current_time
+            or previous.get("target_players") != data.get("target_players")
+        ):
+            previous = None
+    except (ValueError, TypeError, AttributeError):
+        previous = None
+
+    candidates = history.get("snapshots") if isinstance(history, dict) else None
+    candidates = list(candidates) if isinstance(candidates, list) else []
+    if previous is not None:
+        candidates.append(history_snapshot(previous))
+    verified = {}
+    for snapshot in candidates:
+        try:
+            usable = _usable_history_snapshot(snapshot, current_time, data["sampled_players"])
+        except (ValueError, TypeError, OverflowError):
+            # A malformed date or overflowing number in one old snapshot
+            # must not prevent a complete fresh sample repairing the history.
+            usable = False
+        if not usable:
+            continue
+        timestamp = _parse_history_time(snapshot["updated_at"])
+        # Datetime keys collapse Z/+00:00/other offset spellings of one instant.
+        verified[timestamp] = snapshot
+    return previous, {"snapshots": [verified[key] for key in sorted(verified)]}
+
+
+def update_history(
+    data: dict,
+    history: dict | None,
+    limit: int = HISTORY_LIMIT,
+) -> dict:
+    if limit < 1:
+        raise ValueError("history limit must be positive")
+    snapshots = history.get("snapshots", []) if isinstance(history, dict) else []
+    snapshots = [
+        item
+        for item in snapshots
+        if isinstance(item, dict) and item.get("updated_at") != data["updated_at"]
+    ]
+    snapshots.append(history_snapshot(data))
+
+    current_time = _parse_history_time(data["updated_at"])
+    if current_time is None:
+        raise ValueError("history data must have a valid updated_at timestamp")
+    current_local = _as_japan_time(current_time)
+    recent_after = current_time - timedelta(hours=HISTORY_RECENT_HOURS)
+    close_after = current_local.date() - timedelta(days=HISTORY_CLOSE_RETENTION_DAYS)
+
+    # Deduplicate by timestamp before retention.  A later value with the same
+    # timestamp is equivalent for comparisons, so retaining one avoids a
+    # corrupt history growing without bound after a retry.
+    parsed_snapshots: dict[datetime, tuple[datetime, dict]] = {}
+    for item in snapshots:
+        timestamp = _parse_history_time(item.get("updated_at"))
+        if timestamp is not None:
+            # Key by the parsed instant rather than the original spelling.
+            # A UTC timestamp written as Z and the same instant written as
+            # +00:00 must consume only one history slot.
+            parsed_snapshots[timestamp] = (timestamp, item)
+
+    close_by_date: dict[object, tuple[datetime, dict]] = {}
+    recent: list[tuple[datetime, dict]] = []
+    for timestamp, item in parsed_snapshots.values():
+        local_time = _as_japan_time(timestamp)
+        if timestamp >= recent_after:
+            recent.append((timestamp, item))
+        if (
+            local_time.date() >= close_after
+            and CALENDAR_CLOSE_START_HOUR <= local_time.hour <= CALENDAR_CLOSE_END_HOUR
+        ):
+            existing = close_by_date.get(local_time.date())
+            if existing is None or timestamp > existing[0]:
+                close_by_date[local_time.date()] = (timestamp, item)
+
+    retained_by_timestamp = {
+        str(item["updated_at"]): (timestamp, item)
+        for timestamp, item in close_by_date.values()
+    }
+    # The close set is the durable part. Fill the remaining bounded capacity
+    # with newest short-term snapshots, which is more than enough to retain a
+    # valid 45–90 minute reference even when several normal runs are delayed.
+    for timestamp, item in sorted(recent, key=lambda value: value[0], reverse=True):
+        key = str(item["updated_at"])
+        if key in retained_by_timestamp:
+            continue
+        if len(retained_by_timestamp) >= limit:
+            break
+        retained_by_timestamp[key] = (timestamp, item)
+
+    retained = sorted(retained_by_timestamp.values(), key=lambda value: value[0])
+    return {
+        "schema_version": 2,
+        "generated_at": data["updated_at"],
+        "retention_hours": HISTORY_RECENT_HOURS,
+        "calendar_close_retention_days": HISTORY_CLOSE_RETENTION_DAYS,
+        "snapshot_limit": limit,
+        "snapshots": [item for _, item in retained],
+    }
+
+
+def health_summary(data: dict) -> dict:
+    """Return the minimal, non-player-specific evidence used by the watchdog."""
+    comparison = data["comparison"]
+    quality = data["collection_quality"]
+    summary = {
+        "health_schema_version": 1,
+        "source_schema_version": data["schema_version"],
+        "updated_at": data["updated_at"],
+        "target_players": data["target_players"],
+        "sampled_players": data["sampled_players"],
+        "character_slots": data["character_slots"],
+        "unique_characters": data["unique_characters"],
+        "complete_target": data["complete_target"],
+        "publication_mode": data.get("publication_mode", COMPLETE_PUBLICATION_MODE),
+        # These assertions are emitted only after the public payload has
+        # passed the same strict validator used before publication.
+        "validated_full_sample": data["complete_target"] is True,
+        "validated_publishable_sample": True,
+        "collection_quality": {
+            key: quality[key]
+            for key in (
+                "sample_coverage",
+                "equipment_fill_rate",
+                "detail_fetch_failures",
+                "invalid_player_records",
+                "collection_duration_seconds",
+                "detail_fetch_duration_seconds",
+            )
+        },
+        "comparison": {
+            "reference_mode": comparison["reference_mode"],
+            "calendar_date": comparison["calendar_date"],
+            "periods": {
+                period: {
+                    key: comparison["periods"][period][key]
+                    for key in ("comparable", "updated_at", "calendar_date")
+                }
+                for period in RANK_COMPARISON_PERIODS
+            },
+        },
+    }
+    summary["source_freshness"] = {
+        "stale": comparison.get("source_stale") is True,
+        "unchanged_since": comparison.get("source_unchanged_since"),
+        "unchanged_minutes": comparison.get("source_unchanged_minutes", 0.0),
+    }
+    metadata = data.get("diagnostics", {}).get("character_name_metadata")
+    if isinstance(metadata, dict):
+        summary["character_metadata"] = {
+            "source_names": int(metadata.get("source_names", 0)),
+            "preserved_names": int(metadata.get("preserved_names", 0)),
+            "pending_names": int(metadata.get("pending_names", 0)),
+            "translation_fetch_failed": bool(
+                metadata.get("translation_fetch_failed", False)
+            ),
+        }
+    return summary
+
+
+def write_outputs(data: dict, history: dict) -> None:
+    temporary_output = OUTPUT_PATH.with_suffix(".json.tmp")
+    temporary_history = HISTORY_PATH.with_suffix(".json.tmp")
+    temporary_health = HEALTH_PATH.with_suffix(".json.tmp")
+    save_json(temporary_output, data)
+    save_json(temporary_history, history)
+    save_json(temporary_health, health_summary(data))
+    temporary_history.replace(HISTORY_PATH)
+    temporary_output.replace(OUTPUT_PATH)
+    temporary_health.replace(HEALTH_PATH)
+
+
+def dump_detail_failure_summary(
+    requested: int,
+    completed: int,
+    failures: list[dict],
+) -> None:
+    """Write safe aggregate failure diagnostics without player identifiers."""
+    if os.environ.get("DEBUG", "0") != "1":
+        return
+    failure_types = Counter(
+        str(item.get("error_type") or "UnknownError")
+        for item in failures
+        if isinstance(item, dict)
+    )
+    save_json(
+        DEBUG_DIR / "detail_fetch_failures.json",
+        {
+            "requested": requested,
+            "completed": completed,
+            "failure_count": len(failures),
+            "failure_types": dict(sorted(failure_types.items())),
+        },
+    )
+
+
+def dump_debug(data: dict) -> None:
+    if os.environ.get("DEBUG", "0") == "1":
+        diagnostics = data.get("diagnostics")
+        diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+        sensitive_lists = (
+            "detail_fetch_failures",
+            "missing_player_info",
+            "invalid_players",
+            "invalid_unit_codes",
+            "invalid_equipment",
+            "invalid_rank_records",
+        )
+        # Debug artifacts can be retained by the CI service. Keep useful
+        # aggregate health information without storing player identifiers or
+        # upstream payload fragments in an artifact.
+        safe_diagnostics = {
+            key: value
+            for key, value in diagnostics.items()
+            if key not in sensitive_lists
+        }
+        safe_diagnostics["diagnostic_error_counts"] = {
+            key: len(diagnostics.get(key))
+            if isinstance(diagnostics.get(key), list)
+            else 0
+            for key in sensitive_lists
+        }
+        save_json(DEBUG_DIR / "diagnostics.json", safe_diagnostics)
+
+
+def dump_collection_failure(
+    stage: str,
+    error: Exception,
+    previous: dict | None,
+) -> None:
+    """Persist a safe CI diagnosis while keeping player/source details private."""
+    if os.environ.get("DEBUG", "0") != "1":
+        return
+    safe_stages = {"scrape", "comparison", "validation", "history", "publication"}
+    report = {
+        "stage": stage if stage in safe_stages else "unknown",
+        "error_type": type(error).__name__,
+        "last_known_good_updated_at": (
+            previous.get("updated_at") if isinstance(previous, dict) else None
+        ),
+        "previous_data_retained": True,
+    }
+    try:
+        save_json(DEBUG_DIR / "collection_failure.json", report)
+    except OSError:
+        print("[WARN] Could not write the safe failure diagnosis.", file=sys.stderr)
+
+
+def main() -> None:
+    global ALLOW_PARTIAL_FOR_RUN, LAST_COMPLETE_FOR_RUN
+    previous = load_json(OUTPUT_PATH)
+    previous_history = load_json(HISTORY_PATH)
+    stored_history = previous_history
+    stage = "scrape"
+    try:
+        allow_partial, last_complete = partial_fallback_context(previous)
+        ALLOW_PARTIAL_FOR_RUN = allow_partial
+        LAST_COMPLETE_FOR_RUN = last_complete
+        try:
+            data = scrape()
+        finally:
+            ALLOW_PARTIAL_FOR_RUN = False
+            LAST_COMPLETE_FOR_RUN = None
+        stage = "comparison"
+        previous, previous_history = prepare_comparison_context(data, previous, previous_history)
+        previous_history, source_context = quarantine_repeated_source_history(
+            data, previous_history
+        )
+        if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE:
+            # A changing set of fewer than 200 players is not a trustworthy
+            # hour/day/week/month baseline. Keep the last complete history and
+            # show comparison as unavailable until a full sample returns.
+            previous_history = {"snapshots": []}
+        add_previous_comparison(data, previous, previous_history)
+        if source_context.get("stale") is True:
+            mark_source_stale_comparison(data, source_context)
+        stage = "validation"
+        validate_data(data, previous)
+        stage = "history"
+        history = (
+            stored_history
+            if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE
+            else previous_history
+            if source_context.get("stale") is True
+            else update_history(data, previous_history)
+        )
+        stage = "publication"
+        write_outputs(data, history)
+        try:
+            dump_debug(data)
+        except OSError as error:
+            # Optional diagnostics must not block publication of validated
+            # data. Required output writes above still fail closed.
+            print(
+                f"[WARN] Optional diagnostic write failed ({type(error).__name__}).",
+                file=sys.stderr,
+            )
+        print(
+            "[DONE] "
+            f"players={data['sampled_players']}, "
+            f"slots={data['character_slots']}, "
+            f"characters={len(data['characters'])}, "
+            f"equipment_items={data['diagnostics']['equipment_items_collected']}, "
+            f"termination={data['termination_reason']}"
+        )
+    except Exception as error:
+        dump_collection_failure(stage, error, previous)
+        print(f"[ERROR] {error}", file=sys.stderr)
+        raise
+
+
+if __name__ == "__main__":
+    main()
