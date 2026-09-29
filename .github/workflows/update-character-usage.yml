@@ -97,19 +97,17 @@ jobs:
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Apply stale-partial collection policy
+      - name: Apply exact 199/200 collection policy
         if: steps.decision.outputs.due == 'true'
         run: |
           set -euo pipefail
           python scripts/prepare_partial_collection_runtime.py
-          python -m py_compile scripts/scrape_character_usage.py scripts/prepare_partial_collection_runtime.py
+          python -m py_compile scripts/scrape_character_usage.py scripts/quality_checks.py scripts/prepare_partial_collection_runtime.py
 
       - name: Run scraper
         if: steps.decision.outputs.due == 'true'
         env:
           DEBUG: "1"
-          # Four concurrent detail requests is the collector's safe maximum.
-          # Keep the normal target at 200 while avoiding unnecessary serial waits.
           PLAYER_FETCH_WORKERS: "4"
           REQUEST_ATTEMPTS: "3"
           REQUEST_TIMEOUT_SECONDS: "10"
@@ -146,7 +144,7 @@ jobs:
           set -euo pipefail
           jq -e '(
             (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
-            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+            (.target_players == 200 and .sampled_players == 199 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
           )' docs/data/character_usage.json >/dev/null
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
           python scripts/validate_public_bundle.py
@@ -155,8 +153,6 @@ jobs:
         if: steps.decision.outputs.due == 'true'
         run: |
           set -euo pipefail
-          # Collection changes are generated locally. Never run pull/rebase while
-          # those changes are dirty: that caused the previous exit-128 failure.
           git fetch --prune origin main
           stash_created=false
           if [ -n "$(git status --porcelain)" ]; then
@@ -168,14 +164,24 @@ jobs:
             git stash pop
           fi
 
+      - name: Rebuild and revalidate after synchronization
+        if: steps.decision.outputs.due == 'true'
+        run: |
+          set -euo pipefail
+          python scripts/rebuild_cross_sample_comparisons.py
+          jq -e '(
+            (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
+            (.target_players == 200 and .sampled_players == 199 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+          )' docs/data/character_usage.json >/dev/null
+          python scripts/validate_public_comparisons.py docs/data/character_usage.json
+          python scripts/validate_public_bundle.py
+
       - name: Save collected data
         if: steps.decision.outputs.due == 'true'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Add all collector-owned data and cached character images. This also
-          # catches newly generated files that were previously left unstaged.
           git add -A docs/data docs/assets/characters
           if git diff --cached --quiet; then
             echo "No collector data changes to publish."
@@ -183,9 +189,6 @@ jobs:
           fi
           git commit -m "Update PvP ranking data"
 
-          # The branch was synchronized before the commit. If another main push
-          # lands during collection, rebase the committed snapshot automatically;
-          # there should be no dirty tree at this point.
           for push_attempt in 1 2 3; do
             if git push origin HEAD:main; then
               exit 0
