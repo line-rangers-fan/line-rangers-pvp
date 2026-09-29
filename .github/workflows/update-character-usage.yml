@@ -100,6 +100,13 @@ jobs:
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Apply stale-partial collection policy
+        if: steps.decision.outputs.due == 'true'
+        run: |
+          set -euo pipefail
+          python scripts/prepare_partial_collection_runtime.py
+          python -m py_compile scripts/scrape_character_usage.py scripts/prepare_partial_collection_runtime.py
+
       - name: Run scraper
         if: steps.decision.outputs.due == 'true'
         env:
@@ -111,10 +118,8 @@ jobs:
           DETAIL_CONTENT_RECHECKS: "1"
         run: |
           set -euo pipefail
-          # Normal target: 200. If upstream has fewer players, preserve and
-          # validate the available sample instead of aborting merely because
-          # sampled_players < 200. The publication guard decides whether the
-          # resulting partial snapshot is safe to expose.
+          # Normal target: 200. If upstream has fewer usable players, preserve and
+          # validate the available sample instead of aborting merely because sampled_players < 200.
           for attempt in 1 2 3; do
             echo "Collection attempt ${attempt}/3"
             if python scripts/scrape_character_usage.py; then
