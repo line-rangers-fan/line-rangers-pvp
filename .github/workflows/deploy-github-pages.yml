@@ -97,7 +97,7 @@ jobs:
           sha = os.environ["GITHUB_SHA"]
           assets = ("app.js", "community-entry.js", "style.css", "community-entry.css")
           for asset in assets:
-              pattern = rf'(\./assets/{re.escape(asset)}\?v=[^"\']+'
+              pattern = rf'(\./assets/{re.escape(asset)})\?v=[^"\']+'
               text, count = re.subn(pattern, rf'\1?v={sha}', text)
               if count != 1:
                   raise SystemExit(f"Expected exactly one cache-busted reference for {asset}, got {count}")
