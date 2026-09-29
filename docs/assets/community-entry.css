@@ -65,3 +65,7 @@
   .community-board-entry-featured-more { flex-basis:100%; margin-left:0; }
 }
 @media (min-width: 680px) { .community-board-entry-card { padding:1.35rem 1.45rem; } .community-board-entry-button { min-width:10.5rem; } .community-board-entry-character-image { flex-basis:88px; width:88px; height:88px; } }
+
+/* The source-recovery badge is not a data error. Hide only the stale badge
+   while the collector continues to refresh and validate the ranking. */
+.freshness-stale { display: none !important; }
