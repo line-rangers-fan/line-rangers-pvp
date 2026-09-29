@@ -69,3 +69,5 @@
 /* The source-recovery badge is not a data error. Hide only the stale badge
    while the collector continues to refresh and validate the ranking. */
 .freshness-stale { display: none !important; }
+
+/* [collect-now] Manual recovery trigger: the push event forces collection. */
