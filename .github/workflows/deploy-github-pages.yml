@@ -54,7 +54,21 @@ jobs:
       - name: Validate current PvP snapshot
         run: |
           set -euo pipefail
-          jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' docs/data/character_usage.json >/dev/null
+          # Both normal 200/200 snapshots and the already-authorized
+          # partial_after_stale fallback are valid public ranking inputs.
+          # validate_public_bundle.py performs the full fail-closed validation
+          # of the fallback marker, health JSON, histories, and comparisons.
+          jq -e '
+            .target_players == 200 and
+            (
+              (.sampled_players == 200 and .complete_target == true and
+                (.publication_mode == "complete" or .publication_mode == null)) or
+              (.sampled_players > 0 and .sampled_players < 200 and
+                .complete_target == false and
+                .publication_mode == "partial_after_stale" and
+                (.partial_fallback | type) == "object")
+            )
+          ' docs/data/character_usage.json >/dev/null
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
           python scripts/validate_public_bundle.py
 
@@ -73,8 +87,8 @@ jobs:
           sha = os.environ["GITHUB_SHA"]
           assets = ("app.js", "community-entry.js", "style.css", "community-entry.css")
           for asset in assets:
-              pattern = rf'(\./assets/{re.escape(asset)})\?v=[^"\']+'
-              text, count = re.subn(pattern, rf'\1?v={sha}', text)
+              pattern = rf'(\\./assets/{re.escape(asset)})\\?v=[^"\\\']+'
+              text, count = re.subn(pattern, rf'\\1?v={sha}', text)
               if count != 1:
                   raise SystemExit(f"Expected exactly one cache-busted reference for {asset}, got {count}")
           path.write_text(text, encoding="utf-8")
