@@ -1,0 +1,77 @@
+name: deploy-brown-runner-preview
+
+on:
+  push:
+    branches: ["preview/brown-maintenance-runner"]
+    paths:
+      - "preview/brown-maintenance-runner/**"
+      - "infra/cloudflare-brown-runner-preview/**"
+      - ".github/workflows/deploy-brown-runner-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: brown-runner-preview-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out preview branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Validate isolated preview
+        run: |
+          set -euo pipefail
+          node --check preview/brown-maintenance-runner/game.js
+          node --check infra/cloudflare-brown-runner-preview/src/index.js
+          grep -q 'ブラウン メンテナンスラン' preview/brown-maintenance-runner/index.html
+          grep -q 'connect-src '\''none'\''' preview/brown-maintenance-runner/index.html
+          grep -q 'x-robots-tag' infra/cloudflare-brown-runner-preview/src/index.js
+          if grep -R -E 'character_usage.json|/api/board|D1Database|R2Bucket|line-rangers-pvp-production-db|line-rangers-pvp-production-media' preview/brown-maintenance-runner infra/cloudflare-brown-runner-preview; then
+            echo "Preview must remain isolated from PvP/board production data."
+            exit 1
+          fi
+
+      - name: Resolve Cloudflare account ID
+        id: cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "CLOUDFLARE_API_TOKEN repository secret is required."
+            exit 1
+          fi
+          response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts?per_page=50")"
+          account_id="$(printf '%s' "$response" | jq -er '.result | if length == 1 then .[0].id else error("Token must access exactly one Cloudflare account") end')"
+          if ! [[ "$account_id" =~ ^[A-Fa-f0-9]{32}$ ]]; then
+            echo "Cloudflare returned an invalid account ID."
+            exit 1
+          fi
+          echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy separate preview Worker
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ steps.cloudflare.outputs.account_id }}
+          workingDirectory: infra/cloudflare-brown-runner-preview
+          wranglerVersion: "4.131.2"
+          command: deploy
+
+      - name: Verify preview only
+        run: |
+          set -euo pipefail
+          base="https://line-rangers-brown-runner-preview.n-yu1791.workers.dev"
+          root_headers="$(mktemp)"
+          root="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 -D "$root_headers" "$base/")"
+          game="$(curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 8 --retry-delay 3 "$base/game.js")"
+          grep -q 'ブラウン メンテナンスラン' <<< "$root"
+          grep -q 'brownFrames' <<< "$game"
+          grep -qi '^x-robots-tag: noindex, nofollow, noarchive, nosnippet' "$root_headers"
+          grep -qi '^x-frame-options: DENY' "$root_headers"
