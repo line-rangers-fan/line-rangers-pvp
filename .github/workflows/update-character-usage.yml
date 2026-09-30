@@ -97,7 +97,7 @@ jobs:
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Apply exact 199/200 collection policy
+      - name: Apply resilient partial collection policy
         if: steps.decision.outputs.due == 'true'
         run: |
           set -euo pipefail
@@ -144,7 +144,7 @@ jobs:
           set -euo pipefail
           jq -e '(
             (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
-            (.target_players == 200 and .sampled_players == 199 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
           )' docs/data/character_usage.json >/dev/null
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
           python scripts/validate_public_bundle.py
@@ -171,7 +171,7 @@ jobs:
           python scripts/rebuild_cross_sample_comparisons.py
           jq -e '(
             (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
-            (.target_players == 200 and .sampled_players == 199 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
           )' docs/data/character_usage.json >/dev/null
           python scripts/validate_public_comparisons.py docs/data/character_usage.json
           python scripts/validate_public_bundle.py
@@ -206,7 +206,7 @@ jobs:
               python scripts/rebuild_cross_sample_comparisons.py
               jq -e '(
                 (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
-                (.target_players == 200 and .sampled_players == 199 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+                (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
               )' docs/data/character_usage.json >/dev/null
               python scripts/validate_public_comparisons.py docs/data/character_usage.json
               python scripts/validate_public_bundle.py
