@@ -73,7 +73,7 @@ def test_collector_rebuilds_only_derived_comparisons_then_revalidates():
     assert ".sampled_players > 0 and .sampled_players < 200" in workflow
 
 
-def test_publication_allows_any_nonzero_partial_but_never_partial_history():
+def test_publication_allows_any_nonzero_clean_partial_but_never_partial_history():
     pages = read(".github/workflows/deploy-github-pages.yml")
     worker = read(".github/workflows/sync-production-pvp.yml")
     update = read(".github/workflows/update-character-usage.yml")
@@ -89,7 +89,9 @@ def test_publication_allows_any_nonzero_partial_but_never_partial_history():
     assert '"trigger_after_minutes": 0' in policy
     assert "previous = None" in policy
     assert 'previous_history = {"snapshots": []}' in policy
-    assert 'if characters and collected == 0 and not is_partial' in policy
+    assert 'diagnostics["invalid_equipment"].append(str(error))' in policy
+    assert 'invalid_player = True' in policy
+    assert 'diagnostics["detail_team_mismatch_players"] += 1' in policy
     assert 'if not is_partial and any(diagnostics.get(key) for key in failure_keys)' in policy
 
     assert "scripts/validate_public_comparisons.py docs/data/character_usage.json" in pages
