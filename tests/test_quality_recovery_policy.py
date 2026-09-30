@@ -102,3 +102,12 @@ def test_publication_allows_any_nonzero_clean_partial_but_never_partial_history(
     assert "scripts/validate_public_comparisons.py" in worker
     assert "wrangler d1 create" not in worker
     assert "wrangler r2 bucket create" not in worker
+
+
+def test_production_visual_audit_accepts_the_same_nonzero_partial_contract():
+    workflow = read(".github/workflows/production-visual-audit.yml")
+    assert workflow.count(".sampled_players > 0") >= 2
+    assert workflow.count(".sampled_players < 200") >= 2
+    assert workflow.count('.publication_mode == \"partial_after_stale\"') >= 2
+    assert "synchronized at 200/200" not in workflow
+    assert "same nonzero publishable sample" in workflow

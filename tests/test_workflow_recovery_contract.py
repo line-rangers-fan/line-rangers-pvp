@@ -21,7 +21,10 @@ def test_visual_audit_waits_for_pages_worker_parity():
     assert 'workflows: ["deploy-github-pages", "sync-production-pvp", "deploy-original-community-production"]' in workflow
     assert "Wait for synchronized Pages and Worker snapshots" in workflow
     assert "cmp -s /tmp/pages-character-usage.json /tmp/worker-character-usage.json" in workflow
-    assert ".target_players == 200 and .sampled_players == 200 and .complete_target == true" in workflow
+    assert workflow.count(".sampled_players > 0") >= 2
+    assert workflow.count(".sampled_players <= 200") >= 2
+    assert workflow.count('.publication_mode == \"partial_after_stale\"') >= 2
+    assert "same nonzero publishable sample" in workflow
 
 
 def test_retryable_incident_requires_independent_repeat_before_escalation():
@@ -116,4 +119,3 @@ def test_production_viewer_verification_is_read_only():
     assert 'test "$subject_a" != "$subject_b"' in viewer_step
     assert "--data" not in viewer_step
     assert "wrangler d1 execute" not in viewer_step
-
