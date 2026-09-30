@@ -124,24 +124,30 @@ def _publication_mode_is_valid(data: dict) -> bool:
         return False
     if sampled == 200 and complete is True and mode == "complete":
         return True
-    if not (isinstance(sampled, int) and 0 < sampled < 200):
+    if not (isinstance(sampled, int) and not isinstance(sampled, bool) and 0 < sampled < 200):
         return False
     if complete is not False or mode != "partial_after_stale":
         return False
     fallback = data.get("partial_fallback")
     if not isinstance(fallback, dict):
         return False
-    return scraper._parse_history_time(fallback.get("last_complete_updated_at")) is not None
+    try:
+        missing = int(fallback.get("missing_players", -1))
+        trigger = int(fallback.get("trigger_after_minutes", -1))
+    except (TypeError, ValueError):
+        return False
+    if missing != target - sampled or trigger not in {0, 180}:
+        return False
+    # Baseline lineage is useful when available, but a missing historical full
+    # sample must not block a fresh nonzero degraded ranking. Partial snapshots
+    # remain excluded from both comparison-history files.
+    last_complete = fallback.get("last_complete_updated_at")
+    return last_complete is None or scraper._parse_history_time(last_complete) is not None
 
 
 def validate_bundle(data: dict, health: dict, public_history: dict, cross_history: dict) -> None:
-    # Complete 200/200 remains the normal publication path. An explicitly
-    # authorized stale partial snapshot is also a valid public ranking: the
-    # collector has already recorded the last complete baseline and quality
-    # checks have verified the subset. The old validator incorrectly rejected
-    # that valid partial mode here, undoing the collector's policy.
     if not _publication_mode_is_valid(data):
-        raise ValueError("public aggregation requires a valid complete or stale-partial snapshot")
+        raise ValueError("public aggregation requires a valid complete or partial snapshot")
     validate_data(data)
     validate_payload(data)
     if health != scraper.health_summary(data):
