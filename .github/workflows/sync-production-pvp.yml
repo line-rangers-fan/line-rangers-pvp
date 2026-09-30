@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - ".production-promotion-trigger"
       - ".github/workflows/sync-production-pvp.yml"
       - "scripts/prepare_partial_collection_runtime.py"
 
