@@ -86,6 +86,41 @@ SCRAPE_MISSING_DETAIL_NEW = '''        detail_info = detail_by_mid.get(mid)
         detail_team_map = (
 '''
 
+SCRAPE_INVALID_EQUIPMENT_OLD = '''                except ValueError as error:
+                    diagnostics["invalid_equipment"].append(str(error))
+                    equipment = {}
+                    detail_complete = False
+
+                units.append(code)
+'''
+SCRAPE_INVALID_EQUIPMENT_NEW = '''                except ValueError as error:
+                    diagnostics["invalid_equipment"].append(str(error))
+                    equipment = {}
+                    detail_complete = False
+                    invalid_player = True
+                    break
+
+                units.append(code)
+'''
+
+SCRAPE_DETAIL_MISMATCH_OLD = '''        if isinstance(player_details, dict) and (
+            not detail_complete or Counter(detail_codes) != Counter(units)
+        ):
+            diagnostics["detail_team_mismatch_players"] += 1
+            diagnostics["_detail_recheck_mids"].append(mid)
+
+        players.append({"mid": mid, "units": units, "unit_records": unit_records})
+'''
+SCRAPE_DETAIL_MISMATCH_NEW = '''        if isinstance(player_details, dict) and (
+            not detail_complete or Counter(detail_codes) != Counter(units)
+        ):
+            diagnostics["detail_team_mismatch_players"] += 1
+            diagnostics["_detail_recheck_mids"].append(mid)
+            continue
+
+        players.append({"mid": mid, "units": units, "unit_records": unit_records})
+'''
+
 SCRAPE_CONTENT_OLD = '''    expected_players = len(mids)
     if len(players) != expected_players:
         dump_detail_failure_summary(
@@ -196,15 +231,6 @@ QUALITY_FALLBACK_NEW = '''        trigger_after_minutes = (
             errors.append("invalid partial fallback evidence")
 '''
 
-QUALITY_EMPTY_EQUIPMENT_OLD = '''    for equipment_type, collected in equipment_type_slots_collected.items():
-        if characters and collected == 0:
-            errors.append(f"empty {equipment_type} aggregate")
-'''
-QUALITY_EMPTY_EQUIPMENT_NEW = '''    for equipment_type, collected in equipment_type_slots_collected.items():
-        if characters and collected == 0 and not is_partial:
-            errors.append(f"empty {equipment_type} aggregate")
-'''
-
 QUALITY_DIAGNOSTICS_OLD = '''        if int(quality.get("detail_fetch_failures", -1)) != 0:
             errors.append("detail fetch failures present")
         if int(quality.get("invalid_player_records", -1)) != 0:
@@ -285,6 +311,8 @@ def main() -> None:
         (SCRAPE_PARTIAL_CONTEXT_OLD, SCRAPE_PARTIAL_CONTEXT_NEW),
         (SCRAPE_DETAIL_FAILURE_OLD, SCRAPE_DETAIL_FAILURE_NEW),
         (SCRAPE_MISSING_DETAIL_OLD, SCRAPE_MISSING_DETAIL_NEW),
+        (SCRAPE_INVALID_EQUIPMENT_OLD, SCRAPE_INVALID_EQUIPMENT_NEW),
+        (SCRAPE_DETAIL_MISMATCH_OLD, SCRAPE_DETAIL_MISMATCH_NEW),
         (SCRAPE_CONTENT_OLD, SCRAPE_CONTENT_NEW),
         (SCRAPE_PUBLICATION_OLD, SCRAPE_PUBLICATION_NEW),
         (SCRAPE_COMPARISON_OLD, SCRAPE_COMPARISON_NEW),
@@ -292,7 +320,6 @@ def main() -> None:
         changed |= replace_once(SCRAPER, old, new)
     for old, new in (
         (QUALITY_FALLBACK_OLD, QUALITY_FALLBACK_NEW),
-        (QUALITY_EMPTY_EQUIPMENT_OLD, QUALITY_EMPTY_EQUIPMENT_NEW),
         (QUALITY_DIAGNOSTICS_OLD, QUALITY_DIAGNOSTICS_NEW),
     ):
         changed |= replace_once(QUALITY, old, new)
