@@ -236,11 +236,16 @@ jobs:
           grep -q 'レジェンド帯 キャラ集計' "$live_index"
           echo "Production Worker PvP is synchronized with canonical docs data."
 
-      - name: Verify live monthly topics and four-language metadata without board writes
+      - name: Verify live standard-month topics and four-language metadata without board writes
         if: ${{ hashFiles('copy-source/app/api/community-topics/route.ts') != '' }}
         run: |
           set -euo pipefail
-          month="$(TZ=Asia/Tokyo date +%Y-%m)"
+          calendar_month="$(TZ=Asia/Tokyo date +%Y-%m)"
+          registry_month="$(jq -r '[.characters[]?.releaseMonth // empty | select(test("^20[0-9]{2}-(0[1-9]|1[0-2])$"))] | max // empty' copy-source/config/community-characters.json)"
+          month="$calendar_month"
+          if [ -n "$registry_month" ] && [[ "$registry_month" > "$month" ]]; then
+            month="$registry_month"
+          fi
           expected="$RUNNER_TEMP/expected-community-topics.json"
           actual="$RUNNER_TEMP/live-community-topics.json"
           jq -S --arg month "$month" '[.characters[] | select(.releaseMonth == $month) | {
@@ -261,10 +266,10 @@ jobs:
             sleep 5
           done
           if [ "$matched" != true ]; then
-            echo 'Production Worker monthly board manifest did not converge to the verified registry.'
+            echo 'Production Worker standard-month board manifest did not converge to the verified registry.'
             exit 1
           fi
-          echo "Read-only live board audit passed for $month ($(jq length "$expected") distinct character topics)."
+          echo "Read-only live standard-month board audit passed for $month ($(jq length "$expected") distinct character topics)."
 
       # Collector dispatches use GITHUB_TOKEN and do not produce the usual
       # downstream workflow_run audit. User-started runs retain that trigger.
