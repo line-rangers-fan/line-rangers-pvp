@@ -8,6 +8,10 @@ const COMMUNITY_BOARD_ENTRY_CONFIG = Object.freeze({
   allowedHosts: Object.freeze(["line-rangers-pvp-community-production.n-yu1791.workers.dev"]),
   allowedPath: "/boards",
 });
+const COMMUNITY_ACTIVITY_TIMEOUT_MS = 5000;
+const COMMUNITY_ACTIVITY_MAX_BYTES = 256 * 1024;
+const COMMUNITY_ACTIVITY_MAX_TOPICS = 12;
+const COMMUNITY_VIEWER_TOKEN_PATTERN = /^v1\.[a-f0-9-]{36}\.[0-9]{10,}\.[A-Za-z0-9_-]{43}$/;
 
 const COMMUNITY_ENTRY_I18N = Object.freeze({
   ja: Object.freeze({title:"新キャラ情報掲示板",description:"投票・コメント・写真・動画で、今月の新キャラについて話そう。",newCharacter:"新キャラクター",imageAlt:"新キャラクターの画像",featuredLabel:"注目コメント",featuredEmpty:"まだ注目コメントはありません。掲示板で最初の感想を投稿できます。",helpful:"役に立った",viewBoard:"掲示板で見る →",openBoard:"掲示板を開く →",openBoardAria:"新キャラ情報掲示板を開く",featuredAria:"注目コメントの掲示板を開く",newCount:"NEW {count}件",videos:"動画 {count}本",comments:"コメント {count}件"}),
@@ -19,13 +23,19 @@ const COMMUNITY_ENTRY_LANGUAGES = Object.freeze(["ja", "en", "zh", "th"]);
 let communityEntryLanguage = "ja";
 const communityViewerStorageKey = "line-rangers-community-viewer-v1";
 let communityViewerToken = "";
+let communityActivityInFlight = null;
+
+function isValidCommunityViewerToken(value) {
+  return typeof value === "string" && value.length <= 256 && COMMUNITY_VIEWER_TOKEN_PATTERN.test(value);
+}
 function readCommunityViewerToken() {
   try {
     const value = localStorage.getItem(communityViewerStorageKey) || "";
-    return value.length <= 256 ? value : "";
+    return isValidCommunityViewerToken(value) ? value : "";
   } catch { return ""; }
 }
 function saveCommunityViewerToken(value) {
+  if (!isValidCommunityViewerToken(value)) return;
   communityViewerToken = value;
   try { localStorage.setItem(communityViewerStorageKey, value); } catch {}
 }
@@ -35,7 +45,7 @@ function withCommunityViewer(rawUrl) {
   try {
     const url = new URL(rawUrl);
     url.searchParams.set("lang", COMMUNITY_ENTRY_LANGUAGES.includes(communityEntryLanguage) ? communityEntryLanguage : "en");
-    if (communityViewerToken) url.searchParams.set("viewer", communityViewerToken);
+    if (isValidCommunityViewerToken(communityViewerToken)) url.searchParams.set("viewer", communityViewerToken);
     else url.searchParams.delete("viewer");
     return url.href;
   } catch { return rawUrl; }
@@ -57,9 +67,13 @@ function entryText(key) {
   return COMMUNITY_ENTRY_I18N[communityEntryLanguage]?.[key] ?? COMMUNITY_ENTRY_I18N.en[key] ?? key;
 }
 
+function safeCommunityName(value) {
+  return typeof value === "string" ? clipText(value, 80) : "";
+}
 function topicDisplayName(names) {
+  if (!Array.isArray(names)) return entryText("newCharacter");
   const index = COMMUNITY_ENTRY_LANGUAGES.indexOf(communityEntryLanguage);
-  return (names[index]||names[1]||names[0]).trim();
+  return safeCommunityName(names[index]) || safeCommunityName(names[1]) || safeCommunityName(names[0]) || entryText("newCharacter");
 }
 
 function detectCommunityLanguage() {
@@ -124,13 +138,14 @@ function clipText(value, max = 120) {
 function normalizeTopics(value) {
   if (!Array.isArray(value)) return [];
   const seen = new Set();
-  return value.filter((topic) => {
+  return value.slice(0, COMMUNITY_ACTIVITY_MAX_TOPICS).filter((topic) => {
     if (!topic || typeof topic !== "object" || typeof topic.id !== "string" || typeof topic.character !== "string" || typeof topic.image !== "string" || typeof topic.month !== "string") return false;
+    if (topic.id.length > 128 || topic.character.length > 96 || topic.image.length > 2048) return false;
     if (!/^[A-Za-z0-9_-]+$/.test(topic.character) || seen.has(topic.id)) return false;
     if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(topic.month)) return false;
     try {
       const image = new URL(topic.image);
-      if (image.protocol !== "https:" || image.hostname !== "rangers.lerico.net") return false;
+      if (image.protocol !== "https:" || image.username !== "" || image.password !== "" || image.port !== "" || image.hostname !== "rangers.lerico.net") return false;
     } catch { return false; }
     seen.add(topic.id);
     return true;
@@ -139,6 +154,7 @@ function normalizeTopics(value) {
 
 function normalizeFeatured(value) {
   if (!value || typeof value !== "object" || typeof value.body !== "string" || typeof value.board !== "string") return null;
+  if (value.body.length > 4000 || value.board.length > 128) return null;
   const body = value.body.trim();
   if (!body) return null;
   return {body, board:value.board, likes:Math.max(0, Number(value.likes) || 0), helpful:Math.max(0, Number(value.helpful) || 0)};
@@ -273,7 +289,8 @@ function updateCommunityEntryLanguage() {
   }
   for (const element of slot.querySelectorAll("[data-community-alt]")) element.alt = entryText(element.dataset.communityAlt || "imageAlt");
   for (const element of slot.querySelectorAll("[data-community-names]")) {
-    const names = JSON.parse(element.dataset.communityNames || "[]");
+    let names = [];
+    try { names = JSON.parse(element.dataset.communityNames || "[]"); } catch { names = []; }
     element.textContent = topicDisplayName(names) || entryText("newCharacter");
   }
   for (const element of slot.querySelectorAll("[data-community-aria]")) element.setAttribute("aria-label", entryText(element.dataset.communityAria || "openBoardAria"));
@@ -311,21 +328,65 @@ function renderCommunityBoardEntry(state) {
   updateCommunityEntryLanguage();
 }
 
-async function loadCommunityActivity() {
+async function readBoundedJson(response) {
+  const declaredLength = Number(response.headers.get("content-length") || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > COMMUNITY_ACTIVITY_MAX_BYTES) throw new Error("activity_response_too_large");
+  if (!response.body) throw new Error("activity_response_missing");
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > COMMUNITY_ACTIVITY_MAX_BYTES) throw new Error("activity_response_too_large");
+      chunks.push(value);
+    }
+  } catch (error) {
+    try { await reader.cancel(); } catch {}
+    throw error;
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+async function fetchCommunityActivity() {
   const endpoint = getApprovedActivityUrl(COMMUNITY_BOARD_ENTRY_CONFIG.activityUrl, COMMUNITY_BOARD_ENTRY_CONFIG.allowedHosts);
   if (!endpoint) return;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), COMMUNITY_ACTIVITY_TIMEOUT_MS);
   try {
     const headers = {Accept:"application/json"};
-    if (communityViewerToken) headers["X-LR-Viewer"] = communityViewerToken;
-    const response = await fetch(endpoint, {method:"GET", mode:"cors", credentials:"omit", cache:"no-store", headers});
+    if (isValidCommunityViewerToken(communityViewerToken)) headers["X-LR-Viewer"] = communityViewerToken;
+    const response = await fetch(endpoint, {method:"GET", mode:"cors", credentials:"omit", cache:"no-store", headers, signal:controller.signal});
     if (!response.ok) return;
-    const payload = await response.json();
-    if (typeof payload.viewerToken === "string" && payload.viewerToken.length <= 256) saveCommunityViewerToken(payload.viewerToken);
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) return;
+    const payload = await readBoundedJson(response);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
+    if (isValidCommunityViewerToken(payload.viewerToken)) saveCommunityViewerToken(payload.viewerToken);
     const state = {topics:normalizeTopics(payload.topics), featured:normalizeFeatured(payload.featured), unread:normalizeUnread(payload.unread), videos:normalizeMetric(payload.videos), comments:normalizeMetric(payload.comments)};
     renderCommunityBoardEntry(state);
   } catch {
     // Keep ranking visible when community activity metadata is unavailable.
+  } finally {
+    window.clearTimeout(timeout);
   }
+}
+
+function loadCommunityActivity() {
+  if (communityActivityInFlight) return communityActivityInFlight;
+  communityActivityInFlight = fetchCommunityActivity().finally(() => {
+    communityActivityInFlight = null;
+  });
+  return communityActivityInFlight;
 }
 
 window.addEventListener("pageshow", (event) => {
