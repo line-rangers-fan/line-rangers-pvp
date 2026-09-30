@@ -1,10 +1,9 @@
 "use strict";
 
-// Browser compatibility for resilient partial publication.
-// The canonical runtime validator accepts any nonzero structurally valid
-// subset below the 200-player target. Older app.js code still understands the
-// legacy stale-fallback contract, so this adapter temporarily normalizes only
-// validation metadata and restores the real diagnostics immediately after.
+// Compatibility layer for resilient partial publication.
+// Keep this adapter intentionally small: app.js remains the single fetch/render
+// path. The adapter only teaches the older validator about the current partial
+// metadata and adjusts the partial status UI after app.js renders it.
 // Legacy migration markers retained for regression visibility:
 // data.sampled_players === 199
 // Number(detailFailures) !== 0
@@ -14,56 +13,26 @@
 
   const syncPartialStatusUi = () => {
     const hasState = typeof state !== "undefined" && state && typeof state === "object";
-    const isPartial =
-      hasState && state.data?.publication_mode === "partial_after_stale";
+    const isPartial = hasState && state.data?.publication_mode === "partial_after_stale";
     const freshness = document.querySelector("#summary-freshness");
 
     if (freshness) {
-      if (isPartial) {
-        freshness.classList.remove("freshness-delayed");
-        freshness.classList.add("freshness-partial");
-      } else {
-        freshness.classList.remove("freshness-partial");
-      }
+      freshness.classList.toggle("freshness-partial", Boolean(isPartial));
+      if (isPartial) freshness.classList.remove("freshness-delayed");
     }
 
-    // A partial sample is now a normal live publication state. Do not show the
-    // old yellow "under 200 players" warning. Keep real load/stale errors.
     if (isPartial && state.lastLoadError !== true) {
       const warning = document.querySelector("#data-warning");
-      if (warning && warning.hidden !== true) warning.hidden = true;
+      if (warning) warning.hidden = true;
     }
   };
 
-  const installPartialStatusUi = () => {
-    if (window.__partialStatusUiInstalled) {
-      syncPartialStatusUi();
-      return;
-    }
-    if (!document.body) {
-      window.setTimeout(installPartialStatusUi, 50);
-      return;
-    }
-
-    window.__partialStatusUiInstalled = true;
-    const observer = new MutationObserver(syncPartialStatusUi);
-    observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      characterData: true,
-    });
-    syncPartialStatusUi();
-  };
-
-  const install = () => {
+  const installValidationCompat = () => {
     const originalValidateData = window.validateData;
-    if (typeof originalValidateData !== "function" || window.__partialValidationCompatInstalled) {
-      if (!window.__partialValidationCompatInstalled) window.setTimeout(install, 50);
-      return;
-    }
-    window.__partialValidationCompatInstalled = true;
+    if (typeof originalValidateData !== "function") return false;
+    if (window.__partialValidationCompatInstalled) return true;
 
+    window.__partialValidationCompatInstalled = true;
     window.validateData = function validateDataCompat(data) {
       const isPartial =
         data &&
@@ -102,9 +71,8 @@
       }
 
       try {
-        // app.js predates resilient partial mode and treats collection
-        // diagnostics as fatal. They remain untouched in the actual payload;
-        // only its validation call sees the compatibility values below.
+        // app.js predates resilient partial mode. Only its validation call sees
+        // the compatibility values; the published payload remains unchanged.
         quality.detail_fetch_failures = 0;
         quality.invalid_player_records = 0;
         fallback.trigger_after_minutes = LEGACY_FALLBACK_MINUTES;
@@ -119,15 +87,37 @@
         fallback.last_complete_updated_at = lastCompleteUpdatedAt;
       }
     };
+    return true;
   };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
-      install();
-      installPartialStatusUi();
-    }, { once: true });
-  } else {
-    install();
-    installPartialStatusUi();
+  const installStatusHook = () => {
+    const originalUpdate = window.updateFreshnessWarning;
+    if (typeof originalUpdate !== "function") return false;
+    if (window.__partialStatusHookInstalled) return true;
+
+    window.__partialStatusHookInstalled = true;
+    window.updateFreshnessWarning = function updateFreshnessWarningCompat(...args) {
+      const result = originalUpdate.apply(this, args);
+      syncPartialStatusUi();
+      return result;
+    };
+    return true;
+  };
+
+  // Both app.js and this file are defer scripts. app.js executes first, so the
+  // hooks can be installed now, before DOMContentLoaded starts the first fetch.
+  // This avoids the old race where a fast JSON response could be validated
+  // before the compatibility adapter existed and trigger unnecessary retries.
+  if (!installValidationCompat()) {
+    window.setTimeout(installValidationCompat, 0);
   }
+  if (!installStatusHook()) {
+    window.setTimeout(installStatusHook, 0);
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    installValidationCompat();
+    installStatusHook();
+    syncPartialStatusUi();
+  }, { once: true });
 })();
