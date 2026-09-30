@@ -12,6 +12,50 @@
 (() => {
   const LEGACY_FALLBACK_MINUTES = 180;
 
+  const syncPartialStatusUi = () => {
+    const hasState = typeof state !== "undefined" && state && typeof state === "object";
+    const isPartial =
+      hasState && state.data?.publication_mode === "partial_after_stale";
+    const freshness = document.querySelector("#summary-freshness");
+
+    if (freshness) {
+      if (isPartial) {
+        freshness.classList.remove("freshness-delayed");
+        freshness.classList.add("freshness-partial");
+      } else {
+        freshness.classList.remove("freshness-partial");
+      }
+    }
+
+    // A partial sample is now a normal live publication state. Do not show the
+    // old yellow "under 200 players" warning. Keep real load/stale errors.
+    if (isPartial && state.lastLoadError !== true) {
+      const warning = document.querySelector("#data-warning");
+      if (warning && warning.hidden !== true) warning.hidden = true;
+    }
+  };
+
+  const installPartialStatusUi = () => {
+    if (window.__partialStatusUiInstalled) {
+      syncPartialStatusUi();
+      return;
+    }
+    if (!document.body) {
+      window.setTimeout(installPartialStatusUi, 50);
+      return;
+    }
+
+    window.__partialStatusUiInstalled = true;
+    const observer = new MutationObserver(syncPartialStatusUi);
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true,
+    });
+    syncPartialStatusUi();
+  };
+
   const install = () => {
     const originalValidateData = window.validateData;
     if (typeof originalValidateData !== "function" || window.__partialValidationCompatInstalled) {
@@ -78,8 +122,12 @@
   };
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", install, { once: true });
+    document.addEventListener("DOMContentLoaded", () => {
+      install();
+      installPartialStatusUi();
+    }, { once: true });
   } else {
     install();
+    installPartialStatusUi();
   }
 })();
