@@ -213,9 +213,11 @@ PY
           ' wrangler.jsonc > "$tmp"
           mv "$tmp" wrangler.jsonc
 
-      - name: Validate production PvP snapshot as full-only
+      - name: Validate current PvP snapshot
         run: |
           set -euo pipefail
+          # Worker production is stricter than temporary Pages publication:
+          # only a verified full 200/200 bundle can pass this gate.
           python scripts/validate_public_comparisons.py copy-source/public/pvp/data/character_usage.json
           validation_root="$RUNNER_TEMP/production-pvp-validation"
           rm -rf "$validation_root"
@@ -321,7 +323,7 @@ PY
           grep -q 'レジェンド帯 キャラ集計' "$live_index"
           echo "Production Worker PvP is pinned to verified full source $PRODUCTION_PVP_SOURCE_SHA."
 
-      - name: Verify live standard-month topics and four-language metadata without board writes
+      - name: Verify live monthly topics and four-language metadata without board writes
         if: ${{ hashFiles('copy-source/app/api/community-topics/route.ts') != '' }}
         run: |
           set -euo pipefail
