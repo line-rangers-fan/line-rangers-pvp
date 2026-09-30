@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#10182a">
+  <meta name="color-scheme" content="dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none';">
+  <title>ブラウン メンテナンスラン | 非公式プレビュー</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./game.js" defer></script>
+</head>
+<body>
+  <main class="page-shell">
+    <section class="preview-card" aria-labelledby="game-title">
+      <div class="topline">
+        <span class="preview-badge">PRIVATE PREVIEW</span>
+        <span class="maintenance-dot" aria-hidden="true"></span>
+        <span class="maintenance-copy">メンテナンス中のミニゲーム案</span>
+      </div>
+
+      <header class="hero">
+        <p class="eyebrow">FAN-MADE PIXEL RUNNER</p>
+        <h1 id="game-title">ブラウン メンテナンスラン</h1>
+        <p class="lead">アップデート完了まで、ドット絵のブラウンで障害物をジャンプ。</p>
+      </header>
+
+      <div class="hud" aria-live="polite">
+        <div><span>SCORE</span><strong id="score">00000</strong></div>
+        <div><span>BEST</span><strong id="best-score">00000</strong></div>
+        <div><span>SPEED</span><strong id="speed">1.0×</strong></div>
+      </div>
+
+      <div id="game-frame" class="game-frame">
+        <canvas id="game" width="960" height="320" aria-label="ブラウンが自動で走り、障害物をジャンプして避けるミニゲーム"></canvas>
+        <div id="game-overlay" class="game-overlay">
+          <div class="overlay-panel">
+            <p id="overlay-kicker" class="overlay-kicker">READY</p>
+            <h2 id="overlay-title">ジャンプしてメンテを乗り切ろう</h2>
+            <p id="overlay-copy">スペース / ↑ / 画面タップでジャンプ</p>
+            <button id="start-button" type="button">スタート</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls" aria-label="操作方法">
+        <button id="jump-button" type="button" class="jump-button">JUMP</button>
+        <p><kbd>SPACE</kbd> <kbd>↑</kbd> または画面タップ</p>
+      </div>
+
+      <aside class="preview-note">
+        <strong>試作版</strong>
+        <span>本番PvPサイト・掲示板とは分離されています。外部通信なし／スコアはこの端末内だけに保存されます。</span>
+      </aside>
+    </section>
+
+    <footer>
+      <p>非公式ファンメイドのプレビューです。ゲーム内のクマ表現は、この試作用にCanvas上で新規作成した低解像度ドット表現です。</p>
+    </footer>
+  </main>
+</body>
+</html>
