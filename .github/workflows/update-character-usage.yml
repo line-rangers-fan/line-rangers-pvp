@@ -111,8 +111,8 @@ jobs:
           PLAYER_FETCH_WORKERS: "4"
           REQUEST_ATTEMPTS: "3"
           REQUEST_TIMEOUT_SECONDS: "10"
-          DETAIL_FETCH_ROUNDS: "1"
-          DETAIL_CONTENT_RECHECKS: "0"
+          DETAIL_FETCH_ROUNDS: "2"
+          DETAIL_CONTENT_RECHECKS: "1"
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
