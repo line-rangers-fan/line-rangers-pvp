@@ -1,8 +1,10 @@
-"""Rebuild PvP period comparisons from verified complete Legend snapshots.
+"""Rebuild PvP period comparisons from verified Legend snapshots.
 
-Public comparison baselines must remain 200/200. Partial collections may be
-diagnostic evidence elsewhere, but they are never retained or reused as
-one-hour/day/week/month comparison references.
+Durable public comparison baselines remain verified 200/200 snapshots. A
+runner-authorized partial publication may additionally use a verified,
+same-sized partial snapshot from 30-90 minutes earlier for the one-hour
+character-count comparison only. That partial evidence is never retained as
+history and is never reused for day/week/month or equipment comparisons.
 """
 
 from __future__ import annotations
@@ -105,7 +107,7 @@ def compact_snapshot_from_published(payload: object, current_time: datetime) -> 
 
 
 def recent_git_snapshots(data: dict, limit: int = RECENT_GIT_VERSIONS) -> list[dict]:
-    """Recover recent partial publications during first-time bootstrap."""
+    """Recover recent complete publications during first-time bootstrap."""
     if limit <= 0:
         return []
     current_time = _current_time(data)
@@ -146,6 +148,132 @@ def recent_git_snapshots(data: dict, limit: int = RECENT_GIT_VERSIONS) -> list[d
     return snapshots
 
 
+def _runtime_partial_hour_reference(
+    data: dict,
+    limit: int = RECENT_GIT_VERSIONS,
+) -> dict | None:
+    """Recover one same-sized partial snapshot for the one-hour display only."""
+    fallback = data.get("partial_fallback")
+    sampled = scraper._exact_int(data.get("sampled_players"))
+    if (
+        limit <= 0
+        or data.get("complete_target") is not False
+        or data.get("publication_mode") != scraper.PARTIAL_PUBLICATION_MODE
+        or not isinstance(fallback, dict)
+        or fallback.get("trigger_after_minutes") != 0
+        or sampled is None
+        or not 0 < sampled < scraper.TARGET_PLAYER_COUNT
+    ):
+        return None
+
+    current_time = _current_time(data)
+    target_time = current_time - timedelta(hours=1)
+    try:
+        history = subprocess.run(
+            ["git", "log", f"-n{limit}", "--format=%H", "--", DATA_PATH.as_posix()],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if history.returncode != 0:
+        return None
+
+    candidates: list[tuple[float, float, dict]] = []
+    for commit_sha in [line.strip() for line in history.stdout.splitlines() if line.strip()]:
+        try:
+            shown = subprocess.run(
+                ["git", "show", f"{commit_sha}:{DATA_PATH.as_posix()}"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=8,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if shown.returncode != 0:
+            continue
+        try:
+            payload = json.loads(shown.stdout)
+        except (ValueError, RecursionError):
+            continue
+        if (
+            not isinstance(payload, dict)
+            or scraper._exact_int(payload.get("sampled_players")) != sampled
+            or payload.get("complete_target") is not False
+            or payload.get("publication_mode") != scraper.PARTIAL_PUBLICATION_MODE
+        ):
+            continue
+        timestamp = scraper._parse_history_time(payload.get("updated_at"))
+        if timestamp is None or timestamp.tzinfo is None or timestamp >= current_time:
+            continue
+        age = (current_time - timestamp).total_seconds()
+        if not 30 * 60 <= age <= 90 * 60:
+            continue
+        try:
+            validate_data(payload)
+            snapshot = scraper.history_snapshot(payload)
+            if not scraper._usable_history_snapshot(snapshot, current_time, sampled):
+                continue
+        except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
+            continue
+        candidates.append(
+            (
+                abs((timestamp - target_time).total_seconds()),
+                -timestamp.timestamp(),
+                snapshot,
+            )
+        )
+
+    if not candidates:
+        return None
+    return min(candidates, key=lambda item: (item[0], item[1]))[2]
+
+
+def _limit_partial_comparison_to_character_hour(data: dict) -> None:
+    """Keep the partial exception limited to the requested character-hour delta."""
+    summary_unavailable = {
+        "comparable": False,
+        "updated_at": None,
+        "calendar_date": None,
+    }
+    row_unavailable = {
+        "comparable": False,
+        "rank": None,
+        "occurrence_count": None,
+        "from_updated_at": None,
+        "interval_minutes": None,
+    }
+
+    comparison = data.get("comparison")
+    if isinstance(comparison, dict):
+        comparison["comparable"] = False
+        summaries = comparison.get("periods")
+        if isinstance(summaries, dict):
+            for period in ("day", "week", "month"):
+                summaries[period] = dict(summary_unavailable)
+
+    for character in data.get("characters", []):
+        if not isinstance(character, dict):
+            continue
+        periods = (character.get("change") or {}).get("periods")
+        if isinstance(periods, dict):
+            for period in ("day", "week", "month"):
+                periods[period] = dict(row_unavailable)
+        for category in (character.get("equipment_rankings") or {}).values():
+            if not isinstance(category, dict):
+                continue
+            for item in category.get("items", []):
+                if not isinstance(item, dict):
+                    continue
+                item_periods = (item.get("change") or {}).get("periods")
+                if isinstance(item_periods, dict):
+                    for period in ("hour", "day", "week", "month"):
+                        item_periods[period] = dict(row_unavailable)
+
+
 def previous_context(snapshot: dict | None, data: dict) -> dict | None:
     if not isinstance(snapshot, dict):
         return None
@@ -167,16 +295,20 @@ def rebuild_comparisons(data: dict, history: dict | None) -> tuple[dict, dict]:
     clean_history = merge_history_sources(data, history)
     snapshots = clean_history["snapshots"]
 
-    # Current partial collections are never comparable. Even with a valid
-    # earlier 200/200 snapshot available, publishing a delta from 199/200 or
-    # smaller would mix different populations and can mislead the ranking.
     if (
         data.get("sampled_players") != scraper.TARGET_PLAYER_COUNT
         or data.get("complete_target") is not True
     ):
-        scraper.add_previous_comparison(data, None, {"snapshots": []})
-        if isinstance(data.get("comparison"), dict):
-            data["comparison"]["comparable"] = False
+        # Authorized runtime partials may recover only the character one-hour
+        # delta from a same-sized 30-90 minute snapshot. The evidence remains
+        # ephemeral: it is never added to either durable history file.
+        hour_reference = _runtime_partial_hour_reference(data)
+        scraper.add_previous_comparison(
+            data,
+            None,
+            {"snapshots": [hour_reference]} if hour_reference else {"snapshots": []},
+        )
+        _limit_partial_comparison_to_character_hour(data)
         validate_data(data)
         return data, clean_history
 
