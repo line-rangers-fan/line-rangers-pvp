@@ -9,10 +9,12 @@ from pathlib import Path
 
 try:
     import scrape_character_usage as scraper
+    import rebuild_cross_sample_comparisons as cross_rebuild
     from quality_checks import validate_data
     from validate_public_comparisons import validate_payload
 except ImportError:
     from scripts import scrape_character_usage as scraper
+    from scripts import rebuild_cross_sample_comparisons as cross_rebuild
     from scripts.quality_checks import validate_data
     from scripts.validate_public_comparisons import validate_payload
 
@@ -65,14 +67,55 @@ def checked_history(history: dict, current_time, label: str) -> dict[str, dict]:
     return {snapshot["updated_at"]: snapshot for snapshot in by_time.values()}
 
 
+def _partial_character_hour_reference(data: dict, period: str, summary: dict) -> dict | None:
+    """Recover the same ephemeral hour baseline used by the collector."""
+    if period != "hour" or summary.get("comparable") is not True:
+        return None
+    fallback = data.get("partial_fallback")
+    sampled = data.get("sampled_players")
+    if (
+        data.get("complete_target") is not False
+        or data.get("publication_mode") != "partial_after_stale"
+        or not isinstance(sampled, int)
+        or isinstance(sampled, bool)
+        or not 0 < sampled < 200
+        or not isinstance(fallback, dict)
+        or fallback.get("trigger_after_minutes") != 0
+    ):
+        return None
+    reference = cross_rebuild._runtime_partial_hour_reference(data)
+    if not isinstance(reference, dict):
+        return None
+    if reference.get("updated_at") != summary.get("updated_at"):
+        return None
+    return reference
+
+
+def _verify_equipment_hour_unavailable(character: dict) -> None:
+    for category in (character.get("equipment_rankings") or {}).values():
+        for item in (category or {}).get("items") or []:
+            value = ((item.get("change") or {}).get("periods") or {}).get("hour")
+            if not isinstance(value, dict) or value.get("comparable") is not False:
+                raise ValueError("partial hour comparison must remain character-only")
+            if any(
+                value.get(key) is not None
+                for key in ("rank", "occurrence_count", "from_updated_at", "interval_minutes")
+            ):
+                raise ValueError("partial hour equipment comparison contains values")
+
+
 def verify_deltas(data: dict, references: dict[str, dict]) -> None:
     summaries = data["comparison"]["periods"]
     for period, summary in summaries.items():
         if not summary["comparable"]:
             continue
         reference = references.get(summary["updated_at"])
+        partial_character_hour = False
         if reference is None:
-            raise ValueError(f"{period} comparison has no verified 200/200 baseline")
+            reference = _partial_character_hour_reference(data, period, summary)
+            partial_character_hour = reference is not None
+        if reference is None:
+            raise ValueError(f"{period} comparison has no verified baseline")
         old_characters = {row["unit_code"]: row for row in reference["characters"]}
         for character in data["characters"]:
             code = character["unit_code"]
@@ -83,6 +126,9 @@ def verify_deltas(data: dict, references: dict[str, dict]) -> None:
             expected = character["occurrence_count"] - (old["occurrence_count"] if old else 0)
             if change["occurrence_count"] != expected:
                 raise ValueError(f"{period} character occurrence delta differs from history: {code}")
+            if partial_character_hour:
+                _verify_equipment_hour_unavailable(character)
+                continue
             for kind, category in character["equipment_rankings"].items():
                 old_rankings = old.get("equipment_rankings") if old else None
                 old_category = old_rankings.get(kind) if isinstance(old_rankings, dict) else None
