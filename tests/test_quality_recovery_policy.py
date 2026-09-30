@@ -1,4 +1,4 @@
-"""Balanced quality gates: auto-repair only safe failures, never relax core data safety."""
+"""Balanced quality gates: keep the site updating without polluting comparison history."""
 
 from pathlib import Path
 
@@ -70,21 +70,27 @@ def test_collector_rebuilds_only_derived_comparisons_then_revalidates():
     assert workflow.count("scripts/rebuild_cross_sample_comparisons.py") >= 2
     assert "scripts/validate_public_comparisons.py docs/data/character_usage.json" in workflow
     assert ".target_players == 200 and .sampled_players == 200 and .complete_target == true" in workflow
-    assert ".target_players == 200 and .sampled_players == 199 and .complete_target == false" in workflow
+    assert ".sampled_players > 0 and .sampled_players < 200" in workflow
 
 
-def test_publication_allows_only_bounded_199_partial_beside_complete_200():
+def test_publication_allows_any_nonzero_partial_but_never_partial_history():
     pages = read(".github/workflows/deploy-github-pages.yml")
     worker = read(".github/workflows/sync-production-pvp.yml")
+    update = read(".github/workflows/update-character-usage.yml")
     policy = read("scripts/prepare_partial_collection_runtime.py")
 
     assert "python scripts/prepare_partial_collection_runtime.py" in pages
     assert "python scripts/prepare_partial_collection_runtime.py" in worker
-    assert "players == target_players - 1" in policy
-    assert "missing_players != 1" in policy
-    assert "len(players) != TARGET_PLAYER_COUNT - 1" in policy
-    assert "detail_failures != 0" in policy
-    assert "diagnostic unit/equipment corruption present" in policy
+    assert ".sampled_players > 0 and .sampled_players < 200" in update
+    assert "return True, last_complete" in policy
+    assert "len(players) <= 0" in policy
+    assert "if not ALLOW_PARTIAL_FOR_RUN" in policy
+    assert 'data["termination_reason"] = "api_partial_available"' in policy
+    assert '"trigger_after_minutes": 0' in policy
+    assert "previous = None" in policy
+    assert 'previous_history = {"snapshots": []}' in policy
+    assert 'if characters and collected == 0 and not is_partial' in policy
+    assert 'if not is_partial and any(diagnostics.get(key) for key in failure_keys)' in policy
 
     assert "scripts/validate_public_comparisons.py docs/data/character_usage.json" in pages
     assert "BOARD_OWNER_ACCESS_TOKEN|BOARD_OWNER_SUBJECT|BOARD_ANON_COOKIE_SECRET|CLOUDFLARE_.*TOKEN" in pages
