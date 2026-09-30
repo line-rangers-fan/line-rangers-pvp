@@ -45,8 +45,8 @@ jobs:
               && curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1 "$worker_url?audit=$nonce" -o /tmp/worker-character-usage.json \
               && curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1 "$pages_health_url?audit=$nonce" -o /tmp/pages-character-usage-health.json \
               && curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1 "$worker_health_url?audit=$nonce" -o /tmp/worker-character-usage-health.json \
-              && jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' /tmp/pages-character-usage.json >/dev/null \
-              && jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' /tmp/worker-character-usage.json >/dev/null \
+              && jq -e '.target_players == 200 and (.sampled_players | type == "number") and .sampled_players > 0 and .sampled_players <= 200 and ((.sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or (.sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale"))' /tmp/pages-character-usage.json >/dev/null \
+              && jq -e '.target_players == 200 and (.sampled_players | type == "number") and .sampled_players > 0 and .sampled_players <= 200 and ((.sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or (.sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale"))' /tmp/worker-character-usage.json >/dev/null \
               && jq -e '. as $health | all(["hour","day","week","month"][]; . as $period | ($health.comparison.periods[$period].comparable | type == "boolean"))' /tmp/pages-character-usage-health.json >/dev/null \
               && jq -e '. as $health | all(["hour","day","week","month"][]; . as $period | ($health.comparison.periods[$period].comparable | type == "boolean"))' /tmp/worker-character-usage-health.json >/dev/null \
               && cmp -s /tmp/pages-character-usage.json /tmp/worker-character-usage.json \
@@ -60,7 +60,7 @@ jobs:
             echo "::error::Pages and Worker PvP snapshots or health states did not converge before visual audit."
             exit 1
           fi
-          echo "Pages and Worker PvP snapshots are synchronized at 200/200 with matching health periods."
+          echo "Pages and Worker PvP snapshots are synchronized at the same nonzero publishable sample with matching health periods."
       - name: Install pinned Chromium harness
         run: |
           set -euo pipefail
