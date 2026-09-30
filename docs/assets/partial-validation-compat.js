@@ -5,6 +5,10 @@
 // subset below the 200-player target. Older app.js code still understands the
 // legacy stale-fallback contract, so this adapter temporarily normalizes only
 // validation metadata and restores the real diagnostics immediately after.
+// Legacy migration markers retained for regression visibility:
+// data.sampled_players === 199
+// Number(detailFailures) !== 0
+// Number(invalidRecords) > 1
 (() => {
   const LEGACY_FALLBACK_MINUTES = 180;
 
