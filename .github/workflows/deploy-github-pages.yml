@@ -28,7 +28,10 @@ jobs:
         with:
           # A queued Pages run must deploy the newest canonical comparison
           # snapshot, never the older push SHA that originally queued it.
+          # Full history is required to verify the ephemeral same-sized
+          # 30-90 minute baseline used only by the one-hour character delta.
           ref: main
+          fetch-depth: 0
 
       - name: Validate public static safety
         run: |
