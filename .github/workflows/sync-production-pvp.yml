@@ -78,27 +78,27 @@ jobs:
               return 1
             fi
             python - "$tmp/data.json" "$tmp/health.json" <<'PY'
-import json, sys
-from pathlib import Path
+          import json, sys
+          from pathlib import Path
 
-data = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
-health = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
-quality = health.get('collection_quality') or {}
-ok = (
-    data.get('target_players') == 200
-    and data.get('sampled_players') == 200
-    and data.get('complete_target') is True
-    and data.get('publication_mode') == 'complete'
-    and health.get('target_players') == 200
-    and health.get('sampled_players') == 200
-    and health.get('complete_target') is True
-    and health.get('publication_mode') == 'complete'
-    and health.get('validated_full_sample') is True
-    and quality.get('invalid_player_records') == 0
-    and quality.get('detail_fetch_failures') == 0
-)
-raise SystemExit(0 if ok else 1)
-PY
+          data = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          health = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
+          quality = health.get('collection_quality') or {}
+          ok = (
+              data.get('target_players') == 200
+              and data.get('sampled_players') == 200
+              and data.get('complete_target') is True
+              and data.get('publication_mode') == 'complete'
+              and health.get('target_players') == 200
+              and health.get('sampled_players') == 200
+              and health.get('complete_target') is True
+              and health.get('publication_mode') == 'complete'
+              and health.get('validated_full_sample') is True
+              and quality.get('invalid_player_records') == 0
+              and quality.get('detail_fetch_failures') == 0
+          )
+          raise SystemExit(0 if ok else 1)
+          PY
             status=$?
             rm -rf "$tmp"
             return "$status"
