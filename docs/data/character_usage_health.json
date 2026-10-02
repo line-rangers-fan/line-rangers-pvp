@@ -1,31 +1,31 @@
 {
   "health_schema_version": 1,
   "source_schema_version": 11,
-  "updated_at": "2026-10-02T15:16:42.367147+00:00",
+  "updated_at": "2026-10-02T15:31:55.009185+00:00",
   "target_players": 200,
-  "sampled_players": 199,
-  "character_slots": 1982,
-  "unique_characters": 62,
+  "sampled_players": 198,
+  "character_slots": 1972,
+  "unique_characters": 61,
   "complete_target": false,
   "publication_mode": "partial_after_stale",
   "validated_full_sample": false,
   "validated_publishable_sample": true,
   "collection_quality": {
-    "sample_coverage": 99.5,
+    "sample_coverage": 99.0,
     "equipment_fill_rate": 99.9,
     "detail_fetch_failures": 0,
     "invalid_player_records": 1,
-    "collection_duration_seconds": 21.23,
-    "detail_fetch_duration_seconds": 20.74
+    "collection_duration_seconds": 27.42,
+    "detail_fetch_duration_seconds": 26.34
   },
   "comparison": {
     "reference_mode": "jst_calendar_close_v1",
     "calendar_date": "2026-10-03",
     "periods": {
       "hour": {
-        "comparable": true,
-        "updated_at": "2026-10-02T14:16:55.933888+00:00",
-        "calendar_date": "2026-10-02"
+        "comparable": false,
+        "updated_at": null,
+        "calendar_date": null
       },
       "day": {
         "comparable": false,
@@ -50,7 +50,7 @@
     "unchanged_minutes": 0.0
   },
   "character_metadata": {
-    "source_names": 62,
+    "source_names": 61,
     "preserved_names": 0,
     "pending_names": 0,
     "translation_fetch_failed": false
