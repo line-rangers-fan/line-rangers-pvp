@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-10-02T15:02:01.868188+00:00",
+  "updated_at": "2026-10-02T15:16:42.367147+00:00",
   "source": {
     "name": "LINE Rangers Handbook PvP Tracker",
     "url": "https://rangers.lerico.net/ja/pvp-tracker"
@@ -9,7 +9,7 @@
   "target_players": 200,
   "sampled_players": 199,
   "character_slots": 1982,
-  "unique_characters": 63,
+  "unique_characters": 62,
   "median_characters_per_player": 10,
   "pages_scanned": 1,
   "termination_reason": "api_partial_available",
@@ -22,9 +22,9 @@
     "equipment_fill_rate": 99.9,
     "detail_fetch_failures": 0,
     "invalid_player_records": 1,
-    "collection_started_at": "2026-10-02T15:01:34.413884+00:00",
-    "collection_duration_seconds": 27.46,
-    "detail_fetch_duration_seconds": 26.88
+    "collection_started_at": "2026-10-02T15:16:21.142421+00:00",
+    "collection_duration_seconds": 21.23,
+    "detail_fetch_duration_seconds": 20.74
   },
   "characters": [
     {
@@ -2041,8 +2041,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -3353,8 +3353,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -4321,8 +4321,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -4354,13 +4354,13 @@
       "unit_code": "u1554e-yf",
       "name": "ヨル",
       "image": "https://rangers.lerico.net/res/u1554e-yf/u1554e-yf-thum.png",
-      "occurrence_count": 182,
+      "occurrence_count": 183,
       "player_count": 182,
       "adoption_rate": 91.5,
-      "slot_rate": 9.18,
+      "slot_rate": 9.23,
       "equipment_rankings": {
         "WEAPON": {
-          "equipped_occurrence_count": 182,
+          "equipped_occurrence_count": 183,
           "equipped_player_count": 182,
           "items": [
             {
@@ -4409,10 +4409,10 @@
             {
               "item_code": "eq_2212_wpn_07",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2212_wpn_07_icon.png",
-              "occurrence_count": 55,
-              "player_count": 55,
+              "occurrence_count": 56,
+              "player_count": 56,
               "rank": 2,
-              "adoption_rate": 30.2,
+              "adoption_rate": 30.8,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -4452,10 +4452,10 @@
             {
               "item_code": "eq_2512_wpn_38",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2512_wpn_38_icon.png",
-              "occurrence_count": 28,
-              "player_count": 28,
+              "occurrence_count": 27,
+              "player_count": 27,
               "rank": 3,
-              "adoption_rate": 15.4,
+              "adoption_rate": 14.8,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -4665,6 +4665,49 @@
               }
             },
             {
+              "item_code": "eq_wpn_evt_007",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_wpn_evt_007_icon.png",
+              "occurrence_count": 2,
+              "player_count": 2,
+              "rank": 8,
+              "adoption_rate": 1.1,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
               "item_code": "eq_wpn_evt_09",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_wpn_evt_09_icon.png",
               "occurrence_count": 2,
@@ -4708,54 +4751,11 @@
               }
             },
             {
-              "item_code": "eq_wpn_evt_007",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_wpn_evt_007_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 9,
-              "adoption_rate": 0.5,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
               "item_code": "eq_wpn_evt_127",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_wpn_evt_127_icon.png",
               "occurrence_count": 1,
               "player_count": 1,
-              "rank": 9,
+              "rank": 10,
               "adoption_rate": 0.5,
               "change": {
                 "new": true,
@@ -4796,7 +4796,7 @@
           ]
         },
         "ARMOR": {
-          "equipped_occurrence_count": 182,
+          "equipped_occurrence_count": 183,
           "equipped_player_count": 182,
           "items": [
             {
@@ -4845,10 +4845,10 @@
             {
               "item_code": "eq_amr_evt_117",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_117_icon.png",
-              "occurrence_count": 38,
-              "player_count": 38,
+              "occurrence_count": 39,
+              "player_count": 39,
               "rank": 2,
-              "adoption_rate": 20.9,
+              "adoption_rate": 21.4,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -5015,12 +5015,12 @@
               }
             },
             {
-              "item_code": "eq_amr_evt_138",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_138_icon.png",
-              "occurrence_count": 5,
-              "player_count": 5,
-              "rank": 4,
-              "adoption_rate": 2.7,
+              "item_code": "eq_amr_evt_09",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_09_icon.png",
+              "occurrence_count": 4,
+              "player_count": 4,
+              "rank": 6,
+              "adoption_rate": 2.2,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -5058,12 +5058,55 @@
               }
             },
             {
-              "item_code": "eq_amr_evt_09",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_09_icon.png",
+              "item_code": "eq_amr_evt_138",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_138_icon.png",
               "occurrence_count": 4,
               "player_count": 4,
-              "rank": 7,
+              "rank": 6,
               "adoption_rate": 2.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_amr_evt_28",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_28_icon.png",
+              "occurrence_count": 2,
+              "player_count": 2,
+              "rank": 8,
+              "adoption_rate": 1.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -5148,7 +5191,7 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2304_amr_17_icon.png",
               "occurrence_count": 1,
               "player_count": 1,
-              "rank": 9,
+              "rank": 10,
               "adoption_rate": 0.5,
               "change": {
                 "new": true,
@@ -5191,50 +5234,7 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2312_amr_07_icon.png",
               "occurrence_count": 1,
               "player_count": 1,
-              "rank": 9,
-              "adoption_rate": 0.5,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_amr_evt_28",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_28_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 9,
+              "rank": 10,
               "adoption_rate": 0.5,
               "change": {
                 "new": true,
@@ -5275,16 +5275,16 @@
           ]
         },
         "ACC": {
-          "equipped_occurrence_count": 182,
+          "equipped_occurrence_count": 183,
           "equipped_player_count": 182,
           "items": [
             {
-              "item_code": "eq_acc_evt_08",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_evt_08_icon.png",
+              "item_code": "eq_2609_acc_29",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_acc_29_icon.png",
               "occurrence_count": 64,
-              "player_count": 64,
+              "player_count": 63,
               "rank": 1,
-              "adoption_rate": 35.2,
+              "adoption_rate": 34.6,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -5322,8 +5322,8 @@
               }
             },
             {
-              "item_code": "eq_2609_acc_29",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_acc_29_icon.png",
+              "item_code": "eq_acc_evt_08",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_evt_08_icon.png",
               "occurrence_count": 63,
               "player_count": 63,
               "rank": 2,
@@ -5539,10 +5539,10 @@
             {
               "item_code": "eq_acc_0106",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_0106_icon.png",
-              "occurrence_count": 2,
-              "player_count": 2,
+              "occurrence_count": 3,
+              "player_count": 3,
               "rank": 7,
-              "adoption_rate": 1.1,
+              "adoption_rate": 1.6,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -5675,9 +5675,9 @@
           "hour": {
             "comparable": true,
             "rank": 0,
-            "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "occurrence_count": 1,
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -7074,8 +7074,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 1,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -8085,8 +8085,8 @@
             "comparable": true,
             "rank": 1,
             "occurrence_count": 1,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -10128,8 +10128,8 @@
             "comparable": true,
             "rank": -1,
             "occurrence_count": -1,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -11182,8 +11182,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": -1,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -11215,22 +11215,22 @@
       "unit_code": "u1539e-en",
       "name": "エンジン",
       "image": "https://rangers.lerico.net/res/u1539e-en/u1539e-en-thum.png",
-      "occurrence_count": 93,
-      "player_count": 93,
-      "adoption_rate": 46.7,
-      "slot_rate": 4.69,
+      "occurrence_count": 94,
+      "player_count": 94,
+      "adoption_rate": 47.2,
+      "slot_rate": 4.74,
       "equipment_rankings": {
         "WEAPON": {
-          "equipped_occurrence_count": 93,
-          "equipped_player_count": 93,
+          "equipped_occurrence_count": 94,
+          "equipped_player_count": 94,
           "items": [
             {
               "item_code": "eq_2607_wpn_09",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2607_wpn_09_icon.png",
-              "occurrence_count": 51,
-              "player_count": 51,
+              "occurrence_count": 53,
+              "player_count": 53,
               "rank": 1,
-              "adoption_rate": 54.8,
+              "adoption_rate": 56.4,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -11273,7 +11273,7 @@
               "occurrence_count": 9,
               "player_count": 9,
               "rank": 2,
-              "adoption_rate": 9.7,
+              "adoption_rate": 9.6,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -11316,7 +11316,7 @@
               "occurrence_count": 7,
               "player_count": 7,
               "rank": 3,
-              "adoption_rate": 7.5,
+              "adoption_rate": 7.4,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -11359,7 +11359,7 @@
               "occurrence_count": 5,
               "player_count": 5,
               "rank": 4,
-              "adoption_rate": 5.4,
+              "adoption_rate": 5.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -11402,7 +11402,7 @@
               "occurrence_count": 5,
               "player_count": 5,
               "rank": 4,
-              "adoption_rate": 5.4,
+              "adoption_rate": 5.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -11531,7 +11531,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 8,
-              "adoption_rate": 2.2,
+              "adoption_rate": 2.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -11574,50 +11574,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 8,
-              "adoption_rate": 2.2,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2609_wpn_09",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_wpn_09_icon.png",
-              "occurrence_count": 2,
-              "player_count": 2,
-              "rank": 8,
-              "adoption_rate": 2.2,
+              "adoption_rate": 2.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -11659,7 +11616,50 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2209_wpn_07_icon.png",
               "occurrence_count": 1,
               "player_count": 1,
-              "rank": 11,
+              "rank": 10,
+              "adoption_rate": 1.1,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2609_wpn_09",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_wpn_09_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 10,
               "adoption_rate": 1.1,
               "change": {
                 "new": true,
@@ -11702,7 +11702,7 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_wpn_39_icon.png",
               "occurrence_count": 1,
               "player_count": 1,
-              "rank": 11,
+              "rank": 10,
               "adoption_rate": 1.1,
               "change": {
                 "new": true,
@@ -11745,7 +11745,7 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_wpn_evt_118_icon.png",
               "occurrence_count": 1,
               "player_count": 1,
-              "rank": 11,
+              "rank": 10,
               "adoption_rate": 1.1,
               "change": {
                 "new": true,
@@ -11786,8 +11786,8 @@
           ]
         },
         "ARMOR": {
-          "equipped_occurrence_count": 93,
-          "equipped_player_count": 93,
+          "equipped_occurrence_count": 94,
+          "equipped_player_count": 94,
           "items": [
             {
               "item_code": "eq_2510_amr_18",
@@ -11795,7 +11795,7 @@
               "occurrence_count": 58,
               "player_count": 58,
               "rank": 1,
-              "adoption_rate": 62.4,
+              "adoption_rate": 61.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -11838,7 +11838,7 @@
               "occurrence_count": 7,
               "player_count": 7,
               "rank": 2,
-              "adoption_rate": 7.5,
+              "adoption_rate": 7.4,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -11881,7 +11881,7 @@
               "occurrence_count": 6,
               "player_count": 6,
               "rank": 3,
-              "adoption_rate": 6.5,
+              "adoption_rate": 6.4,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -11962,12 +11962,55 @@
               }
             },
             {
+              "item_code": "eq_2610_amr_29",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2610_amr_29_icon.png",
+              "occurrence_count": 3,
+              "player_count": 3,
+              "rank": 4,
+              "adoption_rate": 3.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
               "item_code": "eq_2304_amr_17",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2304_amr_17_icon.png",
               "occurrence_count": 2,
               "player_count": 2,
-              "rank": 5,
-              "adoption_rate": 2.2,
+              "rank": 6,
+              "adoption_rate": 2.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -12009,8 +12052,8 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2403_amr_08_icon.png",
               "occurrence_count": 2,
               "player_count": 2,
-              "rank": 5,
-              "adoption_rate": 2.2,
+              "rank": 6,
+              "adoption_rate": 2.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -12052,8 +12095,8 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2412_amr_17_icon.png",
               "occurrence_count": 2,
               "player_count": 2,
-              "rank": 5,
-              "adoption_rate": 2.2,
+              "rank": 6,
+              "adoption_rate": 2.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -12095,51 +12138,8 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2501_amr_08_icon.png",
               "occurrence_count": 2,
               "player_count": 2,
-              "rank": 5,
-              "adoption_rate": 2.2,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2610_amr_29",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2610_amr_29_icon.png",
-              "occurrence_count": 2,
-              "player_count": 2,
-              "rank": 5,
-              "adoption_rate": 2.2,
+              "rank": 6,
+              "adoption_rate": 2.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -12181,8 +12181,8 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_ch_amr_27_icon.png",
               "occurrence_count": 2,
               "player_count": 2,
-              "rank": 5,
-              "adoption_rate": 2.2,
+              "rank": 6,
+              "adoption_rate": 2.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -12224,8 +12224,8 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_ft_amr_27_icon.png",
               "occurrence_count": 2,
               "player_count": 2,
-              "rank": 5,
-              "adoption_rate": 2.2,
+              "rank": 6,
+              "adoption_rate": 2.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -12480,8 +12480,8 @@
           ]
         },
         "ACC": {
-          "equipped_occurrence_count": 93,
-          "equipped_player_count": 93,
+          "equipped_occurrence_count": 94,
+          "equipped_player_count": 94,
           "items": [
             {
               "item_code": "eq_2606_acc_18",
@@ -12489,7 +12489,7 @@
               "occurrence_count": 49,
               "player_count": 49,
               "rank": 1,
-              "adoption_rate": 52.7,
+              "adoption_rate": 52.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -12532,7 +12532,7 @@
               "occurrence_count": 15,
               "player_count": 15,
               "rank": 2,
-              "adoption_rate": 16.1,
+              "adoption_rate": 16.0,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -12575,7 +12575,50 @@
               "occurrence_count": 5,
               "player_count": 5,
               "rank": 3,
-              "adoption_rate": 5.4,
+              "adoption_rate": 5.3,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2608_acc_08",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2608_acc_08_icon.png",
+              "occurrence_count": 5,
+              "player_count": 5,
+              "rank": 3,
+              "adoption_rate": 5.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -12617,50 +12660,7 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2512_acc_28_icon.png",
               "occurrence_count": 4,
               "player_count": 4,
-              "rank": 4,
-              "adoption_rate": 4.3,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2608_acc_08",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2608_acc_08_icon.png",
-              "occurrence_count": 4,
-              "player_count": 4,
-              "rank": 4,
+              "rank": 5,
               "adoption_rate": 4.3,
               "change": {
                 "new": true,
@@ -12703,7 +12703,7 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_evt_138_icon.png",
               "occurrence_count": 4,
               "player_count": 4,
-              "rank": 4,
+              "rank": 5,
               "adoption_rate": 4.3,
               "change": {
                 "new": true,
@@ -12833,7 +12833,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 9,
-              "adoption_rate": 2.2,
+              "adoption_rate": 2.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -12876,7 +12876,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 9,
-              "adoption_rate": 2.2,
+              "adoption_rate": 2.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -13009,9 +13009,9 @@
           "hour": {
             "comparable": true,
             "rank": 0,
-            "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "occurrence_count": 1,
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -14099,10 +14099,10 @@
             {
               "item_code": "eq_2607_acc_29",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2607_acc_29_icon.png",
-              "occurrence_count": 27,
-              "player_count": 27,
+              "occurrence_count": 26,
+              "player_count": 26,
               "rank": 1,
-              "adoption_rate": 32.5,
+              "adoption_rate": 31.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -14484,6 +14484,49 @@
               }
             },
             {
+              "item_code": "eq_acc_est_28",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_est_28_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 8,
+              "adoption_rate": 1.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
               "item_code": "eq_acc_evt_19",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_evt_19_icon.png",
               "occurrence_count": 1,
@@ -14537,8 +14580,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": -1,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -14570,14 +14613,14 @@
       "unit_code": "u1563e-pew",
       "name": "ピュー",
       "image": "https://rangers.lerico.net/res/u1563e-pew/u1563e-pew-thum.png",
-      "occurrence_count": 72,
-      "player_count": 72,
-      "adoption_rate": 36.2,
-      "slot_rate": 3.63,
+      "occurrence_count": 73,
+      "player_count": 73,
+      "adoption_rate": 36.7,
+      "slot_rate": 3.68,
       "equipment_rankings": {
         "WEAPON": {
-          "equipped_occurrence_count": 72,
-          "equipped_player_count": 72,
+          "equipped_occurrence_count": 73,
+          "equipped_player_count": 73,
           "items": [
             {
               "item_code": "eq_wpn_evt_138",
@@ -14585,7 +14628,7 @@
               "occurrence_count": 31,
               "player_count": 31,
               "rank": 1,
-              "adoption_rate": 43.1,
+              "adoption_rate": 42.5,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -14625,10 +14668,10 @@
             {
               "item_code": "eq_2408_wpn_08",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2408_wpn_08_icon.png",
-              "occurrence_count": 21,
-              "player_count": 21,
+              "occurrence_count": 22,
+              "player_count": 22,
               "rank": 2,
-              "adoption_rate": 29.2,
+              "adoption_rate": 30.1,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -14671,7 +14714,7 @@
               "occurrence_count": 6,
               "player_count": 6,
               "rank": 3,
-              "adoption_rate": 8.3,
+              "adoption_rate": 8.2,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -14714,7 +14757,7 @@
               "occurrence_count": 4,
               "player_count": 4,
               "rank": 4,
-              "adoption_rate": 5.6,
+              "adoption_rate": 5.5,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -14757,7 +14800,7 @@
               "occurrence_count": 4,
               "player_count": 4,
               "rank": 4,
-              "adoption_rate": 5.6,
+              "adoption_rate": 5.5,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -14800,7 +14843,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 6,
-              "adoption_rate": 2.8,
+              "adoption_rate": 2.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -14843,7 +14886,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 6,
-              "adoption_rate": 2.8,
+              "adoption_rate": 2.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -14969,16 +15012,16 @@
           ]
         },
         "ARMOR": {
-          "equipped_occurrence_count": 72,
-          "equipped_player_count": 72,
+          "equipped_occurrence_count": 73,
+          "equipped_player_count": 73,
           "items": [
             {
               "item_code": "eq_amr_0046",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_0046_icon.png",
-              "occurrence_count": 70,
-              "player_count": 70,
+              "occurrence_count": 71,
+              "player_count": 71,
               "rank": 1,
-              "adoption_rate": 97.2,
+              "adoption_rate": 97.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -15104,16 +15147,16 @@
           ]
         },
         "ACC": {
-          "equipped_occurrence_count": 72,
-          "equipped_player_count": 72,
+          "equipped_occurrence_count": 73,
+          "equipped_player_count": 73,
           "items": [
             {
               "item_code": "eq_acc_evt_18",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_evt_18_icon.png",
-              "occurrence_count": 50,
-              "player_count": 50,
+              "occurrence_count": 51,
+              "player_count": 51,
               "rank": 1,
-              "adoption_rate": 69.4,
+              "adoption_rate": 69.9,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -15156,7 +15199,7 @@
               "occurrence_count": 16,
               "player_count": 16,
               "rank": 2,
-              "adoption_rate": 22.2,
+              "adoption_rate": 21.9,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -15199,7 +15242,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 3,
-              "adoption_rate": 2.8,
+              "adoption_rate": 2.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -15418,9 +15461,9 @@
           "hour": {
             "comparable": true,
             "rank": 0,
-            "occurrence_count": -1,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "occurrence_count": 0,
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -15452,22 +15495,22 @@
       "unit_code": "u1631e-sally",
       "name": "サリー",
       "image": "https://rangers.lerico.net/res/u1631e-sally/u1631e-sally-thum.png",
-      "occurrence_count": 53,
-      "player_count": 53,
-      "adoption_rate": 26.6,
-      "slot_rate": 2.67,
+      "occurrence_count": 52,
+      "player_count": 52,
+      "adoption_rate": 26.1,
+      "slot_rate": 2.62,
       "equipment_rankings": {
         "WEAPON": {
-          "equipped_occurrence_count": 53,
-          "equipped_player_count": 53,
+          "equipped_occurrence_count": 52,
+          "equipped_player_count": 52,
           "items": [
             {
               "item_code": "eq_2609_wpn_09",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_wpn_09_icon.png",
-              "occurrence_count": 25,
-              "player_count": 25,
+              "occurrence_count": 24,
+              "player_count": 24,
               "rank": 1,
-              "adoption_rate": 47.2,
+              "adoption_rate": 46.2,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -15510,7 +15553,7 @@
               "occurrence_count": 18,
               "player_count": 18,
               "rank": 2,
-              "adoption_rate": 34.0,
+              "adoption_rate": 34.6,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -15553,7 +15596,7 @@
               "occurrence_count": 3,
               "player_count": 3,
               "rank": 3,
-              "adoption_rate": 5.7,
+              "adoption_rate": 5.8,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -15808,8 +15851,8 @@
           ]
         },
         "ARMOR": {
-          "equipped_occurrence_count": 53,
-          "equipped_player_count": 53,
+          "equipped_occurrence_count": 52,
+          "equipped_player_count": 52,
           "items": [
             {
               "item_code": "eq_2504_amr_08",
@@ -15817,7 +15860,7 @@
               "occurrence_count": 28,
               "player_count": 28,
               "rank": 1,
-              "adoption_rate": 52.8,
+              "adoption_rate": 53.8,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -15860,7 +15903,7 @@
               "occurrence_count": 7,
               "player_count": 7,
               "rank": 2,
-              "adoption_rate": 13.2,
+              "adoption_rate": 13.5,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -15903,7 +15946,7 @@
               "occurrence_count": 5,
               "player_count": 5,
               "rank": 3,
-              "adoption_rate": 9.4,
+              "adoption_rate": 9.6,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -15946,7 +15989,7 @@
               "occurrence_count": 5,
               "player_count": 5,
               "rank": 3,
-              "adoption_rate": 9.4,
+              "adoption_rate": 9.6,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -16156,49 +16199,6 @@
               }
             },
             {
-              "item_code": "eq_amr_est_0072",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_est_0072_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 6,
-              "adoption_rate": 1.9,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
               "item_code": "eq_amr_evt_027",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_027_icon.png",
               "occurrence_count": 1,
@@ -16287,16 +16287,16 @@
           ]
         },
         "ACC": {
-          "equipped_occurrence_count": 53,
-          "equipped_player_count": 53,
+          "equipped_occurrence_count": 52,
+          "equipped_player_count": 52,
           "items": [
             {
               "item_code": "eq_2601_acc_08",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2601_acc_08_icon.png",
-              "occurrence_count": 15,
-              "player_count": 15,
+              "occurrence_count": 14,
+              "player_count": 14,
               "rank": 1,
-              "adoption_rate": 28.3,
+              "adoption_rate": 26.9,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -16339,7 +16339,7 @@
               "occurrence_count": 10,
               "player_count": 10,
               "rank": 2,
-              "adoption_rate": 18.9,
+              "adoption_rate": 19.2,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -16382,7 +16382,7 @@
               "occurrence_count": 10,
               "player_count": 10,
               "rank": 2,
-              "adoption_rate": 18.9,
+              "adoption_rate": 19.2,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -16425,7 +16425,7 @@
               "occurrence_count": 7,
               "player_count": 7,
               "rank": 4,
-              "adoption_rate": 13.2,
+              "adoption_rate": 13.5,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -16468,7 +16468,7 @@
               "occurrence_count": 4,
               "player_count": 4,
               "rank": 5,
-              "adoption_rate": 7.5,
+              "adoption_rate": 7.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -16511,7 +16511,7 @@
               "occurrence_count": 4,
               "player_count": 4,
               "rank": 5,
-              "adoption_rate": 7.5,
+              "adoption_rate": 7.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -16644,9 +16644,9 @@
           "hour": {
             "comparable": true,
             "rank": 0,
-            "occurrence_count": 1,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "occurrence_count": 0,
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -17484,8 +17484,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -18796,8 +18796,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -18829,14 +18829,14 @@
       "unit_code": "u1397e-rd",
       "name": "ルーデウス",
       "image": "https://rangers.lerico.net/res/u1397e-rd/u1397e-rd-thum.png",
-      "occurrence_count": 31,
-      "player_count": 31,
-      "adoption_rate": 15.6,
-      "slot_rate": 1.56,
+      "occurrence_count": 30,
+      "player_count": 30,
+      "adoption_rate": 15.1,
+      "slot_rate": 1.51,
       "equipment_rankings": {
         "WEAPON": {
-          "equipped_occurrence_count": 31,
-          "equipped_player_count": 31,
+          "equipped_occurrence_count": 30,
+          "equipped_player_count": 30,
           "items": [
             {
               "item_code": "eq_2503_wpn_08",
@@ -18844,7 +18844,7 @@
               "occurrence_count": 6,
               "player_count": 6,
               "rank": 1,
-              "adoption_rate": 19.4,
+              "adoption_rate": 20.0,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -18887,7 +18887,7 @@
               "occurrence_count": 5,
               "player_count": 5,
               "rank": 2,
-              "adoption_rate": 16.1,
+              "adoption_rate": 16.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -18930,7 +18930,7 @@
               "occurrence_count": 4,
               "player_count": 4,
               "rank": 3,
-              "adoption_rate": 12.9,
+              "adoption_rate": 13.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -18973,7 +18973,7 @@
               "occurrence_count": 4,
               "player_count": 4,
               "rank": 3,
-              "adoption_rate": 12.9,
+              "adoption_rate": 13.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19016,7 +19016,7 @@
               "occurrence_count": 3,
               "player_count": 3,
               "rank": 5,
-              "adoption_rate": 9.7,
+              "adoption_rate": 10.0,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19059,7 +19059,7 @@
               "occurrence_count": 3,
               "player_count": 3,
               "rank": 5,
-              "adoption_rate": 9.7,
+              "adoption_rate": 10.0,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19099,10 +19099,10 @@
             {
               "item_code": "eq_2609_wpn_09",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_wpn_09_icon.png",
-              "occurrence_count": 3,
-              "player_count": 3,
-              "rank": 5,
-              "adoption_rate": 9.7,
+              "occurrence_count": 2,
+              "player_count": 2,
+              "rank": 7,
+              "adoption_rate": 6.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19145,7 +19145,7 @@
               "occurrence_count": 1,
               "player_count": 1,
               "rank": 8,
-              "adoption_rate": 3.2,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19188,7 +19188,7 @@
               "occurrence_count": 1,
               "player_count": 1,
               "rank": 8,
-              "adoption_rate": 3.2,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19231,7 +19231,7 @@
               "occurrence_count": 1,
               "player_count": 1,
               "rank": 8,
-              "adoption_rate": 3.2,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19271,16 +19271,16 @@
           ]
         },
         "ARMOR": {
-          "equipped_occurrence_count": 31,
-          "equipped_player_count": 31,
+          "equipped_occurrence_count": 30,
+          "equipped_player_count": 30,
           "items": [
             {
               "item_code": "eq_2404_amr_08",
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2404_amr_08_icon.png",
-              "occurrence_count": 10,
-              "player_count": 10,
+              "occurrence_count": 9,
+              "player_count": 9,
               "rank": 1,
-              "adoption_rate": 32.3,
+              "adoption_rate": 30.0,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19323,7 +19323,7 @@
               "occurrence_count": 7,
               "player_count": 7,
               "rank": 2,
-              "adoption_rate": 22.6,
+              "adoption_rate": 23.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19366,7 +19366,7 @@
               "occurrence_count": 4,
               "player_count": 4,
               "rank": 3,
-              "adoption_rate": 12.9,
+              "adoption_rate": 13.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19409,7 +19409,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 4,
-              "adoption_rate": 6.5,
+              "adoption_rate": 6.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19452,7 +19452,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 4,
-              "adoption_rate": 6.5,
+              "adoption_rate": 6.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19495,7 +19495,7 @@
               "occurrence_count": 1,
               "player_count": 1,
               "rank": 6,
-              "adoption_rate": 3.2,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19538,7 +19538,7 @@
               "occurrence_count": 1,
               "player_count": 1,
               "rank": 6,
-              "adoption_rate": 3.2,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19581,7 +19581,7 @@
               "occurrence_count": 1,
               "player_count": 1,
               "rank": 6,
-              "adoption_rate": 3.2,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19624,7 +19624,7 @@
               "occurrence_count": 1,
               "player_count": 1,
               "rank": 6,
-              "adoption_rate": 3.2,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19667,7 +19667,7 @@
               "occurrence_count": 1,
               "player_count": 1,
               "rank": 6,
-              "adoption_rate": 3.2,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19710,7 +19710,7 @@
               "occurrence_count": 1,
               "player_count": 1,
               "rank": 6,
-              "adoption_rate": 3.2,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19750,8 +19750,8 @@
           ]
         },
         "ACC": {
-          "equipped_occurrence_count": 31,
-          "equipped_player_count": 31,
+          "equipped_occurrence_count": 30,
+          "equipped_player_count": 30,
           "items": [
             {
               "item_code": "eq_2306_acc_08",
@@ -19759,7 +19759,7 @@
               "occurrence_count": 14,
               "player_count": 14,
               "rank": 1,
-              "adoption_rate": 45.2,
+              "adoption_rate": 46.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19802,7 +19802,7 @@
               "occurrence_count": 4,
               "player_count": 4,
               "rank": 2,
-              "adoption_rate": 12.9,
+              "adoption_rate": 13.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19845,7 +19845,7 @@
               "occurrence_count": 3,
               "player_count": 3,
               "rank": 3,
-              "adoption_rate": 9.7,
+              "adoption_rate": 10.0,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19888,7 +19888,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 4,
-              "adoption_rate": 6.5,
+              "adoption_rate": 6.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -19931,50 +19931,7 @@
               "occurrence_count": 2,
               "player_count": 2,
               "rank": 4,
-              "adoption_rate": 6.5,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_ff_acc_27",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_ff_acc_27_icon.png",
-              "occurrence_count": 2,
-              "player_count": 2,
-              "rank": 4,
-              "adoption_rate": 6.5,
+              "adoption_rate": 6.7,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -20016,8 +19973,8 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2312_acc_28_icon.png",
               "occurrence_count": 1,
               "player_count": 1,
-              "rank": 7,
-              "adoption_rate": 3.2,
+              "rank": 6,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -20059,8 +20016,8 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2512_acc_28_icon.png",
               "occurrence_count": 1,
               "player_count": 1,
-              "rank": 7,
-              "adoption_rate": 3.2,
+              "rank": 6,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -20102,8 +20059,8 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_2601_acc_08_icon.png",
               "occurrence_count": 1,
               "player_count": 1,
-              "rank": 7,
-              "adoption_rate": 3.2,
+              "rank": 6,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -20145,8 +20102,51 @@
               "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_evt_138_icon.png",
               "occurrence_count": 1,
               "player_count": 1,
-              "rank": 7,
-              "adoption_rate": 3.2,
+              "rank": 6,
+              "adoption_rate": 3.3,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_ff_acc_27",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_ff_acc_27_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 6,
+              "adoption_rate": 3.3,
               "change": {
                 "new": true,
                 "rank": 0,
@@ -20193,9 +20193,9 @@
           "hour": {
             "comparable": true,
             "rank": 0,
-            "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "occurrence_count": -1,
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -20732,8 +20732,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 1,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -20760,6 +20760,1017 @@
       },
       "cached_image": "./assets/characters/u1364e-cony.png",
       "cached_image_version": "7fa377e0ebd9"
+    },
+    {
+      "unit_code": "u1603e-sh",
+      "name": "桜 遥",
+      "image": "https://rangers.lerico.net/res/u1603e-sh/u1603e-sh-thum.png",
+      "occurrence_count": 16,
+      "player_count": 16,
+      "adoption_rate": 8.0,
+      "slot_rate": 0.81,
+      "equipment_rankings": {
+        "WEAPON": {
+          "equipped_occurrence_count": 16,
+          "equipped_player_count": 16,
+          "items": [
+            {
+              "item_code": "eq_2305_wpn_08",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2305_wpn_08_icon.png",
+              "occurrence_count": 8,
+              "player_count": 8,
+              "rank": 1,
+              "adoption_rate": 50.0,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2603_wpn_08",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2603_wpn_08_icon.png",
+              "occurrence_count": 5,
+              "player_count": 5,
+              "rank": 2,
+              "adoption_rate": 31.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2604_wpn_17",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2604_wpn_17_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 3,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2609_wpn_39",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_wpn_39_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 3,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_wpn_evt_138",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_wpn_evt_138_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 3,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "ARMOR": {
+          "equipped_occurrence_count": 16,
+          "equipped_player_count": 16,
+          "items": [
+            {
+              "item_code": "eq_2401_amr_08",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2401_amr_08_icon.png",
+              "occurrence_count": 5,
+              "player_count": 5,
+              "rank": 1,
+              "adoption_rate": 31.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2510_amr_18",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2510_amr_18_icon.png",
+              "occurrence_count": 3,
+              "player_count": 3,
+              "rank": 2,
+              "adoption_rate": 18.8,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2610_amr_29",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2610_amr_29_icon.png",
+              "occurrence_count": 2,
+              "player_count": 2,
+              "rank": 3,
+              "adoption_rate": 12.5,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2304_amr_17",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2304_amr_17_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 4,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2312_amr_07",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2312_amr_07_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 4,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2412_amr_17",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2412_amr_17_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 4,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2609_amr_19",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_amr_19_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 4,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_amr_evt_047",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_047_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 4,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_amr_evt_118",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_118_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 4,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "ACC": {
+          "equipped_occurrence_count": 16,
+          "equipped_player_count": 16,
+          "items": [
+            {
+              "item_code": "eq_2512_acc_28",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2512_acc_28_icon.png",
+              "occurrence_count": 5,
+              "player_count": 5,
+              "rank": 1,
+              "adoption_rate": 31.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_acc_evt_18",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_evt_18_icon.png",
+              "occurrence_count": 3,
+              "player_count": 3,
+              "rank": 2,
+              "adoption_rate": 18.8,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2508_acc_07",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2508_acc_07_icon.png",
+              "occurrence_count": 2,
+              "player_count": 2,
+              "rank": 3,
+              "adoption_rate": 12.5,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2606_acc_18",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2606_acc_18_icon.png",
+              "occurrence_count": 2,
+              "player_count": 2,
+              "rank": 3,
+              "adoption_rate": 12.5,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2309_acc_08",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2309_acc_08_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 5,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2312_acc_28",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2312_acc_28_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 5,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_2608_acc_08",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_2608_acc_08_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 5,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            },
+            {
+              "item_code": "eq_acc_evt_047",
+              "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_evt_047_icon.png",
+              "occurrence_count": 1,
+              "player_count": 1,
+              "rank": 5,
+              "adoption_rate": 6.2,
+              "change": {
+                "new": true,
+                "rank": 0,
+                "occurrence_count": 0,
+                "periods": {
+                  "hour": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "day": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "week": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  },
+                  "month": {
+                    "comparable": false,
+                    "rank": null,
+                    "occurrence_count": null,
+                    "from_updated_at": null,
+                    "interval_minutes": null
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "rank": 17,
+      "change": {
+        "new": true,
+        "periods": {
+          "hour": {
+            "comparable": true,
+            "rank": 0,
+            "occurrence_count": -1,
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
+          },
+          "day": {
+            "comparable": false,
+            "rank": null,
+            "occurrence_count": null,
+            "from_updated_at": null,
+            "interval_minutes": null
+          },
+          "week": {
+            "comparable": false,
+            "rank": null,
+            "occurrence_count": null,
+            "from_updated_at": null,
+            "interval_minutes": null
+          },
+          "month": {
+            "comparable": false,
+            "rank": null,
+            "occurrence_count": null,
+            "from_updated_at": null,
+            "interval_minutes": null
+          }
+        }
+      },
+      "cached_image": "./assets/characters/u1603e-sh.png",
+      "cached_image_version": "a01d69f69c8d"
     },
     {
       "unit_code": "u1265e-re",
@@ -21563,16 +22574,16 @@
           ]
         }
       },
-      "rank": 17,
+      "rank": 18,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 1,
+            "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -21599,1017 +22610,6 @@
       },
       "cached_image": "./assets/characters/u1265e-re.png",
       "cached_image_version": "3be7a2366f87"
-    },
-    {
-      "unit_code": "u1603e-sh",
-      "name": "桜 遥",
-      "image": "https://rangers.lerico.net/res/u1603e-sh/u1603e-sh-thum.png",
-      "occurrence_count": 15,
-      "player_count": 15,
-      "adoption_rate": 7.5,
-      "slot_rate": 0.76,
-      "equipment_rankings": {
-        "WEAPON": {
-          "equipped_occurrence_count": 15,
-          "equipped_player_count": 15,
-          "items": [
-            {
-              "item_code": "eq_2305_wpn_08",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2305_wpn_08_icon.png",
-              "occurrence_count": 7,
-              "player_count": 7,
-              "rank": 1,
-              "adoption_rate": 46.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2603_wpn_08",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2603_wpn_08_icon.png",
-              "occurrence_count": 5,
-              "player_count": 5,
-              "rank": 2,
-              "adoption_rate": 33.3,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2604_wpn_17",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2604_wpn_17_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 3,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2609_wpn_39",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_wpn_39_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 3,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_wpn_evt_138",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_wpn_evt_138_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 3,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            }
-          ]
-        },
-        "ARMOR": {
-          "equipped_occurrence_count": 15,
-          "equipped_player_count": 15,
-          "items": [
-            {
-              "item_code": "eq_2401_amr_08",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2401_amr_08_icon.png",
-              "occurrence_count": 5,
-              "player_count": 5,
-              "rank": 1,
-              "adoption_rate": 33.3,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2510_amr_18",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2510_amr_18_icon.png",
-              "occurrence_count": 2,
-              "player_count": 2,
-              "rank": 2,
-              "adoption_rate": 13.3,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2610_amr_29",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2610_amr_29_icon.png",
-              "occurrence_count": 2,
-              "player_count": 2,
-              "rank": 2,
-              "adoption_rate": 13.3,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2304_amr_17",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2304_amr_17_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 4,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2312_amr_07",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2312_amr_07_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 4,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2412_amr_17",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2412_amr_17_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 4,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2609_amr_19",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2609_amr_19_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 4,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_amr_evt_047",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_047_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 4,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_amr_evt_118",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_amr_evt_118_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 4,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            }
-          ]
-        },
-        "ACC": {
-          "equipped_occurrence_count": 15,
-          "equipped_player_count": 15,
-          "items": [
-            {
-              "item_code": "eq_2512_acc_28",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2512_acc_28_icon.png",
-              "occurrence_count": 4,
-              "player_count": 4,
-              "rank": 1,
-              "adoption_rate": 26.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_acc_evt_18",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_evt_18_icon.png",
-              "occurrence_count": 3,
-              "player_count": 3,
-              "rank": 2,
-              "adoption_rate": 20.0,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2508_acc_07",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2508_acc_07_icon.png",
-              "occurrence_count": 2,
-              "player_count": 2,
-              "rank": 3,
-              "adoption_rate": 13.3,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2606_acc_18",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2606_acc_18_icon.png",
-              "occurrence_count": 2,
-              "player_count": 2,
-              "rank": 3,
-              "adoption_rate": 13.3,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2309_acc_08",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2309_acc_08_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 5,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2312_acc_28",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2312_acc_28_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 5,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_2608_acc_08",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2608_acc_08_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 5,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            },
-            {
-              "item_code": "eq_acc_evt_047",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_acc_evt_047_icon.png",
-              "occurrence_count": 1,
-              "player_count": 1,
-              "rank": 5,
-              "adoption_rate": 6.7,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            }
-          ]
-        }
-      },
-      "rank": 17,
-      "change": {
-        "new": true,
-        "periods": {
-          "hour": {
-            "comparable": true,
-            "rank": 0,
-            "occurrence_count": -2,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
-          },
-          "day": {
-            "comparable": false,
-            "rank": null,
-            "occurrence_count": null,
-            "from_updated_at": null,
-            "interval_minutes": null
-          },
-          "week": {
-            "comparable": false,
-            "rank": null,
-            "occurrence_count": null,
-            "from_updated_at": null,
-            "interval_minutes": null
-          },
-          "month": {
-            "comparable": false,
-            "rank": null,
-            "occurrence_count": null,
-            "from_updated_at": null,
-            "interval_minutes": null
-          }
-        }
-      },
-      "cached_image": "./assets/characters/u1603e-sh.png",
-      "cached_image_version": "a01d69f69c8d"
     },
     {
       "unit_code": "u1522e-po",
@@ -23421,8 +23421,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -24432,8 +24432,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -25314,8 +25314,8 @@
             "comparable": true,
             "rank": 2,
             "occurrence_count": 1,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -25766,8 +25766,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -26304,8 +26304,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -26756,8 +26756,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -27208,8 +27208,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -27789,8 +27789,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -28327,8 +28327,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -28865,8 +28865,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -29360,8 +29360,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -29855,8 +29855,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -30393,8 +30393,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -30888,8 +30888,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -31297,8 +31297,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -31749,8 +31749,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -32115,8 +32115,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -32481,8 +32481,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -32847,8 +32847,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -33256,8 +33256,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -33579,8 +33579,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -33988,8 +33988,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -34268,8 +34268,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -34591,8 +34591,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -34914,8 +34914,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -35237,8 +35237,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -35517,8 +35517,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -35754,8 +35754,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -36077,8 +36077,8 @@
             "comparable": true,
             "rank": 0,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -36105,200 +36105,6 @@
       },
       "cached_image": "./assets/characters/u1620e-ki.png",
       "cached_image_version": "937bd2c89798"
-    },
-    {
-      "unit_code": "u1329e-moon",
-      "name": "ムーン",
-      "image": "https://rangers.lerico.net/res/u1329e-moon/u1329e-moon-thum.png",
-      "occurrence_count": 2,
-      "player_count": 1,
-      "adoption_rate": 0.5,
-      "slot_rate": 0.1,
-      "equipment_rankings": {
-        "WEAPON": {
-          "equipped_occurrence_count": 2,
-          "equipped_player_count": 1,
-          "items": [
-            {
-              "item_code": "eq_2607_wpn_09",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2607_wpn_09_icon.png",
-              "occurrence_count": 2,
-              "player_count": 1,
-              "rank": 1,
-              "adoption_rate": 100.0,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            }
-          ]
-        },
-        "ARMOR": {
-          "equipped_occurrence_count": 2,
-          "equipped_player_count": 1,
-          "items": [
-            {
-              "item_code": "eq_2410_amr_18",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2410_amr_18_icon.png",
-              "occurrence_count": 2,
-              "player_count": 1,
-              "rank": 1,
-              "adoption_rate": 100.0,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            }
-          ]
-        },
-        "ACC": {
-          "equipped_occurrence_count": 2,
-          "equipped_player_count": 1,
-          "items": [
-            {
-              "item_code": "eq_2601_acc_08",
-              "image": "https://rangers.lerico.net/res/gear_icon/eq_2601_acc_08_icon.png",
-              "occurrence_count": 2,
-              "player_count": 1,
-              "rank": 1,
-              "adoption_rate": 100.0,
-              "change": {
-                "new": true,
-                "rank": 0,
-                "occurrence_count": 0,
-                "periods": {
-                  "hour": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "day": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "week": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  },
-                  "month": {
-                    "comparable": false,
-                    "rank": null,
-                    "occurrence_count": null,
-                    "from_updated_at": null,
-                    "interval_minutes": null
-                  }
-                }
-              }
-            }
-          ]
-        }
-      },
-      "rank": 41,
-      "change": {
-        "new": true,
-        "periods": {
-          "hour": {
-            "comparable": true,
-            "rank": 0,
-            "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
-          },
-          "day": {
-            "comparable": false,
-            "rank": null,
-            "occurrence_count": null,
-            "from_updated_at": null,
-            "interval_minutes": null
-          },
-          "week": {
-            "comparable": false,
-            "rank": null,
-            "occurrence_count": null,
-            "from_updated_at": null,
-            "interval_minutes": null
-          },
-          "month": {
-            "comparable": false,
-            "rank": null,
-            "occurrence_count": null,
-            "from_updated_at": null,
-            "interval_minutes": null
-          }
-        }
-      },
-      "cached_image": "./assets/characters/u1329e-moon.png",
-      "cached_image_version": "53c6fc0a4fec"
     },
     {
       "unit_code": "u1109h-sally",
@@ -36457,16 +36263,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -36651,16 +36457,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -36713,16 +36519,16 @@
           "items": []
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -36907,16 +36713,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -37101,16 +36907,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -37295,16 +37101,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -37489,16 +37295,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -37683,16 +37489,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -37877,16 +37683,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -38071,16 +37877,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -38265,16 +38071,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -38459,16 +38265,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -38653,16 +38459,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -38847,7 +38653,7 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
@@ -38855,8 +38661,8 @@
             "comparable": true,
             "rank": null,
             "occurrence_count": 1,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -39041,16 +38847,16 @@
           ]
         }
       },
-      "rank": 49,
+      "rank": 48,
       "change": {
         "new": true,
         "periods": {
           "hour": {
             "comparable": true,
-            "rank": 0,
+            "rank": 1,
             "occurrence_count": 0,
-            "from_updated_at": "2026-10-02T14:02:19.301687+00:00",
-            "interval_minutes": 59.7
+            "from_updated_at": "2026-10-02T14:16:55.933888+00:00",
+            "interval_minutes": 59.8
           },
           "day": {
             "comparable": false,
@@ -39109,12 +38915,12 @@
     "partial_missing_players": 1,
     "partial_detail_recheck_failures": 0,
     "character_name_metadata": {
-      "source_names": 63,
+      "source_names": 62,
       "preserved_names": 0,
       "pending_names": 0,
       "translation_fetch_failed": false
     },
-    "equipment_items_collected": 813
+    "equipment_items_collected": 810
   },
   "publication_mode": "partial_after_stale",
   "partial_fallback": {
@@ -39133,7 +38939,7 @@
     "periods": {
       "hour": {
         "comparable": true,
-        "updated_at": "2026-10-02T14:02:19.301687+00:00",
+        "updated_at": "2026-10-02T14:16:55.933888+00:00",
         "calendar_date": "2026-10-02"
       },
       "day": {
@@ -39154,8 +38960,8 @@
     }
   },
   "character_assets": {
-    "characters": 63,
-    "cached_images": 63,
+    "characters": 62,
+    "cached_images": 62,
     "pending_images": 0,
     "downloaded_images": 0,
     "refresh_attempted": 8,
