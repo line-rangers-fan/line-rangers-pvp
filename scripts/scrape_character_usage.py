@@ -722,7 +722,6 @@ def extract_ranked_players(
         ):
             diagnostics["detail_team_mismatch_players"] += 1
             diagnostics["_detail_recheck_mids"].append(mid)
-            continue
 
         players.append({"mid": mid, "units": units, "unit_records": unit_records})
 
@@ -1124,6 +1123,17 @@ def scrape() -> dict:
                 [mid for mid in mids if mid not in valid_mids]
                 + list(diagnostics.pop("_detail_recheck_mids", []))
             )
+        )
+    unresolved_mids = set(pending_content_recheck)
+    if unresolved_mids:
+        players = [
+            player
+            for player in players
+            if str(player.get("mid")) not in unresolved_mids
+        ]
+        diagnostics["valid_players"] = len(players)
+        diagnostics["team_size_distribution"] = dict(
+            sorted(Counter(len(player["units"]) for player in players).items())
         )
     diagnostics.pop("_detail_recheck_mids", None)
     diagnostics["detail_content_rechecks"] = content_rechecks
