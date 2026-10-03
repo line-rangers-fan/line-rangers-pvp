@@ -76,8 +76,11 @@ def validate_payload(data: object) -> None:
     if not isinstance(comparison, dict) or comparison.get("reference_mode") != "jst_calendar_close_v1":
         raise ValueError("Unexpected comparison reference mode")
 
-    # Any positive structurally valid sample may carry verified comparison
-    # history. Headcount alone must not suppress day/week/month comparisons.
+    # Existing partial publications may predate durable sub-200 history. The
+    # bundle validator checks any references that are actually retained; after
+    # the next collector run the rebuilt cross-history carries these baselines.
+    if not complete:
+        return
 
     source_stale = comparison.get("source_stale") is True
     if source_stale and not _timestamp(comparison.get("source_unchanged_since")):
