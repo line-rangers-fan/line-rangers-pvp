@@ -46,7 +46,7 @@ def stamped_partial(players: int, timestamp: str) -> dict:
     return data
 
 
-def test_partial_snapshot_is_not_comparable_or_retained():
+def test_valid_sub_200_snapshot_is_comparable_and_retained():
     current = stamped_partial(199, "2026-08-31T07:00:00+09:00")
     previous = stamped_complete(200, "2026-08-31T06:00:00+09:00")
     previous_close = stamped_complete(200, "2026-08-30T23:30:00+09:00")
@@ -59,18 +59,31 @@ def test_partial_snapshot_is_not_comparable_or_retained():
 
     rebuilt, next_history = cross.rebuild_comparisons(deepcopy(current), history)
 
-    assert rebuilt["comparison"]["periods"]["hour"]["comparable"] is False
-    assert rebuilt["comparison"]["periods"]["day"]["comparable"] is False
+    assert rebuilt["comparison"]["periods"]["hour"]["comparable"] is True
+    assert rebuilt["comparison"]["periods"]["day"]["comparable"] is True
     assert all(
-        row["change"]["periods"]["hour"]["comparable"] is False
+        row["change"]["periods"]["hour"]["comparable"] is True
         for row in rebuilt["characters"]
     )
-    assert all(
-        snapshot["sampled_players"] == scraper.TARGET_PLAYER_COUNT
+    assert any(
+        snapshot["updated_at"] == current["updated_at"]
+        and snapshot["sampled_players"] == 199
         for snapshot in next_history["snapshots"]
     )
-    assert not any(
+    assert validate_data(rebuilt)
+
+
+def test_arbitrary_positive_sample_count_is_valid_history():
+    current = stamped_partial(137, "2026-08-31T07:00:00+09:00")
+    previous_close = stamped_partial(121, "2026-08-30T23:30:00+09:00")
+    history = {"snapshots": [scraper.history_snapshot(previous_close)]}
+
+    rebuilt, next_history = cross.rebuild_comparisons(deepcopy(current), history)
+
+    assert rebuilt["comparison"]["periods"]["day"]["comparable"] is True
+    assert any(
         snapshot["updated_at"] == current["updated_at"]
+        and snapshot["sampled_players"] == 137
         for snapshot in next_history["snapshots"]
     )
     assert validate_data(rebuilt)
@@ -94,12 +107,9 @@ def test_complete_run_ignores_newer_partial_baseline():
         rebuilt["comparison"]["periods"]["hour"]["updated_at"]
         == full_hour["updated_at"]
     )
-    assert all(
-        snapshot["sampled_players"] == scraper.TARGET_PLAYER_COUNT
-        for snapshot in next_history["snapshots"]
-    )
-    assert not any(
+    assert any(
         snapshot["updated_at"] == partial_newer["updated_at"]
+        and snapshot["sampled_players"] == 199
         for snapshot in next_history["snapshots"]
     )
     assert validate_data(rebuilt)
@@ -107,9 +117,11 @@ def test_complete_run_ignores_newer_partial_baseline():
 
 def test_published_comparison_values_match_selected_history_baselines():
     data = json.loads(Path("docs/data/character_usage.json").read_text(encoding="utf-8"))
-    history = json.loads(Path("docs/data/character_usage_history.json").read_text(encoding="utf-8"))
+    public_history = json.loads(Path("docs/data/character_usage_history.json").read_text(encoding="utf-8"))
+    cross_history = json.loads(Path("docs/data/character_usage_cross_sample_history.json").read_text(encoding="utf-8"))
     snapshots = {
         snapshot["updated_at"]: snapshot
+        for history in (public_history, cross_history)
         for snapshot in history.get("snapshots", [])
         if isinstance(snapshot, dict) and isinstance(snapshot.get("updated_at"), str)
     }
@@ -148,7 +160,7 @@ def test_published_comparison_values_match_selected_history_baselines():
 
         baseline = snapshots.get(summary["updated_at"])
         assert baseline is not None, f"{period} baseline is not retained in public history"
-        assert baseline["sampled_players"] == scraper.TARGET_PLAYER_COUNT
+        assert 0 < baseline["sampled_players"] <= scraper.TARGET_PLAYER_COUNT
         baseline_characters = {
             row["unit_code"]: row for row in baseline.get("characters", [])
         }
