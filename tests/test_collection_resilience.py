@@ -74,7 +74,7 @@ def test_optional_diagnostic_file_failure_does_not_reject_valid_collection(tmp_p
     assert "diagnostic" in capsys.readouterr().err.lower()
 
 
-def test_partial_publication_updates_current_data_without_entering_history(
+def test_partial_publication_updates_current_data_and_enters_valid_history(
     tmp_path, monkeypatch
 ):
     from datetime import datetime, timezone
@@ -90,7 +90,6 @@ def test_partial_publication_updates_current_data_without_entering_history(
     health = tmp_path / "health.json"
     scraper.save_json(output, previous)
     scraper.save_json(history, history_value)
-    original_history = history.read_bytes()
     monkeypatch.setattr(scraper, "OUTPUT_PATH", output)
     monkeypatch.setattr(scraper, "HISTORY_PATH", history)
     monkeypatch.setattr(scraper, "HEALTH_PATH", health)
@@ -102,7 +101,12 @@ def test_partial_publication_updates_current_data_without_entering_history(
     published = json.loads(output.read_text(encoding="utf-8"))
     assert published["sampled_players"] == 199
     assert published["publication_mode"] == scraper.PARTIAL_PUBLICATION_MODE
-    assert history.read_bytes() == original_history
+    saved_history = json.loads(history.read_text(encoding="utf-8"))
+    assert any(
+        snapshot["updated_at"] == published["updated_at"]
+        and snapshot["sampled_players"] == 199
+        for snapshot in saved_history["snapshots"]
+    )
     assert json.loads(health.read_text())["validated_full_sample"] is False
 
 
@@ -275,8 +279,9 @@ def test_live_collection_uses_balanced_preflight_and_strict_post_validation():
     assert "assert scraper.TARGET_PLAYER_COUNT == 200" in workflow
     assert 'args=(--max-age-minutes 40 --github-output "$GITHUB_OUTPUT")' in workflow
 
-    # New data still fails closed unless it is a real complete 200/200 sample
-    # with a valid public comparison contract after derived-data repair.
+    # New data still fails closed unless it is structurally valid. The live
+    # collector continues targeting 200 while allowing a positive smaller
+    # sample to publish and enter comparison history.
     assert workflow.count("python scripts/rebuild_cross_sample_comparisons.py") >= 2
     assert ".target_players == 200 and .sampled_players == 200 and .complete_target == true" in workflow
     assert workflow.count("python scripts/validate_public_comparisons.py docs/data/character_usage.json") >= 2
