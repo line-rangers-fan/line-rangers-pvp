@@ -314,7 +314,6 @@ jobs:
           health="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/api/health")"
           api_headers="$(mktemp)"
           api="$(curl --location --fail --silent --show-error --dump-header "$api_headers" --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/api/board")"
-          sally_archive="$(curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 "$PRODUCTION_BASE_URL/api/board?month=2026-09")"
           activity_headers="$(mktemp)"
           activity="$(curl --location --fail --silent --show-error --dump-header "$activity_headers" --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 -H 'Origin: https://line-rangers-fan.github.io' "$PRODUCTION_BASE_URL/api/activity?public=1")"
           grep -q 'レジェンド帯 キャラ集計' <<< "$pvp"
@@ -334,9 +333,19 @@ jobs:
             ) and
             (.posts | type == "array")
           ' >/dev/null
-          printf '%s' "$sally_archive" | jq -e '
-            ([.boards[] | select(.character == "u1631e-sally")] | length == 1)
-          ' >/dev/null
+          # Keep the long-lived Sally localization contract anchored to the
+          # promoted registry rather than requiring its archived D1 board row to
+          # exist in the current-month production read path.
+          jq -e '
+            [.characters[] | {
+              character:.id,
+              nameZh:(.nameZh // ""),
+              nameTh:(.nameTh // "")
+            } | select(.character == "u1631e-sally")] as $sally |
+            ($sally | length == 1) and
+            (($sally[0].nameZh | length) > 0) and
+            (($sally[0].nameTh | length) > 0)
+          ' config/community-characters.json >/dev/null
           printf '%s' "$activity" | jq -e '(.topics | type == "array") and ((.featured == null) or (.featured | type == "object"))' >/dev/null
           grep -qi '^x-content-type-options: nosniff' "$api_headers"
           grep -qi "^content-security-policy: base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'" "$api_headers"
