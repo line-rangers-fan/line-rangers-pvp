@@ -50,7 +50,7 @@ SCRAPE_PARTIAL_CONTEXT_NEW = '''def partial_fallback_context(
         last_complete = _last_complete_timestamp(previous)
     except (ValueError, TypeError, AttributeError):
         # A damaged/missing previous publication must not prevent a fresh
-        # structurally valid partial sample from keeping the site updated.
+        # structurally valid sample from keeping the site updated.
         pass
     if last_complete is not None and last_complete.tzinfo is None:
         last_complete = last_complete.replace(tzinfo=timezone.utc)
@@ -79,8 +79,8 @@ SCRAPE_MISSING_DETAIL_OLD = '''        detail_info = detail_by_mid.get(mid)
 SCRAPE_MISSING_DETAIL_NEW = '''        detail_info = detail_by_mid.get(mid)
         if isinstance(player_details, dict) and detail_info is None:
             # The ranking response still proves this player exists, but without
-            # a detail response we cannot safely attach equipment. Omit this
-            # player from the degraded sample rather than aborting everybody.
+            # a detail response we cannot safely attach equipment. Omit only
+            # this player and keep every other verified player in the sample.
             diagnostics["missing_player_info"].append(mid)
             diagnostics["_detail_recheck_mids"].append(mid)
             continue
@@ -117,7 +117,6 @@ SCRAPE_DETAIL_MISMATCH_NEW = '''        if isinstance(player_details, dict) and 
         ):
             diagnostics["detail_team_mismatch_players"] += 1
             diagnostics["_detail_recheck_mids"].append(mid)
-            continue
 
         players.append({"mid": mid, "units": units, "unit_records": unit_records})
 '''
