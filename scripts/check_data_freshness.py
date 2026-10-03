@@ -82,15 +82,14 @@ def has_complete_sample(data: dict) -> bool:
             for period in RANK_PERIODS
         ):
             return False
-        # A source_stale payload is allowed to have non-comparable periods, but
-        # those periods must carry the explicit safe public reason. Treat only
-        # this recoverable derived-metadata class as incomplete so the collector
-        # repairs it immediately instead of waiting for the normal freshness age.
-        if comparison.get("source_stale") is True:
-            try:
-                validate_public_payload(data)
-            except ValueError:
-                return False
+        # Public comparison metadata is derived and therefore repairable.
+        # Always validate it, not only in source_stale mode, so a fresh 200/200
+        # snapshot with a broken or stale derived comparison never waits for the
+        # normal freshness window before the collector repairs it.
+        try:
+            validate_public_payload(data)
+        except ValueError:
+            return False
         collection_duration = float(quality.get("collection_duration_seconds"))
         detail_duration = float(quality.get("detail_fetch_duration_seconds"))
         equipment_fill_rate = float(quality.get("equipment_fill_rate"))
@@ -144,11 +143,8 @@ def check_freshness(
                 validate_data(data)
             except ValueError:
                 return Freshness(True, None, "invalid_quality")
-            comparison = data.get("comparison")
             if (
-                isinstance(comparison, dict)
-                and comparison.get("source_stale") is True
-                and data.get("sampled_players") == 200
+                data.get("sampled_players") == 200
                 and data.get("complete_target") is True
             ):
                 try:
