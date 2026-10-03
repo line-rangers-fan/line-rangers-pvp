@@ -60,30 +60,30 @@
 .community-board-entry-button:active { transform:scale(.98); }
 .community-board-entry-button:focus-visible { outline:3px solid rgba(99,235,167,.35); outline-offset:3px; }
 @media (max-width:600px) {
-  .community-board-entry-slot { margin:.55rem 0 .7rem; }
-  .community-board-entry-card { padding:.68rem .7rem .72rem; border-left-width:3px; border-radius:.82rem; box-shadow:0 8px 22px rgba(0,0,0,.17); }
+  .community-board-entry-slot { margin:-1.35rem -.25rem .85rem; }
+  .community-board-entry-card { padding:.78rem .82rem .84rem; border-left-width:3px; border-radius:.86rem; box-shadow:0 9px 24px rgba(0,0,0,.18); }
   .community-board-entry-heading { gap:.42rem; }
   .community-board-entry-marker { margin-top:.16rem; font-size:.58rem; }
   .community-board-entry-title-row { gap:.3rem .4rem; }
-  .community-board-entry-title { font-size:1.04rem; line-height:1.24; }
+  .community-board-entry-title { font-size:1.1rem; line-height:1.24; }
   .community-board-entry-stats { gap:.2rem; }
-  .community-board-entry-stat { padding:.12rem .31rem; font-size:.59rem; }
-  .community-board-entry-description { display:-webkit-box; margin:.26rem 0 0; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:.78rem; line-height:1.42; white-space:normal; }
-  .community-board-entry-character-list { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.4rem; margin-top:.58rem; }
-  .community-board-entry-character { min-width:0; gap:.4rem; padding:.4rem .44rem; border-radius:.66rem; }
-  .community-board-entry-character-image { flex:0 0 50px; width:50px; height:50px; padding:2px; box-sizing:border-box; object-fit:contain; object-position:center; border-radius:.58rem; box-shadow:0 4px 12px rgba(0,0,0,.18); }
-  .community-board-entry-character-name { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:.76rem; line-height:1.3; }
-  .community-board-entry-featured { margin-top:.56rem; padding:.5rem .58rem; border-radius:.62rem; }
-  .community-board-entry-featured-label { font-size:.79rem; line-height:1.32; }
-  .community-board-entry-featured-text { display:-webkit-box; margin:.24rem 0 0; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:.75rem; line-height:1.42; }
-  .community-board-entry-featured-reactions { gap:.25rem .55rem; margin-top:.35rem; font-size:.66rem; }
+  .community-board-entry-stat { padding:.14rem .34rem; font-size:.62rem; }
+  .community-board-entry-description { display:-webkit-box; margin:.26rem 0 0; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:.81rem; line-height:1.46; white-space:normal; }
+  .community-board-entry-character-list { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.45rem; margin-top:.66rem; }
+  .community-board-entry-character { min-width:0; gap:.44rem; padding:.46rem .5rem; border-radius:.7rem; }
+  .community-board-entry-character-image { flex:0 0 54px; width:54px; height:54px; padding:2px; box-sizing:border-box; object-fit:contain; object-position:center; border-radius:.6rem; box-shadow:0 4px 12px rgba(0,0,0,.18); }
+  .community-board-entry-character-name { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:.82rem; line-height:1.32; }
+  .community-board-entry-featured { margin-top:.64rem; padding:.62rem .66rem; border-radius:.66rem; }
+  .community-board-entry-featured-label { font-size:.84rem; line-height:1.34; }
+  .community-board-entry-featured-text { display:-webkit-box; margin:.24rem 0 0; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:.79rem; line-height:1.46; }
+  .community-board-entry-featured-reactions { gap:.28rem .6rem; margin-top:.4rem; font-size:.7rem; }
   .community-board-entry-featured-more { margin-left:auto; }
-  .community-board-entry-button { min-height:2.15rem; margin-top:.56rem; padding:.38rem .7rem; border-radius:.58rem; font-size:.76rem; box-shadow:0 5px 14px rgba(50,213,131,.13); }
+  .community-board-entry-button { min-height:2.35rem; margin-top:.64rem; padding:.44rem .78rem; border-radius:.6rem; font-size:.8rem; box-shadow:0 5px 14px rgba(50,213,131,.14); }
 }
 @media (max-width:380px) {
   .community-board-entry-character-list { grid-template-columns:1fr 1fr; gap:.34rem; }
   .community-board-entry-character { gap:.38rem; padding:.38rem; }
-  .community-board-entry-character-image { flex-basis:46px; width:46px; height:46px; }
+  .community-board-entry-character-image { flex-basis:50px; width:50px; height:50px; }
   .community-board-entry-featured-more { flex-basis:auto; margin-left:auto; }
 }
 @media (min-width: 680px) { .community-board-entry-card { padding:1.35rem 1.45rem; } .community-board-entry-button { min-width:10.5rem; } .community-board-entry-character-image { flex-basis:88px; width:88px; height:88px; } }
