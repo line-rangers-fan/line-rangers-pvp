@@ -73,19 +73,22 @@ def test_collector_rebuilds_only_derived_comparisons_then_revalidates():
     assert ".sampled_players > 0 and .sampled_players < 200" in workflow
 
 
-def test_pages_can_publish_clean_partial_while_worker_retains_verified_full_snapshot():
+def test_pages_and_worker_publish_the_same_verified_nonzero_snapshot_contract():
     pages = read(".github/workflows/deploy-github-pages.yml")
     worker = read(".github/workflows/sync-production-pvp.yml")
     update = read(".github/workflows/update-character-usage.yml")
     policy = read("scripts/prepare_partial_collection_runtime.py")
 
     assert "python scripts/prepare_partial_collection_runtime.py" in pages
-    assert "python scripts/prepare_partial_collection_runtime.py" not in worker
-    assert "Select newest verified full PvP snapshot for production" in worker
+    assert "python scripts/prepare_partial_collection_runtime.py" in worker
+    assert "Select current verified nonzero PvP snapshot for production" in worker
     assert "PRODUCTION_PVP_SOURCE_SHA" in worker
-    assert '.sampled_players == 200' in worker
-    assert '.publication_mode == "complete"' in worker
-    assert '.collection_quality.invalid_player_records == 0' in worker
+    assert ".sampled_players > 0" in worker
+    assert ".sampled_players <= 200" in worker
+    assert '.publication_mode == "partial_after_stale"' in worker
+    assert ".validated_publishable_sample == true" in worker
+    assert "newest verified full PvP snapshot" not in worker
+    assert "retain verified full snapshot" not in worker
     assert ".sampled_players > 0 and .sampled_players < 200" in update
     assert "return True, last_complete" in policy
     assert "len(players) <= 0" in policy

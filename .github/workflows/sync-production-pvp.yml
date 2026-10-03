@@ -33,13 +33,13 @@ jobs:
       contents: read
       actions: write
     steps:
-      - name: Check out current PvP source with complete history
+      - name: Check out current PvP source with comparison history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Sync runs share a serialized production queue. Always inspect the
-          # newest canonical state when this run starts, while retaining history
-          # so an incomplete collection can fall back to the newest verified
-          # 200/200 production snapshot without publishing partial data.
+          # newest canonical state when this run starts and keep comparison
+          # history available. The collector still targets 200 players, while
+          # any structurally valid nonzero sample is publishable.
           ref: main
           fetch-depth: 0
 
@@ -65,102 +65,48 @@ jobs:
             exit 78
           fi
 
-      - name: Select newest verified full PvP snapshot for production
+      - name: Apply resilient nonzero-sample validation policy
         run: |
           set -euo pipefail
-          is_full_snapshot() {
-            local sha="$1"
-            local tmp
-            tmp="$(mktemp -d)"
-            if ! git show "$sha:docs/data/character_usage.json" > "$tmp/data.json" 2>/dev/null \
-              || ! git show "$sha:docs/data/character_usage_health.json" > "$tmp/health.json" 2>/dev/null; then
-              rm -rf "$tmp"
-              return 1
-            fi
-            python - "$tmp/data.json" "$tmp/health.json" <<'PY'
-          import json, sys
-          from pathlib import Path
+          python scripts/prepare_partial_collection_runtime.py
 
-          data = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
-          health = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
-          quality = health.get('collection_quality') or {}
-          ok = (
-              data.get('target_players') == 200
-              and data.get('sampled_players') == 200
-              and data.get('complete_target') is True
-              and data.get('publication_mode') == 'complete'
-              and health.get('target_players') == 200
-              and health.get('sampled_players') == 200
-              and health.get('complete_target') is True
-              and health.get('publication_mode') == 'complete'
-              and health.get('validated_full_sample') is True
-              and quality.get('invalid_player_records') == 0
-              and quality.get('detail_fetch_failures') == 0
-          )
-          raise SystemExit(0 if ok else 1)
-          PY
-            status=$?
-            rm -rf "$tmp"
-            return "$status"
-          }
-
-          selected=""
-          head_sha="$(git rev-parse HEAD)"
-          if is_full_snapshot "$head_sha"; then
-            selected="$head_sha"
-          else
-            while IFS= read -r sha; do
-              if [ "$sha" = "$head_sha" ]; then
-                continue
-              fi
-              if is_full_snapshot "$sha"; then
-                selected="$sha"
-                break
-              fi
-            done < <(git log --format=%H -- docs/data/character_usage_health.json)
-          fi
-          if ! [[ "$selected" =~ ^[a-f0-9]{40}$ ]]; then
-            echo "No verified complete 200/200 PvP snapshot exists in canonical history."
-            exit 78
-          fi
+      - name: Select current verified nonzero PvP snapshot for production
+        run: |
+          set -euo pipefail
+          selected="$(git rev-parse HEAD)"
+          python scripts/validate_public_comparisons.py docs/data/character_usage.json
+          python scripts/validate_public_bundle.py
+          jq -e '(
+            (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
+            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+          )' docs/data/character_usage.json >/dev/null
+          jq -e '
+            .target_players == 200 and
+            .sampled_players > 0 and
+            .sampled_players <= 200 and
+            .validated_publishable_sample == true
+          ' docs/data/character_usage_health.json >/dev/null
           echo "PRODUCTION_PVP_SOURCE_SHA=$selected" >> "$GITHUB_ENV"
-          if [ "$selected" != "$head_sha" ]; then
-            echo "::warning::Current canonical PvP is incomplete; production will retain verified full snapshot $selected."
-          fi
           echo "Production PvP source: $selected" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Overlay current UI with verified full production PvP data
+      - name: Overlay current UI with verified nonzero production PvP data
         run: |
           set -euo pipefail
           rm -rf copy-source/public/pvp
           mkdir -p copy-source/public/pvp
           rsync -a --delete --exclude 'OWNER_PREVIEW_NOTE.md' docs/ copy-source/public/pvp/
 
-          if [ "$PRODUCTION_PVP_SOURCE_SHA" != "$(git rev-parse HEAD)" ]; then
-            frozen="$RUNNER_TEMP/verified-full-pvp"
-            rm -rf "$frozen"
-            mkdir -p "$frozen"
-            git archive "$PRODUCTION_PVP_SOURCE_SHA" docs/data | tar -x -C "$frozen"
-            rm -rf copy-source/public/pvp/data
-            cp -a "$frozen/docs/data" copy-source/public/pvp/data
-          fi
-
           cmp docs/index.html copy-source/public/pvp/index.html
           diff -qr docs/assets copy-source/public/pvp/assets
+          jq -e '(
+            (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
+            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+          )' copy-source/public/pvp/data/character_usage.json >/dev/null
           jq -e '
             .target_players == 200 and
-            .sampled_players == 200 and
-            .complete_target == true and
-            .publication_mode == "complete"
-          ' copy-source/public/pvp/data/character_usage.json >/dev/null
-          jq -e '
-            .target_players == 200 and
-            .sampled_players == 200 and
-            .complete_target == true and
-            .publication_mode == "complete" and
-            .validated_full_sample == true and
-            .collection_quality.invalid_player_records == 0 and
-            .collection_quality.detail_fetch_failures == 0
+            .sampled_players > 0 and
+            .sampled_players <= 200 and
+            .validated_publishable_sample == true
           ' copy-source/public/pvp/data/character_usage_health.json >/dev/null
 
       - name: Set up Node
@@ -216,18 +162,24 @@ jobs:
       - name: Validate current PvP snapshot
         run: |
           set -euo pipefail
-          # Worker production is stricter than temporary Pages publication:
-          # only a verified full 200/200 bundle can pass this gate.
+          # Pages and Worker share the same nonzero publishable-sample contract.
+          # Zero, malformed, or internally inconsistent bundles still fail closed.
           python scripts/validate_public_comparisons.py copy-source/public/pvp/data/character_usage.json
           validation_root="$RUNNER_TEMP/production-pvp-validation"
           rm -rf "$validation_root"
           mkdir -p "$validation_root/docs"
           ln -s "$GITHUB_WORKSPACE/copy-source/public/pvp/data" "$validation_root/docs/data"
           (cd "$validation_root" && python "$GITHUB_WORKSPACE/scripts/validate_public_bundle.py")
-          jq -e '.sampled_players == 200 and .complete_target == true and .publication_mode == "complete"' \
-            copy-source/public/pvp/data/character_usage.json >/dev/null
-          jq -e '.sampled_players == 200 and .complete_target == true and .validated_full_sample == true and .collection_quality.invalid_player_records == 0' \
-            copy-source/public/pvp/data/character_usage_health.json >/dev/null
+          jq -e '(
+            (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
+            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+          )' copy-source/public/pvp/data/character_usage.json >/dev/null
+          jq -e '
+            .target_players == 200 and
+            .sampled_players > 0 and
+            .sampled_players <= 200 and
+            .validated_publishable_sample == true
+          ' copy-source/public/pvp/data/character_usage_health.json >/dev/null
 
       - name: Overlay audited monthly community registry without changing promoted code
         run: |
@@ -278,7 +230,7 @@ jobs:
           npm audit --omit=dev --audit-level=high
           npm run build
 
-      - name: Deploy verified full PvP refresh without mutating board data
+      - name: Deploy verified PvP refresh without mutating board data
         working-directory: copy-source
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
@@ -291,7 +243,7 @@ jobs:
           fi
           npx wrangler deploy --config "$output_config"
 
-      - name: Verify live PvP matches selected verified full snapshot
+      - name: Verify live PvP matches selected verified snapshot
         run: |
           set -euo pipefail
           live="$RUNNER_TEMP/live-character-usage.json"
@@ -307,21 +259,24 @@ jobs:
             sleep 5
           done
           if [ "$matched" != true ]; then
-            echo "Production Worker PvP did not converge to the selected verified full snapshot."
+            echo "Production Worker PvP did not converge to the selected verified snapshot."
             exit 1
           fi
-          jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete"' "$live" >/dev/null
+          jq -e '(
+            (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
+            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+          )' "$live" >/dev/null
           python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" "$live"
           live_health="$RUNNER_TEMP/live-character-usage-health.json"
           curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 \
             "$PRODUCTION_BASE_URL/pvp/data/character_usage_health.json?deploy=$(git rev-parse HEAD)" -o "$live_health"
           cmp copy-source/public/pvp/data/character_usage_health.json "$live_health"
-          jq -e '.sampled_players == 200 and .complete_target == true and .validated_full_sample == true and .collection_quality.invalid_player_records == 0' "$live_health" >/dev/null
+          jq -e '.target_players == 200 and .sampled_players > 0 and .sampled_players <= 200 and .validated_publishable_sample == true' "$live_health" >/dev/null
           live_index="$RUNNER_TEMP/production-pvp-index.html"
           curl --location --fail --silent --show-error --connect-timeout 10 --max-time 30 --retry 10 --retry-delay 3 \
             "$PRODUCTION_BASE_URL/pvp/index.html" -o "$live_index"
           grep -q 'レジェンド帯 キャラ集計' "$live_index"
-          echo "Production Worker PvP is pinned to verified full source $PRODUCTION_PVP_SOURCE_SHA."
+          echo "Production Worker PvP matches verified source $PRODUCTION_PVP_SOURCE_SHA."
 
       - name: Verify live monthly topics and four-language metadata without board writes
         if: ${{ hashFiles('copy-source/app/api/community-topics/route.ts') != '' }}
