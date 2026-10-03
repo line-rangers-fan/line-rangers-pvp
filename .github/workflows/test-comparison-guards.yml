@@ -14,6 +14,10 @@ jobs:
     steps:
       - name: Check out proposed changes
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The bundle validator may need recent variable-size publications to
+          # verify the transitional pre-migration hour baseline.
+          fetch-depth: 192
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -24,8 +28,8 @@ jobs:
           python -m pip install -r requirements.txt
           PYTHONPATH=. python -m pytest -q
           # Unit tests exercise the conservative source validators first. The
-          # public bundle then uses the same runner-local exact-199 policy as
-          # collection, Pages and Worker publication.
+          # public bundle then uses the same runner-local nonzero-sample policy
+          # as collection and publication.
           python scripts/prepare_partial_collection_runtime.py
           python scripts/validate_public_bundle.py
           node --check docs/assets/app.js
