@@ -138,8 +138,12 @@ def test_entry_assets_remain_small_mobile_first_and_dedicated():
     assert "@media (min-width: 680px)" in ENTRY_CSS
     assert "@media (max-width:600px)" in ENTRY_CSS
     assert "grid-template-columns:repeat(2,minmax(0,1fr))" in ENTRY_CSS
-    assert "flex:0 0 48px; width:48px; height:48px" in ENTRY_CSS
+    assert "flex:0 0 42px; width:42px; height:42px" in ENTRY_CSS
+    assert "object-fit:contain" in ENTRY_CSS
+    assert ".community-board-entry-character-name { display:-webkit-box" in ENTRY_CSS
+    assert ".community-board-entry-description { display:-webkit-box" in ENTRY_CSS
     assert "-webkit-line-clamp:2" in ENTRY_CSS
+    assert "font-size:.75rem" in ENTRY_CSS
     assert "min-height:2.15rem" in ENTRY_CSS
 
 
