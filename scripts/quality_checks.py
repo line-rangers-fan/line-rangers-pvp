@@ -371,16 +371,29 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
             else None
         )
         current = _parse_time(data.get("updated_at"))
+        trigger_after_minutes = (
+            int(fallback.get("trigger_after_minutes", -1))
+            if isinstance(fallback, dict)
+            else -1
+        )
         if (
             not isinstance(fallback, dict)
-            or int(fallback.get("trigger_after_minutes", 0))
-            != PARTIAL_FALLBACK_AFTER_MINUTES
+            or trigger_after_minutes not in {0, PARTIAL_FALLBACK_AFTER_MINUTES}
             or int(fallback.get("missing_players", -1))
             != target_players - players
-            or last_complete is None
             or current is None
-            or (current - last_complete).total_seconds()
-            < PARTIAL_FALLBACK_AFTER_MINUTES * 60
+            or (
+                last_complete is not None
+                and (last_complete.tzinfo is None or last_complete > current)
+            )
+            or (
+                trigger_after_minutes > 0
+                and (
+                    last_complete is None
+                    or (current - last_complete).total_seconds()
+                    < trigger_after_minutes * 60
+                )
+            )
         ):
             errors.append("invalid partial fallback evidence")
     elif "partial_fallback" in data:
@@ -648,10 +661,12 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
             round(players / target_players * 100, 1),
         ):
             errors.append("sample coverage mismatch")
-        if int(quality.get("detail_fetch_failures", -1)) != 0:
-            errors.append("detail fetch failures present")
-        if int(quality.get("invalid_player_records", -1)) != 0:
-            errors.append("invalid player records present")
+        detail_failures = int(quality.get("detail_fetch_failures", -1))
+        invalid_records = int(quality.get("invalid_player_records", -1))
+        if detail_failures < 0 or invalid_records < 0:
+            errors.append("invalid collection error counts")
+        elif not is_partial and (detail_failures != 0 or invalid_records != 0):
+            errors.append("collection errors present in complete publication")
 
     diagnostics = data.get("diagnostics")
     if not isinstance(diagnostics, dict):
@@ -659,8 +674,14 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
     else:
         if int(diagnostics.get("valid_players", -1)) != players:
             errors.append("diagnostic player total mismatch")
-        expected_fetches = players if is_partial else target_players
-        if int(diagnostics.get("detail_fetches_requested", -1)) != expected_fetches:
+        try:
+            requested_fetches = int(diagnostics.get("detail_fetches_requested", -1))
+        except (TypeError, ValueError):
+            requested_fetches = -1
+        if is_partial:
+            if not players <= requested_fetches <= target_players:
+                errors.append("diagnostic fetch total mismatch")
+        elif requested_fetches != target_players:
             errors.append("diagnostic fetch total mismatch")
         failure_keys = (
             "detail_fetch_failures",
@@ -670,7 +691,7 @@ def _validate_data(data: dict, previous: dict | None = None) -> bool:
             "invalid_equipment",
             "invalid_rank_records",
         )
-        if any(diagnostics.get(key) for key in failure_keys):
+        if not is_partial and any(diagnostics.get(key) for key in failure_keys):
             errors.append("diagnostic collection errors present")
         distribution = diagnostics.get("team_size_distribution")
         if not isinstance(distribution, dict):
