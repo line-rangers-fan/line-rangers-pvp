@@ -117,7 +117,6 @@ SCRAPE_DETAIL_MISMATCH_NEW = '''        if isinstance(player_details, dict) and 
         ):
             diagnostics["detail_team_mismatch_players"] += 1
             diagnostics["_detail_recheck_mids"].append(mid)
-            continue
 
         players.append({"mid": mid, "units": units, "unit_records": unit_records})
 '''
