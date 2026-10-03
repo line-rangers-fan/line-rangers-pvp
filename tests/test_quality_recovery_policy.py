@@ -108,6 +108,9 @@ def test_pages_and_worker_publish_the_same_verified_nonzero_snapshot_contract():
     assert "Existing production D1 could not be resolved." in worker
     assert "Existing production R2 bucket could not be resolved." in worker
     assert "scripts/validate_public_comparisons.py" in worker
+    assert "Apply pinned Next.js security patch when required" in worker
+    assert "next@16.3.8" in worker
+    assert "npm audit --omit=dev --audit-level=high" in worker
     assert "wrangler d1 create" not in worker
     assert "wrangler r2 bucket create" not in worker
 
