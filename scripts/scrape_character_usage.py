@@ -2018,11 +2018,16 @@ def prepare_comparison_context(data: dict, previous: dict | None, history: dict 
         candidates.append(history_snapshot(previous))
     verified = {}
     for snapshot in candidates:
+        sampled = _exact_int(snapshot.get("sampled_players")) if isinstance(snapshot, dict) else None
         try:
-            usable = _usable_history_snapshot(snapshot, current_time, data["sampled_players"])
+            usable = (
+                sampled is not None
+                and 0 < sampled <= TARGET_PLAYER_COUNT
+                and _usable_history_snapshot(snapshot, current_time, sampled)
+            )
         except (ValueError, TypeError, OverflowError):
             # A malformed date or overflowing number in one old snapshot
-            # must not prevent a complete fresh sample repairing the history.
+            # must not prevent a fresh valid sample repairing the history.
             usable = False
         if not usable:
             continue
@@ -2077,7 +2082,19 @@ def update_history(
             and CALENDAR_CLOSE_START_HOUR <= local_time.hour <= CALENDAR_CLOSE_END_HOUR
         ):
             existing = close_by_date.get(local_time.date())
-            if existing is None or timestamp > existing[0]:
+            sampled = _exact_int(item.get("sampled_players")) or 0
+            existing_sampled = (
+                _exact_int(existing[1].get("sampled_players")) or 0
+                if existing is not None
+                else -1
+            )
+            # Keep the highest-coverage valid close. If coverage ties, prefer
+            # the later 23:xx snapshot over an earlier 22:xx snapshot.
+            if (
+                existing is None
+                or sampled > existing_sampled
+                or (sampled == existing_sampled and timestamp > existing[0])
+            ):
                 close_by_date[local_time.date()] = (timestamp, item)
 
     retained_by_timestamp = {
@@ -2274,10 +2291,10 @@ def main() -> None:
             data, previous_history
         )
         if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE:
-            # A changing set of fewer than 200 players is not a trustworthy
-            # hour/day/week/month baseline. Keep the last complete history and
-            # show comparison as unavailable until a full sample returns.
-            previous_history = {"snapshots": []}
+            # A smaller but structurally valid sample is still a successful
+            # collection. Keep verified prior history available for comparison;
+            # the cross-sample rebuild will retain this sample as valid history.
+            pass
         add_previous_comparison(data, previous, previous_history)
         if source_context.get("stale") is True:
             mark_source_stale_comparison(data, source_context)
@@ -2285,9 +2302,7 @@ def main() -> None:
         validate_data(data, previous)
         stage = "history"
         history = (
-            stored_history
-            if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE
-            else previous_history
+            previous_history
             if source_context.get("stale") is True
             else update_history(data, previous_history)
         )
