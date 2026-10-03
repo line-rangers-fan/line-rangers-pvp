@@ -54,6 +54,19 @@ test("source-stale notices do not claim that comparisons are zero", () => {
   const messages = vm.runInContext('["ja", "en", "zh", "th"].map(language => STATUS_TEXT[language].sourceStale)', context);
   for (const message of messages) assert.equal(message.includes("±0"), false);
 });
+
+test("fresh nonzero partial publications use normal freshness status", () => {
+  context.inputUpdatedAt = new Date().toISOString();
+  const level = vm.runInContext(`
+    state.data = {
+      updated_at: inputUpdatedAt,
+      publication_mode: "partial_after_stale",
+      comparison: {reference_mode: CALENDAR_CLOSE_REFERENCE_MODE}
+    };
+    getFreshnessLevel();
+  `, context);
+  assert.equal(level, "healthy");
+});
 function historySample() {
   return {snapshots: [{updated_at: "2026-08-30T14:00:00Z", calendar_date: "2026-08-30", sampled_players: 200,
     characters: [{unit_code: "u-a", rank: 1, occurrence_count: 200, player_count: 200, adoption_rate: 100,
