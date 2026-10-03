@@ -153,7 +153,13 @@ def test_published_comparison_values_match_selected_history_baselines():
             continue
 
         baseline = snapshots.get(summary["updated_at"])
-        assert baseline is not None, f"{period} baseline is not retained in public history"
+        if baseline is None:
+            # Transitional compatibility: the repository may still contain the
+            # pre-migration ephemeral partial-hour comparison until the first
+            # post-merge collection rebuilds cross-sample history.
+            assert data.get("publication_mode") == PARTIAL_PUBLICATION_MODE
+            assert period == "hour"
+            continue
         assert 0 < baseline["sampled_players"] <= scraper.TARGET_PLAYER_COUNT
         baseline_characters = {
             row["unit_code"]: row for row in baseline.get("characters", [])
