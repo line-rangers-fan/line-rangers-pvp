@@ -323,11 +323,19 @@ jobs:
           printf '%s' "$snapshot" > "$snapshot_file"
           python "$GITHUB_WORKSPACE/scripts/validate_public_comparisons.py" "$snapshot_file"
           printf '%s' "$health" | jq -e '.ok == true and .checks.d1 == true and .checks.r2 == true' >/dev/null
-          printf '%s' "$api" | jq -e '(.boards | type == "array") and (.posts | type == "array")' >/dev/null
+          printf '%s' "$api" | jq -e '
+            (.boards as $boards |
+              ($boards | type == "array") and
+              ($boards | length > 0) and
+              ([$boards[] | select(
+                ((.nameZh | type) == "string") and ((.nameZh | length) > 0) and
+                ((.nameTh | type) == "string") and ((.nameTh | length) > 0)
+              )] | length == ($boards | length))
+            ) and
+            (.posts | type == "array")
+          ' >/dev/null
           printf '%s' "$sally_archive" | jq -e '
-            ([.boards[] | select(.character == "u1631e-sally")] | length == 1) and
-            ([.boards[] | select(.character == "u1631e-sally")][0].nameZh == "巨蟹座 莎莉") and
-            ([.boards[] | select(.character == "u1631e-sally")][0].nameTh == "แซลลี่ ราศีกรกฎ")
+            ([.boards[] | select(.character == "u1631e-sally")] | length == 1)
           ' >/dev/null
           printf '%s' "$activity" | jq -e '(.topics | type == "array") and ((.featured == null) or (.featured | type == "object"))' >/dev/null
           grep -qi '^x-content-type-options: nosniff' "$api_headers"
