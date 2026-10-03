@@ -78,7 +78,7 @@ def test_csp_allows_only_the_production_worker_for_live_teaser_fetch():
         f"blob {len(entry_bytes)}\0".encode() + entry_bytes
     ).hexdigest()[:12]
     assert f'community-entry.js?v={entry_blob}' in INDEX
-    assert 'community-entry.css?v=20260918-stats-1' in INDEX
+    assert 'community-entry.css?v=20261003-compact-1' in INDEX
 
 
 def test_featured_comment_is_live_clickable_and_shows_reaction_counts():
@@ -132,6 +132,11 @@ def test_entry_assets_remain_small_mobile_first_and_dedicated():
     assert ".community-board-entry-featured-reactions" in ENTRY_CSS
     assert ".community-board-entry-button" in ENTRY_CSS
     assert "@media (min-width: 680px)" in ENTRY_CSS
+    assert "@media (max-width:600px)" in ENTRY_CSS
+    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in ENTRY_CSS
+    assert "flex:0 0 48px; width:48px; height:48px" in ENTRY_CSS
+    assert "-webkit-line-clamp:2" in ENTRY_CSS
+    assert "min-height:2.15rem" in ENTRY_CSS
 
 
 def test_monthly_character_cards_show_localized_names_and_never_pin_a_past_month():
