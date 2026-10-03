@@ -1,10 +1,9 @@
 """Rebuild PvP period comparisons from verified Legend snapshots.
 
-Durable public comparison baselines remain verified 200/200 snapshots. A
-runner-authorized partial publication may additionally use a verified,
-same-sized partial snapshot from 30-90 minutes earlier for the one-hour
-character-count comparison only. That partial evidence is never retained as
-history and is never reused for day/week/month or equipment comparisons.
+The collector still targets 200 ranked players on every run. Any structurally
+valid nonzero sample can be published and can serve as comparison evidence.
+Variable-size samples are retained only in the comparison history; the public
+target remains 200 so coverage stays visible to users and monitoring.
 """
 
 from __future__ import annotations
@@ -25,7 +24,7 @@ DATA_PATH = Path("docs/data/character_usage.json")
 PUBLIC_HISTORY_PATH = Path("docs/data/character_usage_history.json")
 CROSS_SAMPLE_HISTORY_PATH = Path("docs/data/character_usage_cross_sample_history.json")
 HEALTH_PATH = Path("docs/data/character_usage_health.json")
-RECENT_GIT_VERSIONS = 24
+RECENT_GIT_VERSIONS = 192
 
 
 def load_dict(path: Path) -> dict | None:
@@ -52,11 +51,11 @@ def _usable_snapshot(snapshot: object, current_time: datetime) -> bool:
     if not isinstance(snapshot, dict):
         return False
     sampled = scraper._exact_int(snapshot.get("sampled_players"))
-    if sampled != scraper.TARGET_PLAYER_COUNT:
+    if sampled is None or not 0 < sampled <= scraper.TARGET_PLAYER_COUNT:
         return False
     try:
         return scraper._usable_history_snapshot(
-            snapshot, current_time, scraper.TARGET_PLAYER_COUNT
+            snapshot, current_time, sampled
         )
     except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
         return False
@@ -107,7 +106,7 @@ def compact_snapshot_from_published(payload: object, current_time: datetime) -> 
 
 
 def recent_git_snapshots(data: dict, limit: int = RECENT_GIT_VERSIONS) -> list[dict]:
-    """Recover recent complete publications during first-time bootstrap."""
+    """Recover recent validated publications during comparison bootstrap."""
     if limit <= 0:
         return []
     current_time = _current_time(data)
@@ -295,23 +294,6 @@ def rebuild_comparisons(data: dict, history: dict | None) -> tuple[dict, dict]:
     clean_history = merge_history_sources(data, history)
     snapshots = clean_history["snapshots"]
 
-    if (
-        data.get("sampled_players") != scraper.TARGET_PLAYER_COUNT
-        or data.get("complete_target") is not True
-    ):
-        # Authorized runtime partials may recover only the character one-hour
-        # delta from a same-sized 30-90 minute snapshot. The evidence remains
-        # ephemeral: it is never added to either durable history file.
-        hour_reference = _runtime_partial_hour_reference(data)
-        scraper.add_previous_comparison(
-            data,
-            None,
-            {"snapshots": [hour_reference]} if hour_reference else {"snapshots": []},
-        )
-        _limit_partial_comparison_to_character_hour(data)
-        validate_data(data)
-        return data, clean_history
-
     clean_history, source_context = scraper.quarantine_repeated_source_history(
         data, clean_history
     )
@@ -328,7 +310,9 @@ def rebuild_comparisons(data: dict, history: dict | None) -> tuple[dict, dict]:
     if isinstance(data.get("comparison"), dict):
         data["comparison"]["comparable"] = previous is not None
 
-    # Keep all current-sample quality and fixed-JST comparison checks strict.
+    # Keep current-sample quality and fixed-JST comparison checks strict. The
+    # current nonzero sample is retained even when fewer than 200 players were
+    # available, so a later day/week/month close does not become "history pending".
     validate_data(data)
     next_history = scraper.update_history(data, clean_history)
     added = next(
