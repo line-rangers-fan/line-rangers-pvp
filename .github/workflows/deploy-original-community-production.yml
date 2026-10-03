@@ -180,7 +180,10 @@ jobs:
           grep -q 'id="community-board-entry-slot"' public/pvp/index.html
           grep -q 'api/activity?public=1' public/pvp/assets/community-entry.js
           grep -q 'レジェンド帯 キャラ集計' public/pvp/index.html
-          jq -e '.target_players == 200 and .sampled_players == 200 and .complete_target == true' public/pvp/data/character_usage.json >/dev/null
+          jq -e '(
+            (.target_players == 200 and .sampled_players == 200 and .complete_target == true and .publication_mode == "complete") or
+            (.target_players == 200 and .sampled_players > 0 and .sampled_players < 200 and .complete_target == false and .publication_mode == "partial_after_stale" and (.partial_fallback | type) == "object")
+          )' public/pvp/data/character_usage.json >/dev/null
           npm run build
           mapfile -t regression_tests < <(find tests -maxdepth 1 -type f -name '*.test.mjs' \
             ! -name 'original-pvp-copy.test.mjs' \
