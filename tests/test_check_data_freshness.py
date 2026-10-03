@@ -49,6 +49,24 @@ def test_stale_missing_and_future_data_are_due(tmp_path):
     assert check_freshness(path, 50, now=now).reason == "future_timestamp"
 
 
+def test_fresh_generic_public_metadata_error_is_immediately_due(tmp_path):
+    now = datetime(2026, 10, 4, 0, 0, tzinfo=timezone.utc)
+    path = tmp_path / "ranking.json"
+    write_timestamp(path, now - timedelta(minutes=5))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    # Core ranking quality remains valid, but the derived public comparison
+    # carries an unsupported reason. This must be repaired immediately rather
+    # than waiting for the normal freshness threshold.
+    data["comparison"]["periods"]["hour"]["reason"] = "unexpected-derived-state"
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = check_freshness(path, 50, now=now)
+
+    assert result.due is True
+    assert result.reason == "repairable_public_comparison"
+    assert result.age_minutes == 5
+
+
 def test_fresh_source_stale_public_metadata_error_is_immediately_due(tmp_path):
     now = datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc)
     path = tmp_path / "ranking.json"
