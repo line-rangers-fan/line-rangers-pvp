@@ -28,13 +28,18 @@ def _summary_ok(value: object, *, allow_source_stale: bool) -> bool:
         return False
     if value.get("comparable") is True:
         return _timestamp(value.get("updated_at"))
-    return (
-        allow_source_stale
-        and value.get("comparable") is False
-        and value.get("reason") == "source_stale"
-        and value.get("updated_at") is None
-        and value.get("calendar_date") is None
-    )
+    if value.get("comparable") is not False:
+        return False
+    if value.get("updated_at") is not None or value.get("calendar_date") is not None:
+        return False
+    if allow_source_stale:
+        return value.get("reason") == "source_stale"
+    # A complete 200/200 collection must remain publishable after a long
+    # outage even when the 30-90 minute hourly baseline no longer exists.
+    # The collector emits an explicit empty comparison state in that case;
+    # accepting only the all-null form prevents invented deltas while allowing
+    # the fresh 200-player snapshot to repair history for the next run.
+    return value.get("reason") in (None, "history_unavailable")
 
 
 def _row_period_ok(value: object, *, allow_source_stale: bool) -> bool:
@@ -43,15 +48,16 @@ def _row_period_ok(value: object, *, allow_source_stale: bool) -> bool:
     if value.get("comparable") is True:
         delta = value.get("occurrence_count")
         return isinstance(delta, int) and not isinstance(delta, bool)
-    return (
-        allow_source_stale
-        and value.get("comparable") is False
-        and value.get("reason") == "source_stale"
-        and all(
-            value.get(key) is None
-            for key in ("rank", "occurrence_count", "from_updated_at", "interval_minutes")
-        )
-    )
+    if value.get("comparable") is not False:
+        return False
+    if not all(
+        value.get(key) is None
+        for key in ("rank", "occurrence_count", "from_updated_at", "interval_minutes")
+    ):
+        return False
+    if allow_source_stale:
+        return value.get("reason") == "source_stale"
+    return value.get("reason") in (None, "history_unavailable")
 
 
 def validate_payload(data: object) -> None:
