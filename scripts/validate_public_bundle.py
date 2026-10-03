@@ -47,27 +47,55 @@ def ordered_competition_ranks(rows: list[dict]) -> bool:
 
 
 def checked_history(history: dict, current_time, label: str) -> dict[str, dict]:
+    """Return only independently valid baselines without letting old debris deadlock publishing.
+
+    Historical snapshots are supporting evidence, not the current ranking itself.
+    An invalid or internally conflicting *unreferenced* old entry is quarantined
+    here. If the current public comparison actually points at that entry,
+    verify_deltas() still fails closed because no verified reference will exist.
+    """
     snapshots = history.get("snapshots")
     if not isinstance(snapshots, list):
         raise ValueError(f"{label} has no snapshot list")
     by_time = {}
+    conflicted = set()
     for snapshot in snapshots:
         sampled = scraper._exact_int(snapshot.get("sampled_players")) if isinstance(snapshot, dict) else None
-        if (
-            sampled is None
-            or not 0 < sampled <= scraper.TARGET_PLAYER_COUNT
-            or not scraper._usable_history_snapshot(snapshot, current_time, sampled)
-        ):
-            raise ValueError(f"{label} contains an invalid comparison baseline")
+        try:
+            usable = (
+                sampled is not None
+                and 0 < sampled <= scraper.TARGET_PLAYER_COUNT
+                and scraper._usable_history_snapshot(snapshot, current_time, sampled)
+            )
+        except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
+            usable = False
+        if not usable:
+            continue
         if not ordered_competition_ranks(snapshot["characters"]):
-            raise ValueError(f"{label} contains inconsistent character ranks")
+            continue
+        rankings_ok = True
         for character in snapshot["characters"]:
             for category in (character.get("equipment_rankings") or {}).values():
                 if not ordered_competition_ranks(category["items"]):
-                    raise ValueError(f"{label} contains inconsistent equipment ranks")
+                    rankings_ok = False
+                    break
+            if not rankings_ok:
+                break
+        if not rankings_ok:
+            continue
         instant = scraper._parse_history_time(snapshot["updated_at"]).astimezone(timezone.utc)
-        if instant in by_time:
-            raise ValueError(f"{label} has a duplicate comparison baseline")
+        if instant in conflicted:
+            continue
+        existing = by_time.get(instant)
+        if existing is not None:
+            if existing == snapshot:
+                continue
+            # Two different payloads claiming the same instant are ambiguous.
+            # Quarantine that instant entirely; a live comparison referencing it
+            # will then fail safely instead of choosing one arbitrarily.
+            by_time.pop(instant, None)
+            conflicted.add(instant)
+            continue
         by_time[instant] = snapshot
     return {snapshot["updated_at"]: snapshot for snapshot in by_time.values()}
 
@@ -116,8 +144,15 @@ def verify_deltas(data: dict, references: dict[str, dict]) -> None:
                         raise ValueError(f"{period} equipment occurrence delta differs from history")
 
 
-def verify_shared_history(public: dict[str, dict], cross: dict[str, dict]) -> None:
-    for timestamp in public.keys() & cross.keys():
+def verify_shared_history(
+    public: dict[str, dict],
+    cross: dict[str, dict],
+    referenced_timestamps: set[str],
+) -> None:
+    # Only evidence used by the current public deltas can block the current
+    # publication. Old overlapping history is still retained for later repair,
+    # but an unrelated historical disagreement cannot freeze fresh 200/200 data.
+    for timestamp in (public.keys() & cross.keys() & referenced_timestamps):
         left = {row["unit_code"]: row for row in public[timestamp]["characters"]}
         right = {row["unit_code"]: row for row in cross[timestamp]["characters"]}
         if left.keys() != right.keys():
@@ -172,7 +207,14 @@ def validate_bundle(data: dict, health: dict, public_history: dict, cross_histor
     current_time = scraper._parse_history_time(data["updated_at"])
     public = checked_history(public_history, current_time, "public history")
     cross = checked_history(cross_history, current_time, "cross-sample history")
-    verify_shared_history(public, cross)
+    referenced_timestamps = {
+        summary.get("updated_at")
+        for summary in data["comparison"]["periods"].values()
+        if isinstance(summary, dict)
+        and summary.get("comparable") is True
+        and isinstance(summary.get("updated_at"), str)
+    }
+    verify_shared_history(public, cross, referenced_timestamps)
     verify_deltas(data, {**public, **cross})
 
 

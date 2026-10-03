@@ -44,17 +44,43 @@ class PublicBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "equipment occurrence delta"):
             validate_bundle(*bundle)
 
-    def test_corrupt_baseline_cannot_support_a_comparison(self):
+    def test_corrupt_referenced_baseline_cannot_support_a_comparison(self):
         bundle = list(verified_bundle())
-        bundle[2]["snapshots"][0]["sampled_players"] = 0
-        with self.assertRaisesRegex(ValueError, "invalid comparison baseline"):
+        for history in (bundle[2], bundle[3]):
+            history["snapshots"][0]["sampled_players"] = 0
+        with self.assertRaisesRegex(ValueError, "comparison has no verified baseline"):
             validate_bundle(*bundle)
 
-    def test_inconsistent_competition_ranks_are_not_trusted_as_history(self):
+    def test_inconsistent_referenced_ranks_are_not_trusted_as_history(self):
         bundle = list(verified_bundle())
-        bundle[2]["snapshots"][0]["characters"][0]["rank"] = 2
-        with self.assertRaisesRegex(ValueError, "inconsistent character ranks"):
+        for history in (bundle[2], bundle[3]):
+            history["snapshots"][0]["characters"][0]["rank"] = 2
+        with self.assertRaisesRegex(ValueError, "comparison has no verified baseline"):
             validate_bundle(*bundle)
+
+    def test_invalid_unreferenced_old_history_does_not_freeze_current_publication(self):
+        bundle = list(verified_bundle())
+        invalid_old = deepcopy(bundle[2]["snapshots"][0])
+        invalid_old["updated_at"] = "2026-08-25T03:00:00+00:00"
+        invalid_old["calendar_date"] = "2026-08-25"
+        invalid_old["sampled_players"] = 0
+        bundle[2]["snapshots"].append(invalid_old)
+
+        validate_bundle(*bundle)
+
+    def test_unreferenced_old_overlap_disagreement_does_not_freeze_current_publication(self):
+        bundle = list(verified_bundle())
+        left = deepcopy(bundle[2]["snapshots"][0])
+        right = deepcopy(bundle[3]["snapshots"][0])
+        for snapshot in (left, right):
+            snapshot["updated_at"] = "2026-08-25T03:00:00+00:00"
+            snapshot["calendar_date"] = "2026-08-25"
+        right["characters"][0]["player_count"] = 2
+        right["characters"][0]["adoption_rate"] = 1.0
+        bundle[2]["snapshots"].append(left)
+        bundle[3]["snapshots"].append(right)
+
+        validate_bundle(*bundle)
 
     def test_two_saved_histories_cannot_disagree_on_player_counts(self):
         bundle = list(verified_bundle())
