@@ -1166,7 +1166,6 @@ function detectLanguage() {
 
 function getFreshnessLevel() {
   if (state.data?.comparison?.source_stale === true) return "sourceStale";
-  if (state.data?.publication_mode === "partial_after_stale") return "partial";
   const updatedTime = new Date(state.data?.updated_at || "").getTime();
   if (Number.isNaN(updatedTime)) return "stale";
   const age = Math.max(0, Date.now() - updatedTime);
@@ -1845,15 +1844,19 @@ function validateData(data) {
     data.complete_target === true &&
     (data.publication_mode === undefined || data.publication_mode === "complete");
   const fallback = data.partial_fallback;
-  const lastCompleteAt = Date.parse(String(fallback?.last_complete_updated_at || ""));
+  const partialTrigger = Number(fallback?.trigger_after_minutes);
+  const lastCompleteRaw = fallback?.last_complete_updated_at;
+  const lastCompleteAt =
+    lastCompleteRaw === null || lastCompleteRaw === undefined || lastCompleteRaw === ""
+      ? null
+      : Date.parse(String(lastCompleteRaw));
   const isPartial =
     data.publication_mode === "partial_after_stale" &&
     sampled < target &&
     data.complete_target === false &&
-    Number(fallback?.trigger_after_minutes) === PARTIAL_FALLBACK_AFTER_MINUTES &&
     Number(fallback?.missing_players) === target - sampled &&
-    Number.isFinite(lastCompleteAt) &&
-    updatedAt - lastCompleteAt >= PARTIAL_FALLBACK_AFTER_MINUTES * 60 * 1000;
+    (partialTrigger === 0 || partialTrigger === PARTIAL_FALLBACK_AFTER_MINUTES) &&
+    (lastCompleteAt === null || Number.isFinite(lastCompleteAt));
 
   if (
     !isSafeInteger(Number(data.schema_version), 9, 99) ||
@@ -1879,8 +1882,8 @@ function validateData(data) {
       quality.sample_coverage,
       Math.round((sampled / target) * 1000) / 10
     ) ||
-    Number(quality.detail_fetch_failures) !== 0 ||
-    Number(quality.invalid_player_records) !== 0 ||
+    !isSafeInteger(Number(quality.detail_fetch_failures), 0, target) ||
+    !isSafeInteger(Number(quality.invalid_player_records), 0, target * 10) ||
     !Number.isFinite(collectionDuration) ||
     collectionDuration < 0 ||
     collectionDuration > MAX_COLLECTION_DURATION_SECONDS ||
