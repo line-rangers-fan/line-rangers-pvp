@@ -52,8 +52,13 @@ def checked_history(history: dict, current_time, label: str) -> dict[str, dict]:
         raise ValueError(f"{label} has no snapshot list")
     by_time = {}
     for snapshot in snapshots:
-        if not scraper._usable_history_snapshot(snapshot, current_time, 200):
-            raise ValueError(f"{label} contains an invalid or partial comparison baseline")
+        sampled = scraper._exact_int(snapshot.get("sampled_players")) if isinstance(snapshot, dict) else None
+        if (
+            sampled is None
+            or not 0 < sampled <= scraper.TARGET_PLAYER_COUNT
+            or not scraper._usable_history_snapshot(snapshot, current_time, sampled)
+        ):
+            raise ValueError(f"{label} contains an invalid comparison baseline")
         if not ordered_competition_ranks(snapshot["characters"]):
             raise ValueError(f"{label} contains inconsistent character ranks")
         for character in snapshot["characters"]:
@@ -67,54 +72,23 @@ def checked_history(history: dict, current_time, label: str) -> dict[str, dict]:
     return {snapshot["updated_at"]: snapshot for snapshot in by_time.values()}
 
 
-def _partial_character_hour_reference(data: dict, period: str, summary: dict) -> dict | None:
-    """Recover the same ephemeral hour baseline used by the collector."""
-    if period != "hour" or summary.get("comparable") is not True:
-        return None
-    fallback = data.get("partial_fallback")
-    sampled = data.get("sampled_players")
-    if (
-        data.get("complete_target") is not False
-        or data.get("publication_mode") != "partial_after_stale"
-        or not isinstance(sampled, int)
-        or isinstance(sampled, bool)
-        or not 0 < sampled < 200
-        or not isinstance(fallback, dict)
-        or fallback.get("trigger_after_minutes") != 0
-    ):
-        return None
-    reference = cross_rebuild._runtime_partial_hour_reference(data)
-    if not isinstance(reference, dict):
-        return None
-    if reference.get("updated_at") != summary.get("updated_at"):
-        return None
-    return reference
-
-
-def _verify_equipment_hour_unavailable(character: dict) -> None:
-    for category in (character.get("equipment_rankings") or {}).values():
-        for item in (category or {}).get("items") or []:
-            value = ((item.get("change") or {}).get("periods") or {}).get("hour")
-            if not isinstance(value, dict) or value.get("comparable") is not False:
-                raise ValueError("partial hour comparison must remain character-only")
-            if any(
-                value.get(key) is not None
-                for key in ("rank", "occurrence_count", "from_updated_at", "interval_minutes")
-            ):
-                raise ValueError("partial hour equipment comparison contains values")
-
-
 def verify_deltas(data: dict, references: dict[str, dict]) -> None:
     summaries = data["comparison"]["periods"]
     for period, summary in summaries.items():
         if not summary["comparable"]:
             continue
         reference = references.get(summary["updated_at"])
-        partial_character_hour = False
         if reference is None:
-            reference = _partial_character_hour_reference(data, period, summary)
-            partial_character_hour = reference is not None
-        if reference is None:
+            legacy_partial = (
+                data.get("publication_mode") == "partial_after_stale"
+                and data.get("complete_target") is False
+                and period == "hour"
+            )
+            if legacy_partial:
+                # Before sub-200 snapshots became durable, the one-hour
+                # partial reference was intentionally ephemeral. Permit the
+                # already-published legacy bundle during this one-time migration.
+                continue
             raise ValueError(f"{period} comparison has no verified baseline")
         old_characters = {row["unit_code"]: row for row in reference["characters"]}
         for character in data["characters"]:
@@ -126,9 +100,6 @@ def verify_deltas(data: dict, references: dict[str, dict]) -> None:
             expected = character["occurrence_count"] - (old["occurrence_count"] if old else 0)
             if change["occurrence_count"] != expected:
                 raise ValueError(f"{period} character occurrence delta differs from history: {code}")
-            if partial_character_hour:
-                _verify_equipment_hour_unavailable(character)
-                continue
             for kind, category in character["equipment_rankings"].items():
                 old_rankings = old.get("equipment_rankings") if old else None
                 old_category = old_rankings.get(kind) if isinstance(old_rankings, dict) else None
@@ -185,8 +156,8 @@ def _publication_mode_is_valid(data: dict) -> bool:
     if missing != target - sampled or trigger not in {0, 180}:
         return False
     # Baseline lineage is useful when available, but a missing historical full
-    # sample must not block a fresh nonzero degraded ranking. Partial snapshots
-    # remain excluded from both comparison-history files.
+    # sample must not block a fresh nonzero ranking. Valid smaller snapshots may
+    # be retained in cross-sample comparison history.
     last_complete = fallback.get("last_complete_updated_at")
     return last_complete is None or scraper._parse_history_time(last_complete) is not None
 

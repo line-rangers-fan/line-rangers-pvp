@@ -76,8 +76,9 @@ def validate_payload(data: object) -> None:
     if not isinstance(comparison, dict) or comparison.get("reference_mode") != "jst_calendar_close_v1":
         raise ValueError("Unexpected comparison reference mode")
 
-    # Partial-after-stale publications intentionally do not create comparison
-    # history. Their public validity is checked by the sample/publication gate.
+    # Existing partial publications may predate durable sub-200 history. The
+    # bundle validator checks any references that are actually retained; after
+    # the next collector run the rebuilt cross-history carries these baselines.
     if not complete:
         return
 
