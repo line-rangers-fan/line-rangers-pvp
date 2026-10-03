@@ -44,10 +44,15 @@ class PublicBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "equipment occurrence delta"):
             validate_bundle(*bundle)
 
-    def test_partial_or_corrupt_baseline_cannot_support_a_comparison(self):
+    def test_verified_variable_size_baseline_can_support_a_comparison(self):
         bundle = list(verified_bundle())
         bundle[2]["snapshots"][0]["sampled_players"] = 199
-        with self.assertRaisesRegex(ValueError, "invalid or partial comparison baseline"):
+        validate_bundle(*bundle)
+
+    def test_zero_player_baseline_cannot_support_a_comparison(self):
+        bundle = list(verified_bundle())
+        bundle[2]["snapshots"][0]["sampled_players"] = 0
+        with self.assertRaisesRegex(ValueError, "invalid comparison baseline"):
             validate_bundle(*bundle)
 
     def test_inconsistent_competition_ranks_are_not_trusted_as_history(self):
