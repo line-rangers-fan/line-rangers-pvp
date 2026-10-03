@@ -636,6 +636,13 @@ def extract_ranked_players(
         detail_codes: list[str] = []
         detail_complete = True
         detail_info = detail_by_mid.get(mid)
+        if isinstance(player_details, dict) and detail_info is None:
+            # The ranking response still proves this player exists, but without
+            # a detail response we cannot safely attach equipment. Omit only
+            # this player and keep every other verified player in the sample.
+            diagnostics["missing_player_info"].append(mid)
+            diagnostics["_detail_recheck_mids"].append(mid)
+            continue
         detail_team_map = (
             detail_info.get("playerUnitTeamGroupMap")
             if isinstance(detail_info, dict)
@@ -695,6 +702,8 @@ def extract_ranked_players(
                     diagnostics["invalid_equipment"].append(str(error))
                     equipment = {}
                     detail_complete = False
+                    invalid_player = True
+                    break
 
                 units.append(code)
                 unit_records.append({"unit_code": code, "equipment": equipment})
@@ -713,6 +722,7 @@ def extract_ranked_players(
         ):
             diagnostics["detail_team_mismatch_players"] += 1
             diagnostics["_detail_recheck_mids"].append(mid)
+            continue
 
         players.append({"mid": mid, "units": units, "unit_records": unit_records})
 
@@ -1030,20 +1040,18 @@ def partial_fallback_context(
     previous: dict | None,
     now: datetime | None = None,
 ) -> tuple[bool, datetime | None]:
-    """Enable partial publication only after three hours without a full sample."""
+    """Allow any non-empty verified sample while still targeting 200 players."""
+    last_complete = None
     try:
         validate_data(previous)
+        last_complete = _last_complete_timestamp(previous)
     except (ValueError, TypeError, AttributeError):
-        return False, None
-    current = now or datetime.now(timezone.utc)
-    if current.tzinfo is None:
-        current = current.replace(tzinfo=timezone.utc)
-    current = current.astimezone(timezone.utc)
-    last_complete = _last_complete_timestamp(previous)
-    if last_complete is None or last_complete.tzinfo is None:
-        return False, None
-    age = (current - last_complete.astimezone(timezone.utc)).total_seconds()
-    return age >= PARTIAL_FALLBACK_AFTER_MINUTES * 60, last_complete
+        # A damaged/missing previous publication must not prevent a fresh
+        # structurally valid sample from keeping the site updated.
+        pass
+    if last_complete is not None and last_complete.tzinfo is None:
+        last_complete = last_complete.replace(tzinfo=timezone.utc)
+    return True, last_complete
 
 
 def scrape() -> dict:
@@ -1070,10 +1078,11 @@ def scrape() -> dict:
     ensure_collection_within_budget(collection_started_clock)
     if detail_failures:
         dump_detail_failure_summary(len(mids), len(details), detail_failures)
-        raise RuntimeError(
-            "Player detail collection failed after bounded retries; "
-            f"aborted without publishing ({len(detail_failures)} failures)."
-        )
+        if not ALLOW_PARTIAL_FOR_RUN:
+            raise RuntimeError(
+                "Player detail collection failed after bounded retries; "
+                f"aborted without publishing ({len(detail_failures)} failures)."
+            )
     players, diagnostics = extract_ranked_players(
         payload, TARGET_PLAYER_COUNT, player_details=details
     )
@@ -1126,10 +1135,13 @@ def scrape() -> dict:
             len(players),
             content_recheck_failures + [{"error_type": "InvalidDetailContent"}],
         )
-        raise RuntimeError(
-            "Some requested ranked players had incomplete team or equipment data; "
-            f"refusing to publish missing player details ({len(players)} != {expected_players})."
-        )
+        if not ALLOW_PARTIAL_FOR_RUN or len(players) <= 0:
+            raise RuntimeError(
+                "Some requested ranked players had incomplete team or equipment data; "
+                f"refusing to publish missing player details ({len(players)} != {expected_players})."
+            )
+        diagnostics["partial_missing_players"] = TARGET_PLAYER_COUNT - len(players)
+        diagnostics["partial_detail_recheck_failures"] = len(content_recheck_failures)
 
     unit_codes = {
         record["unit_code"]
@@ -1148,13 +1160,15 @@ def scrape() -> dict:
     if len(players) == TARGET_PLAYER_COUNT:
         data["publication_mode"] = COMPLETE_PUBLICATION_MODE
     else:
-        if LAST_COMPLETE_FOR_RUN is None:
-            raise RuntimeError("Partial publication has no verified full-sample baseline.")
         data["publication_mode"] = PARTIAL_PUBLICATION_MODE
-        data["termination_reason"] = "api_partial_after_stale"
+        data["termination_reason"] = "api_partial_available"
         data["partial_fallback"] = {
-            "trigger_after_minutes": PARTIAL_FALLBACK_AFTER_MINUTES,
-            "last_complete_updated_at": LAST_COMPLETE_FOR_RUN.isoformat(),
+            "trigger_after_minutes": 0,
+            "last_complete_updated_at": (
+                LAST_COMPLETE_FOR_RUN.isoformat()
+                if LAST_COMPLETE_FOR_RUN is not None
+                else None
+            ),
             "missing_players": TARGET_PLAYER_COUNT - len(players),
         }
     data["collection_quality"].update(
