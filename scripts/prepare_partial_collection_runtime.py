@@ -6,10 +6,11 @@ can still publish every structurally valid player that was collected.
 
 The runtime policy deliberately keeps two hard boundaries:
 - zero usable players / zero character slots never replace the last publication;
-- degraded samples never become hour/day/week/month comparison baselines.
+- every run still requests up to 200 ranked players before falling back.
 
-Malformed rows are omitted, diagnostics remain visible, and complete 200/200
-collections continue to use the normal strict path.
+Malformed rows are omitted and diagnostics remain visible. A nonzero validated
+sample may be published immediately; the comparison rebuild then retains it in
+cross-sample history so hour/day/week/month comparisons keep working.
 """
 
 from pathlib import Path
@@ -185,8 +186,9 @@ SCRAPE_COMPARISON_OLD = '''        if data.get("publication_mode") == PARTIAL_PU
             previous_history = {"snapshots": []}
 '''
 SCRAPE_COMPARISON_NEW = '''        if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE:
-            # A degraded sample is useful for the live ranking but must never
-            # produce cross-sample deltas or enter comparison history.
+            # The first collector pass publishes the verified live sample.
+            # Cross-sample comparison rebuilding runs after git synchronization
+            # and will attach/retain variable-size comparison evidence.
             previous = None
             previous_history = {"snapshots": []}
 '''
