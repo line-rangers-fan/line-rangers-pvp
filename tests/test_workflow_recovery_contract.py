@@ -81,8 +81,9 @@ def test_production_deploy_verifies_all_four_ranger_languages_and_localized_boar
         assert f"probe_ranger {language} {source_language}" in workflow
     assert '/api/ranger-info?unit=u1556e-af&lang=$language&schema=3' in workflow
     assert '.language == $language' in workflow
-    assert '.nameZh == "巨蟹座 莎莉"' in workflow
-    assert '.nameTh == "แซลลี่ ราศีกรกฎ"' in workflow
+    assert '((.nameZh | type) == "string") and ((.nameZh | length) > 0)' in workflow
+    assert '((.nameTh | type) == "string") and ((.nameTh | length) > 0)' in workflow
+    assert 'select(.character == "u1631e-sally")' in workflow
 
 
 def test_transient_ranger_probe_is_bounded_and_does_not_fail_core_deploy():
