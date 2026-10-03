@@ -1166,7 +1166,8 @@ function detectLanguage() {
 
 function getFreshnessLevel() {
   if (state.data?.comparison?.source_stale === true) return "sourceStale";
-  if (state.data?.publication_mode === "partial_after_stale") return "partial";
+  // Player count alone is not an error state. The collector always targets
+  // 200, but any positive structurally valid result is a normal fresh update.
   const updatedTime = new Date(state.data?.updated_at || "").getTime();
   if (Number.isNaN(updatedTime)) return "stale";
   const age = Math.max(0, Date.now() - updatedTime);
