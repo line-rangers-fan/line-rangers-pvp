@@ -2095,7 +2095,11 @@ function validateHistory(history) {
     ) {
       throw new Error("Invalid history calendar date.");
     }
-    if (snapshot.sampled_players !== PUBLIC_TARGET_PLAYER_COUNT) {
+    if (
+      !Number.isSafeInteger(snapshot.sampled_players) ||
+      snapshot.sampled_players <= 0 ||
+      snapshot.sampled_players > PUBLIC_TARGET_PLAYER_COUNT
+    ) {
       throw new Error("Invalid history sample size.");
     }
     const unitCodes = new Set();
