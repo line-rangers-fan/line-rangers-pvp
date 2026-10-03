@@ -138,14 +138,16 @@ def test_entry_assets_remain_small_mobile_first_and_dedicated():
     assert "@media (min-width: 680px)" in ENTRY_CSS
     assert "@media (max-width:600px)" in ENTRY_CSS
     assert "grid-template-columns:repeat(2,minmax(0,1fr))" in ENTRY_CSS
-    assert "flex:0 0 50px; width:50px; height:50px" in ENTRY_CSS
+    assert "margin:-1.35rem -.25rem .85rem" in ENTRY_CSS
+    assert "flex:0 0 54px; width:54px; height:54px" in ENTRY_CSS
     assert "object-fit:contain" in ENTRY_CSS
-    assert "flex-basis:46px; width:46px; height:46px" in ENTRY_CSS
+    assert "flex-basis:50px; width:50px; height:50px" in ENTRY_CSS
     assert ".community-board-entry-character-name { display:-webkit-box" in ENTRY_CSS
     assert ".community-board-entry-description { display:-webkit-box" in ENTRY_CSS
     assert "-webkit-line-clamp:2" in ENTRY_CSS
-    assert "font-size:.75rem" in ENTRY_CSS
-    assert "min-height:2.15rem" in ENTRY_CSS
+    assert "font-size:.79rem" in ENTRY_CSS
+    assert "font-size:.82rem" in ENTRY_CSS
+    assert "min-height:2.35rem" in ENTRY_CSS
 
 
 def test_monthly_character_cards_show_localized_names_and_never_pin_a_past_month():
