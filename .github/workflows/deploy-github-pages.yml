@@ -41,9 +41,11 @@ jobs:
           test -s docs/assets/community-entry.css
           grep -q 'id="community-board-entry-slot"' docs/index.html
           community_entry_version="$(git hash-object docs/assets/community-entry.js | cut -c1-12)"
+          community_entry_css_version="$(git hash-object docs/assets/community-entry.css | cut -c1-12)"
           test -n "$community_entry_version"
+          test -n "$community_entry_css_version"
           grep -q "community-entry.js?v=$community_entry_version" docs/index.html
-          grep -q 'community-entry.css?v=20260918-stats-1' docs/index.html
+          grep -q "community-entry.css?v=$community_entry_css_version" docs/index.html
           grep -q 'defaultState: true' docs/assets/community-entry.js
           grep -q 'state: true' docs/assets/community-entry.js
           grep -q 'allowedPath: "/boards"' docs/assets/community-entry.js
