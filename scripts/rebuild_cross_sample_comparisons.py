@@ -27,6 +27,46 @@ HEALTH_PATH = Path("docs/data/character_usage_health.json")
 RECENT_GIT_VERSIONS = 384
 
 
+def deepen_git_history(limit: int = RECENT_GIT_VERSIONS) -> None:
+    """Best-effort deepen only when a missing fixed close needs recovery."""
+    if limit <= 0:
+        return
+    try:
+        shallow = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if shallow.returncode != 0 or shallow.stdout.strip().lower() != "true":
+            return
+        subprocess.run(
+            ["git", "fetch", "--deepen", str(limit), "origin", "main"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=90,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return
+
+
+def missing_calendar_periods(data: dict, history: dict) -> list[str]:
+    current_time = _current_time(data)
+    return [
+        period
+        for period in ("day", "week", "month")
+        if scraper._period_reference(
+            history,
+            current_time,
+            scraper.RANK_COMPARISON_PERIODS[period],
+            period,
+        )
+        is None
+    ]
+
+
 def load_dict(path: Path) -> dict | None:
     if not path.exists():
         return None
@@ -211,12 +251,20 @@ def main() -> None:
     if data is None:
         raise RuntimeError("current PvP data is unavailable")
 
-    merged = merge_history_sources(
-        data,
-        load_dict(CROSS_SAMPLE_HISTORY_PATH),
-        load_dict(PUBLIC_HISTORY_PATH),
-        extra_snapshots=recent_git_snapshots(data),
-    )
+    cross_history = load_dict(CROSS_SAMPLE_HISTORY_PATH)
+    public_history = load_dict(PUBLIC_HISTORY_PATH)
+    merged = merge_history_sources(data, cross_history, public_history)
+    missing = missing_calendar_periods(data, merged)
+    if missing:
+        # Historical 199/200 (or other valid) closes were previously excluded
+        # from durable comparison history. Deepen only while repairing those
+        # missing fixed closes, then retain the recovered snapshots normally.
+        deepen_git_history()
+        merged = merge_history_sources(
+            data,
+            merged,
+            extra_snapshots=recent_git_snapshots(data),
+        )
     data, cross_history = rebuild_comparisons(data, merged)
     health = scraper.health_summary(data)
 
