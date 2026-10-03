@@ -39,6 +39,19 @@ def test_incident_guardian_retries_transient_failure_once_then_escalates():
     assert "200/200、比較整合性、公開データの品質基準は自動では緩めません" in workflow
 
 
+def test_collector_retries_publication_dispatch_before_failing():
+    workflow = _read(".github/workflows/update-character-usage.yml")
+
+    block = workflow.split("- name: Dispatch synchronized PvP publication", 1)[1]
+    block = block.split("\n      - name:", 1)[0]
+    assert "dispatch_workflow()" in block
+    assert "for attempt in 1 2 3 4; do" in block
+    assert "deploy-github-pages.yml" in block
+    assert "sync-production-pvp.yml" in block
+    assert "retrying in" in block
+    assert "Unable to dispatch" in block
+
+
 def test_worker_and_runbook_document_the_same_deduplicated_recovery_contract():
     worker = _read("infra/cloudflare-watchdog/src/index.mjs")
     runbook = _read("OPERATIONS.md")
