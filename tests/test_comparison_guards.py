@@ -7,6 +7,7 @@ import json
 import pytest
 
 from scripts import scrape_character_usage as scraper
+from scripts import validate_public_comparisons as public_comparisons
 from scripts.check_data_freshness import check_freshness, has_complete_sample
 from scripts.quality_checks import validate_data
 from test_quality_checks import valid_data
@@ -179,3 +180,31 @@ def test_close_preference_and_month_end_survive_retention():
     assert reference["updated_at"] == "2026-09-30T23:00:00+09:00"
     assert history["retention_hours"] == 6 and history["calendar_close_retention_days"] == 40
     assert len({s["updated_at"] for s in history["snapshots"]}) == len(history["snapshots"])
+
+
+def test_public_validator_allows_complete_sample_to_recover_after_history_gap():
+    """A missing hour baseline must not deadlock fresh 200/200 publications."""
+    data = complete_data("2026-10-04T07:47:00+09:00")
+    assert data["sampled_players"] == 200
+    assert data["complete_target"] is True
+    assert all(
+        data["comparison"]["periods"][period]["comparable"] is False
+        for period in ("hour", "day", "week", "month")
+    )
+
+    public_comparisons.validate_payload(data)
+
+
+def test_public_validator_rejects_values_inside_noncomparable_history_gap():
+    data = complete_data("2026-10-04T07:47:00+09:00")
+    data["comparison"]["periods"]["hour"]["updated_at"] = "2026-10-04T06:47:00+09:00"
+
+    with pytest.raises(ValueError, match="Invalid comparison summary: hour"):
+        public_comparisons.validate_payload(data)
+
+    data = complete_data("2026-10-04T07:47:00+09:00")
+    first = data["characters"][0]["change"]["periods"]["hour"]
+    first["occurrence_count"] = 1
+
+    with pytest.raises(ValueError, match="Invalid character comparison"):
+        public_comparisons.validate_payload(data)
