@@ -254,18 +254,25 @@ def test_incomplete_sample_rejected():
         validate_data(data)
 
 
-def test_verified_partial_sample_is_allowed_only_after_three_hours():
+def test_verified_partial_sample_is_allowed_immediately_or_after_legacy_delay():
     data = valid_data(sampled_players=199)
     data["target_players"] = 200
     data["complete_target"] = False
     data["publication_mode"] = PARTIAL_PUBLICATION_MODE
     data["partial_fallback"] = {
-        "trigger_after_minutes": PARTIAL_FALLBACK_AFTER_MINUTES,
-        "last_complete_updated_at": "2026-08-26T23:59:00+00:00",
+        "trigger_after_minutes": 0,
+        "last_complete_updated_at": None,
         "missing_players": 1,
     }
     data["collection_quality"]["sample_coverage"] = 99.5
 
+    assert validate_data(data)
+
+    data["partial_fallback"] = {
+        "trigger_after_minutes": PARTIAL_FALLBACK_AFTER_MINUTES,
+        "last_complete_updated_at": "2026-08-26T23:59:00+00:00",
+        "missing_players": 1,
+    }
     assert validate_data(data)
 
     data["partial_fallback"]["last_complete_updated_at"] = "2026-08-27T00:01:00+00:00"
