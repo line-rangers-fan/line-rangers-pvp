@@ -78,7 +78,11 @@ def test_csp_allows_only_the_production_worker_for_live_teaser_fetch():
         f"blob {len(entry_bytes)}\0".encode() + entry_bytes
     ).hexdigest()[:12]
     assert f'community-entry.js?v={entry_blob}' in INDEX
-    assert 'community-entry.css?v=20261003-compact-1' in INDEX
+    css_bytes = (ROOT / "docs" / "assets" / "community-entry.css").read_bytes()
+    css_blob = hashlib.sha1(
+        f"blob {len(css_bytes)}\0".encode() + css_bytes
+    ).hexdigest()[:12]
+    assert f'community-entry.css?v={css_blob}' in INDEX
 
 
 def test_featured_comment_is_live_clickable_and_shows_reaction_counts():
