@@ -120,6 +120,23 @@ jobs:
         working-directory: copy-source
         run: npm run install:ci
 
+      - name: Apply pinned Next.js security patch when required
+        working-directory: copy-source
+        run: |
+          set -euo pipefail
+          declared="$(node -p "require('./package.json').dependencies.next || ''")"
+          if [ "$declared" = "16.3.5" ]; then
+            # npm audit currently reports a critical next/og RCE for 16.3.5.
+            # Patch only this known vulnerable promoted dependency without
+            # promoting unrelated community-source changes.
+            npm install --save-exact --no-audit --no-fund next@16.3.8
+          fi
+          installed="$(node -p "require('./node_modules/next/package.json').version")"
+          if [ "$installed" = "16.3.5" ]; then
+            echo "Vulnerable Next.js 16.3.5 is still installed."
+            exit 1
+          fi
+
       - name: Resolve existing Cloudflare bindings only
         working-directory: copy-source
         env:
