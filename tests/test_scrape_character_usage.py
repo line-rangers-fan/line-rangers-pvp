@@ -452,22 +452,21 @@ def test_failed_collection_keeps_previous_published_data(tmp_path, monkeypatch):
     assert scraper.load_json(output_path) == previous
 
 
-def test_partial_fallback_starts_at_three_hours_and_carries_full_timestamp():
+def test_partial_fallback_allows_any_nonempty_verified_sample_immediately():
     from test_comparison_guards import complete_data
 
     last_complete = datetime(2026, 8, 31, 0, 0, tzinfo=timezone.utc)
     previous = complete_data(last_complete.isoformat())
 
     allowed, timestamp = scraper.partial_fallback_context(
-        previous, last_complete + timedelta(hours=3)
+        previous, last_complete + timedelta(minutes=1)
     )
     assert allowed is True
     assert timestamp == last_complete
 
-    allowed, _ = scraper.partial_fallback_context(
-        previous, last_complete + timedelta(hours=3) - timedelta(seconds=1)
-    )
-    assert allowed is False
+    allowed, timestamp = scraper.partial_fallback_context(None)
+    assert allowed is True
+    assert timestamp is None
 
     partial = valid_partial_publication(last_complete)
     allowed, timestamp = scraper.partial_fallback_context(
