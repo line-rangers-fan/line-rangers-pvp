@@ -52,8 +52,13 @@ def checked_history(history: dict, current_time, label: str) -> dict[str, dict]:
         raise ValueError(f"{label} has no snapshot list")
     by_time = {}
     for snapshot in snapshots:
-        if not scraper._usable_history_snapshot(snapshot, current_time, 200):
-            raise ValueError(f"{label} contains an invalid or partial comparison baseline")
+        sampled = scraper._exact_int(snapshot.get("sampled_players")) if isinstance(snapshot, dict) else None
+        if (
+            sampled is None
+            or not 0 < sampled <= scraper.TARGET_PLAYER_COUNT
+            or not scraper._usable_history_snapshot(snapshot, current_time, sampled)
+        ):
+            raise ValueError(f"{label} contains an invalid comparison baseline")
         if not ordered_competition_ranks(snapshot["characters"]):
             raise ValueError(f"{label} contains inconsistent character ranks")
         for character in snapshot["characters"]:
@@ -185,8 +190,8 @@ def _publication_mode_is_valid(data: dict) -> bool:
     if missing != target - sampled or trigger not in {0, 180}:
         return False
     # Baseline lineage is useful when available, but a missing historical full
-    # sample must not block a fresh nonzero degraded ranking. Partial snapshots
-    # remain excluded from both comparison-history files.
+    # sample must not block a fresh nonzero ranking. Valid variable-size
+    # snapshots are retained in cross-sample history so comparisons stay live.
     last_complete = fallback.get("last_complete_updated_at")
     return last_complete is None or scraper._parse_history_time(last_complete) is not None
 
