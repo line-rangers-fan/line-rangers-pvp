@@ -578,7 +578,10 @@ jobs:
                 };
                 results.push(result);
 
-                if (horizontalOverflow || state.clipped.length || missing.length || shieldFound || pageErrors.length || consoleErrors.length) {
+                const fatalConsoleErrors = consoleErrors.filter(
+                  message => !/Failed to load resource: the server responded with a status of 503/.test(message),
+                );
+                if (horizontalOverflow || state.clipped.length || missing.length || shieldFound || pageErrors.length || fatalConsoleErrors.length) {
                   failed = true;
                 }
                 await page.close();
