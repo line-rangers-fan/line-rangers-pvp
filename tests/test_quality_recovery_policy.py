@@ -92,8 +92,8 @@ def test_pages_can_publish_clean_partial_while_worker_retains_verified_full_snap
     assert "if not ALLOW_PARTIAL_FOR_RUN" in policy
     assert 'data["termination_reason"] = "api_partial_available"' in policy
     assert '"trigger_after_minutes": 0' in policy
-    assert "previous = None" in policy
-    assert 'previous_history = {"snapshots": []}' in policy
+    assert "A smaller but structurally valid sample is still a successful" in policy
+    assert "cross-sample rebuild will retain this sample as valid history" in policy
     assert 'diagnostics["invalid_equipment"].append(str(error))' in policy
     assert 'invalid_player = True' in policy
     assert 'diagnostics["detail_team_mismatch_players"] += 1' in policy
