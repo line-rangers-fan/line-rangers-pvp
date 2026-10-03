@@ -5,11 +5,12 @@ and publication workflows run this helper first so a degraded upstream response
 can still publish every structurally valid player that was collected.
 
 The runtime policy deliberately keeps two hard boundaries:
-- zero usable players / zero character slots never replace the last publication;
-- degraded samples never become hour/day/week/month comparison baselines.
+- every run still targets all 200 ranked players;
+- zero usable players / zero character slots never replace the last publication.
 
-Malformed rows are omitted, diagnostics remain visible, and complete 200/200
-collections continue to use the normal strict path.
+Any positive structurally valid sample is a successful collection and may be
+used as comparison history. Malformed rows are omitted and diagnostics remain
+visible instead of turning headcount alone into a collection failure.
 """
 
 from pathlib import Path
@@ -185,10 +186,10 @@ SCRAPE_COMPARISON_OLD = '''        if data.get("publication_mode") == PARTIAL_PU
             previous_history = {"snapshots": []}
 '''
 SCRAPE_COMPARISON_NEW = '''        if data.get("publication_mode") == PARTIAL_PUBLICATION_MODE:
-            # A degraded sample is useful for the live ranking but must never
-            # produce cross-sample deltas or enter comparison history.
-            previous = None
-            previous_history = {"snapshots": []}
+            # A smaller but structurally valid sample is still a successful
+            # collection. Keep verified prior history available for comparison;
+            # the cross-sample rebuild will retain this sample as valid history.
+            pass
 '''
 
 QUALITY_FALLBACK_OLD = '''        if (
