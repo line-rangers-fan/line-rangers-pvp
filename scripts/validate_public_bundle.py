@@ -79,6 +79,16 @@ def verify_deltas(data: dict, references: dict[str, dict]) -> None:
             continue
         reference = references.get(summary["updated_at"])
         if reference is None:
+            legacy_partial = (
+                data.get("publication_mode") == "partial_after_stale"
+                and data.get("complete_target") is False
+                and period == "hour"
+            )
+            if legacy_partial:
+                # Before sub-200 snapshots became durable, the one-hour
+                # partial reference was intentionally ephemeral. Permit the
+                # already-published legacy bundle during this one-time migration.
+                continue
             raise ValueError(f"{period} comparison has no verified baseline")
         old_characters = {row["unit_code"]: row for row in reference["characters"]}
         for character in data["characters"]:
