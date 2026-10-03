@@ -226,8 +226,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-github-pages.yml/dispatches" -f ref=main >/dev/null
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/sync-production-pvp.yml/dispatches" -f ref=main >/dev/null
+          dispatch_workflow() {
+            local workflow="$1"
+            for attempt in 1 2 3 4; do
+              if gh api --method POST                   "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/dispatches"                   -f ref=main >/dev/null; then
+                echo "Dispatched ${workflow} on attempt ${attempt}."
+                return 0
+              fi
+              if [ "$attempt" -lt 4 ]; then
+                delay=$((attempt * 3))
+                echo "::warning::Dispatch ${workflow} attempt ${attempt}/4 failed; retrying in ${delay}s."
+                sleep "$delay"
+              fi
+            done
+            echo "::error::Unable to dispatch ${workflow} after 4 bounded attempts."
+            return 1
+          }
+          dispatch_workflow deploy-github-pages.yml
+          dispatch_workflow sync-production-pvp.yml
 
       - name: Upload debug artifacts
         if: always()
