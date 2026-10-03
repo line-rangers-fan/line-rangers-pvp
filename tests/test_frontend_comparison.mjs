@@ -54,6 +54,12 @@ test("source-stale notices do not claim that comparisons are zero", () => {
   const messages = vm.runInContext('["ja", "en", "zh", "th"].map(language => STATUS_TEXT[language].sourceStale)', context);
   for (const message of messages) assert.equal(message.includes("±0"), false);
 });
+
+test("a fresh valid sub-200 publication is a normal update", () => {
+  vm.runInContext('state.data={publication_mode:"partial_after_stale",updated_at:new Date().toISOString(),comparison:{reference_mode:CALENDAR_CLOSE_REFERENCE_MODE}};', context);
+  assert.equal(vm.runInContext("getFreshnessLevel()", context), "healthy");
+});
+
 function historySample() {
   return {snapshots: [{updated_at: "2026-08-30T14:00:00Z", calendar_date: "2026-08-30", sampled_players: 200,
     characters: [{unit_code: "u-a", rank: 1, occurrence_count: 200, player_count: 200, adoption_rate: 100,
@@ -63,6 +69,20 @@ function historySample() {
     }],
   }]};
 }
+
+test("history accepts any positive sample size up to the 200-player target", () => {
+  for (const sampled of [1, 73, 137, 199, 200]) {
+    context.inputHistory = historySample();
+    context.inputHistory.snapshots[0].sampled_players = sampled;
+    context.inputHistory.snapshots[0].characters[0].occurrence_count = sampled;
+    context.inputHistory.snapshots[0].characters[0].player_count = sampled;
+    context.inputHistory.snapshots[0].characters[0].adoption_rate = 100;
+    context.inputHistory.snapshots[0].characters[0].equipment_rankings.WEAPON.items[0].occurrence_count = sampled;
+    context.inputHistory.snapshots[0].characters[0].equipment_rankings.ARMOR.items[0].occurrence_count = sampled;
+    context.inputHistory.snapshots[0].characters[0].equipment_rankings.ACC.items[0].occurrence_count = sampled;
+    assert.doesNotThrow(() => vm.runInContext("validateHistory(inputHistory)", context));
+  }
+});
 
 test("history rejects unknown or invalid character and equipment counts", () => {
   context.inputHistory = historySample();
