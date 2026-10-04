@@ -1,31 +1,31 @@
 {
   "health_schema_version": 1,
   "source_schema_version": 11,
-  "updated_at": "2026-10-03T23:01:39.219079+00:00",
+  "updated_at": "2026-10-04T00:02:10.620685+00:00",
   "target_players": 200,
-  "sampled_players": 200,
-  "character_slots": 1994,
-  "unique_characters": 66,
-  "complete_target": true,
-  "publication_mode": "complete",
-  "validated_full_sample": true,
+  "sampled_players": 197,
+  "character_slots": 1970,
+  "unique_characters": 54,
+  "complete_target": false,
+  "publication_mode": "partial_after_stale",
+  "validated_full_sample": false,
   "validated_publishable_sample": true,
   "collection_quality": {
-    "sample_coverage": 100.0,
+    "sample_coverage": 98.5,
     "equipment_fill_rate": 99.9,
     "detail_fetch_failures": 0,
     "invalid_player_records": 0,
-    "collection_duration_seconds": 18.24,
-    "detail_fetch_duration_seconds": 17.84
+    "collection_duration_seconds": 20.31,
+    "detail_fetch_duration_seconds": 19.79
   },
   "comparison": {
     "reference_mode": "jst_calendar_close_v1",
     "calendar_date": "2026-10-04",
     "periods": {
       "hour": {
-        "comparable": false,
-        "updated_at": null,
-        "calendar_date": null
+        "comparable": true,
+        "updated_at": "2026-10-03T23:01:39.219079+00:00",
+        "calendar_date": "2026-10-04"
       },
       "day": {
         "comparable": true,
@@ -50,7 +50,7 @@
     "unchanged_minutes": 0.0
   },
   "character_metadata": {
-    "source_names": 66,
+    "source_names": 54,
     "preserved_names": 0,
     "pending_names": 0,
     "translation_fetch_failed": false
