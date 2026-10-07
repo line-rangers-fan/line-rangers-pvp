@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: line-rangers-github-pages
+  group: line-rangers-github-pages-board
   cancel-in-progress: false
 
 jobs:
@@ -23,6 +23,7 @@ jobs:
     outputs:
       data_sha256: ${{ steps.snapshot.outputs.data_sha256 }}
       source_sha: ${{ steps.snapshot.outputs.source_sha }}
+      build_type: ${{ steps.pages_mode.outputs.build_type }}
     steps:
       - name: Check out current site source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,6 +34,14 @@ jobs:
           # 30-90 minute baseline used only by the one-hour character delta.
           ref: main
           fetch-depth: 0
+
+      - name: Inspect configured Pages publication mode
+        id: pages_mode
+        run: |
+          set -euo pipefail
+          mode="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 'https://api.github.com/repos/line-rangers-fan/line-rangers-pvp/pages' | jq -er '.build_type')"
+          [[ "$mode" == "legacy" || "$mode" == "workflow" ]]
+          echo "build_type=$mode" >> "$GITHUB_OUTPUT"
 
       - name: Validate public static safety
         run: |
@@ -113,6 +122,10 @@ jobs:
           node --test tests/pages-api.test.mjs tests/community-multi-character.test.mjs tests/community-release-policy.test.mjs
           npx vite build --config vite.pages.config.mjs
           node scripts/validate-pages-board.mjs dist-pages/boards
+          # The configured /docs publication must contain exactly this same
+          # frontend. Fail on drift rather than letting a routine data push
+          # remove the board or serve a different version.
+          diff -qr dist-pages/boards "$GITHUB_WORKSPACE/docs/boards"
 
       - name: Prepare cache-busted Pages artifact
         run: |
@@ -184,6 +197,7 @@ jobs:
 
   deploy:
     needs: build
+    if: needs.build.outputs.build_type == 'workflow'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -199,6 +213,7 @@ jobs:
 
   verify:
     needs: [build, deploy]
+    if: always() && needs.build.result == 'success' && (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -227,6 +242,8 @@ jobs:
             nonce="$GITHUB_SHA-$attempt"
             if curl -fsSL --retry 2 --retry-delay 1 "$SITE_URL/?deploy=$nonce" -o /tmp/index.html \
               && curl -fsSL --retry 2 --retry-delay 1 "$SITE_URL/data/character_usage.json?deploy=$nonce" -o /tmp/data.json \
+              && curl -fsSL --retry 2 --retry-delay 1 "$SITE_URL/boards/?deploy=$nonce" -o /tmp/boards.html \
+              && grep -q 'board-root' /tmp/boards.html \
               && grep -q 'data-language="ja"' /tmp/index.html \
               && grep -q 'data-language="en"' /tmp/index.html \
               && grep -q 'data-language="zh"' /tmp/index.html \

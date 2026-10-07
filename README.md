@@ -9,7 +9,7 @@ LINE Rangers Handbook の PvP Tracker を参照し、レジェンド帯の防衛
 - 掲示板画面はGitHub Pagesで公開し、投稿・投票・メディア保存には既存のCloudflare WorkerとD1/R2を使用します。第三者Cookieを必要としない署名付き匿名IDで接続します。運営ログインは既存のHttpOnly Cookieで保護した管理画面を使用します。
 - 日本時間の偶数月は追加順の先頭2体、奇数月は先頭1体を選びます。公式のリリース告知・カタログ・名前・スキル・画像と3回の観測を確認して自動登録し、取得失敗時は次回に再試行します。過去の掲示板IDと投稿は維持します。
 - 掲示板の新キャラ確認に200人固定の制約は設けません。199人などの有効な部分集計でも、公式データに基づく確認を続けます。
-- `.production-promotion-trigger` の `copy_source_sha` にWorkerとPagesのコードを固定します。Pages公開前に署名付きAPIの稼働を確認し、準備できていない場合は現在の公開ファイルを維持します。
+- `.production-promotion-trigger` の `copy_source_sha` にWorkerとPagesのコードを固定します。検証済みの掲示板画面を `docs/boards/` に含め、現在の `/docs` 公開方式でも集計更新時に掲示板を維持します。公開ワークフローは設定済みのPages方式を確認し、署名付きAPIと画面の整合性を検査します。
 
 ## 仕様
 - データ取得元: https://rangers.lerico.net/ja/pvp-tracker の公開PvP API
