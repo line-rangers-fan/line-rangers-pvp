@@ -3,10 +3,11 @@
 const COMMUNITY_BOARD_ENTRY_CONFIG = Object.freeze({
   defaultState: true,
   state: true,
-  url: "https://line-rangers-pvp-community-production.n-yu1791.workers.dev/boards",
+  url: "https://line-rangers-fan.github.io/line-rangers-pvp/boards/",
   activityUrl: "https://line-rangers-pvp-community-production.n-yu1791.workers.dev/api/activity?public=1",
-  allowedHosts: Object.freeze(["line-rangers-pvp-community-production.n-yu1791.workers.dev"]),
-  allowedPath: "/boards",
+  allowedHosts: Object.freeze(["line-rangers-fan.github.io"]),
+  activityAllowedHosts: Object.freeze(["line-rangers-pvp-community-production.n-yu1791.workers.dev"]),
+  allowedPath: "/line-rangers-pvp/boards/",
 });
 const COMMUNITY_ACTIVITY_TIMEOUT_MS = 5000;
 const COMMUNITY_ACTIVITY_MAX_BYTES = 256 * 1024;
@@ -358,7 +359,7 @@ async function readBoundedJson(response) {
 }
 
 async function fetchCommunityActivity() {
-  const endpoint = getApprovedActivityUrl(COMMUNITY_BOARD_ENTRY_CONFIG.activityUrl, COMMUNITY_BOARD_ENTRY_CONFIG.allowedHosts);
+  const endpoint = getApprovedActivityUrl(COMMUNITY_BOARD_ENTRY_CONFIG.activityUrl, COMMUNITY_BOARD_ENTRY_CONFIG.activityAllowedHosts);
   if (!endpoint) return;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), COMMUNITY_ACTIVITY_TIMEOUT_MS);

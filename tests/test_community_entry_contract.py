@@ -7,10 +7,11 @@ INDEX = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
 ENTRY_JS = (ROOT / "docs" / "assets" / "community-entry.js").read_text(encoding="utf-8")
 ENTRY_CSS = (ROOT / "docs" / "assets" / "community-entry.css").read_text(encoding="utf-8")
 
-BOARD_HOST = "line-rangers-pvp-community-production.n-yu1791.workers.dev"
-BOARD_PATH = "/boards"
+BOARD_HOST = "line-rangers-fan.github.io"
+API_HOST = "line-rangers-pvp-community-production.n-yu1791.workers.dev"
+BOARD_PATH = "/line-rangers-pvp/boards/"
 BOARD_URL = f"https://{BOARD_HOST}{BOARD_PATH}"
-ACTIVITY_URL = f"https://{BOARD_HOST}/api/activity?public=1"
+ACTIVITY_URL = f"https://{API_HOST}/api/activity?public=1"
 BANNED_RANKING_LINK_LABELS = (
     "PvP集計表を開く",
     "集計表へ",
@@ -72,7 +73,7 @@ def test_urls_are_https_allowlisted_and_activity_feed_is_read_only_public_data()
 
 
 def test_csp_allows_only_the_production_worker_for_live_teaser_fetch():
-    assert f"connect-src 'self' https://{BOARD_HOST}" in INDEX
+    assert f"connect-src 'self' https://{API_HOST}" in INDEX
     entry_bytes = (ROOT / "docs" / "assets" / "community-entry.js").read_bytes()
     entry_blob = hashlib.sha1(
         f"blob {len(entry_bytes)}\0".encode() + entry_bytes

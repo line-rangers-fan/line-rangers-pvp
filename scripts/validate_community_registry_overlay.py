@@ -115,8 +115,20 @@ def validate_release_evidence(topic, unit, month, snapshot_time):
     ):
         raise ValueError("new topic release notice does not match its verified Ranger metadata")
     published = date(evidence.get("publishedAt"))
+    published_month = published.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m")
+    # The official notice can be published at the end of the preceding month.
+    # The discovery parser records its verified maintenance window; never infer
+    # the board month from publication time alone.
+    window_matches = False
+    if evidence.get("windowStartAt") and evidence.get("windowEndAt"):
+        start, end = date(evidence["windowStartAt"]), date(evidence["windowEndAt"])
+        window_matches = (
+            start <= published <= end
+            and 0 < (end - start).total_seconds() <= 62 * 86400
+            and end.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m") == month
+        )
     if (
-        published.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m") != month
+        (published_month != month and not window_matches)
         or published > snapshot_time
     ):
         raise ValueError("new topic release notice is outside the verified release month")
@@ -137,8 +149,14 @@ def validate_overlay(pinned, candidate, changed_files):
     old = topic_map(read(pinned, TOPICS))
     new = topic_map(read(candidate, TOPICS))
     snapshot = read(candidate, SNAPSHOT)
-    if snapshot.get("target_players") != 200 or snapshot.get("sampled_players") != 200 or snapshot.get("complete_target") is not True:
-        raise ValueError("candidate PvP snapshot is not 200/200")
+    sampled = snapshot.get("sampled_players")
+    complete = type(sampled) is int and sampled == 200
+    if (
+        snapshot.get("target_players") != 200
+        or type(sampled) is not int or not 1 <= sampled <= 200
+        or snapshot.get("complete_target") is not complete
+    ):
+        raise ValueError("candidate PvP snapshot has invalid sample metadata")
     now = date(snapshot["updated_at"])
     release_month = now.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m")
     rows = snapshot.get("characters")
@@ -173,6 +191,10 @@ def validate_overlay(pinned, candidate, changed_files):
         if key in old:
             if key[0] == release_month:
                 row = ranked.get(key[1])
+                if row is None and not complete:
+                    if topic.get("pvpRank") != old[key].get("pvpRank") or topic.get("adoptionRate") != old[key].get("adoptionRate"):
+                        raise ValueError("partial snapshot rewrote an unobserved existing topic rank")
+                    continue
                 expected_rank = row.get("rank") if row else None
                 raw_rate = row.get("adoption_rate") if row else None
                 expected_rate = (
