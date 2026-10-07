@@ -20,6 +20,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
     outputs:
       data_sha256: ${{ steps.snapshot.outputs.data_sha256 }}
       source_sha: ${{ steps.snapshot.outputs.source_sha }}
@@ -37,9 +40,11 @@ jobs:
 
       - name: Inspect configured Pages publication mode
         id: pages_mode
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mode="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 'https://api.github.com/repos/line-rangers-fan/line-rangers-pvp/pages' | jq -er '.build_type')"
+          mode="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 --header "Authorization: Bearer $GH_TOKEN" 'https://api.github.com/repos/line-rangers-fan/line-rangers-pvp/pages' | jq -er '.build_type')"
           [[ "$mode" == "legacy" || "$mode" == "workflow" ]]
           echo "build_type=$mode" >> "$GITHUB_OUTPUT"
 

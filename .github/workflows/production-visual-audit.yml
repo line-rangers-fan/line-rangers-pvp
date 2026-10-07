@@ -91,6 +91,7 @@ jobs:
           const worker = 'https://line-rangers-pvp-community-production.n-yu1791.workers.dev';
           const pvp = 'https://line-rangers-fan.github.io/line-rangers-pvp/';
           const ownerKey = process.env.BOARD_OWNER_ACCESS_TOKEN;
+          function safeAuditError(error) { return String(error).replace(/v1[.][a-f0-9-]{36}[.][0-9]+[.][A-Za-z0-9_-]{43}/g, '[redacted-viewer]'); }
           const viewports = [
             { name: 'mobile-390x844', width: 390, height: 844 },
             { name: 'ipad-1024x1366', width: 1024, height: 1366 },
@@ -99,7 +100,8 @@ jobs:
           const targets = [
             { name: 'pvp-pages', url: pvp, kind: 'pvp', mustInclude: ['キャラクターランキング'] },
             { name: 'pvp-worker', url: worker + '/pvp/', kind: 'pvp', mustInclude: ['キャラクターランキング'] },
-            { name: 'boards', url: worker + '/boards', kind: 'boards', mustInclude: ['新キャラ情報掲示板', '運営'] },
+            { name: 'boards', url: worker + '/boards?manage=1', kind: 'boards', mustInclude: ['新キャラ情報掲示板', '運営'] },
+            { name: 'boards-pages', url: pvp + 'boards/?lang=ja', kind: 'boards', mustInclude: ['新キャラ情報掲示板', '運営アクセス'] },
           ];
           const artifactDir = path.resolve('artifacts');
           const comparisonHealth = JSON.parse(await fs.readFile('/tmp/pages-character-usage-health.json', 'utf8'));
@@ -636,7 +638,7 @@ jobs:
                 }
 
                 await Promise.all([
-                  page.waitForURL(url => url.origin === worker && url.pathname === '/boards', { timeout: 30000 }),
+                  page.waitForURL(url => url.origin === new URL(pvp).origin && url.pathname === new URL('boards/', pvp).pathname, { timeout: 30000 }),
                   page.locator('.community-board-entry-button').click(),
                 ]);
                 await page.waitForFunction(() => !new URL(location.href).searchParams.has('viewer'), undefined, { timeout: 20000 });
@@ -647,23 +649,28 @@ jobs:
                   throw new Error(`Viewer token remained in board URL in ${name}`);
                 }
 
-                const boardState = await page.evaluate(async token => {
-                  const response = await fetch('/api/board?viewer=' + encodeURIComponent(token), {
+                const boardState = await page.evaluate(async ({ worker, token }) => {
+                  const response = await fetch(worker + '/api/board', {
                     cache: 'no-store',
-                    credentials: 'same-origin',
+                    credentials: 'omit',
+                    headers: { 'X-LR-Viewer': token },
                   });
                   if (!response.ok) throw new Error('board_api_' + response.status);
                   return await response.json();
-                }, viewerBefore);
+                }, { worker, token: viewerBefore });
 
                 if (Number(boardState?.stats?.unread) !== 0) {
                   throw new Error(`Board unread did not clear for ${name}: ${boardState?.stats?.unread}`);
                 }
-                if (ownerMode && boardState?.me?.role !== 'owner') {
-                  throw new Error(`Owner role was lost while using Viewer token: ${boardState?.me?.role}`);
+                if (boardState?.me?.role === 'owner') {
+                  throw new Error('Pages Viewer unexpectedly gained Owner role');
                 }
-                if (!ownerMode && boardState?.me?.role === 'owner') {
-                  throw new Error('Normal Viewer unexpectedly gained Owner role');
+                let ownerRole = null;
+                if (ownerMode) {
+                  const management = await context.request.get(worker + '/api/board');
+                  if (!management.ok()) throw new Error('Owner management verification failed');
+                  ownerRole = (await management.json())?.me?.role;
+                  if (ownerRole !== 'owner') throw new Error('Dedicated Worker Owner session was lost after the Pages round trip');
                 }
 
                 await page.screenshot({ path: path.join(artifactDir, `${name}-board.png`), fullPage: true });
@@ -696,7 +703,8 @@ jobs:
                   unreadBefore,
                   boardUnread: Number(boardState?.stats?.unread),
                   unreadAfter,
-                  ownerRole: boardState?.me?.role || null,
+                  ownerRole,
+                  pagesRole: boardState?.me?.role || null,
                   pageErrors,
                 });
                 if (pageErrors.length) failed = true;
@@ -705,7 +713,7 @@ jobs:
                 results.push({
                   target: name,
                   viewport: { name: 'mobile-390x844', width: 390, height: 844 },
-                  error: String(error),
+                  error: safeAuditError(error),
                   pageErrors,
                 });
               } finally {
