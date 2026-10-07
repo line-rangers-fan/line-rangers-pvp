@@ -170,3 +170,27 @@ def test_overlay_accepts_rank_and_adoption_rate_from_full_snapshot():
         data["characters"] = [{"unit_code": "u2000e-new", "rank": 8, "adoption_rate": 2.5}]
         write(candidate, SNAPSHOT, data)
         assert validate_overlay(pinned, candidate, [TOPICS, STATE, SNAPSHOT]) == 1
+
+
+def test_overlay_accepts_verified_boards_with_199_players():
+    old = topic("u1631e-sally", "2026-09")
+    tmp_a, tmp_b, pinned, candidate = fixture([old], [deepcopy(old), topic("u2000e-new")])
+    with tmp_a, tmp_b:
+        data = json.loads((candidate / SNAPSHOT).read_text())
+        data["sampled_players"] = 199
+        data["complete_target"] = False
+        write(candidate, SNAPSHOT, data)
+        assert validate_overlay(pinned, candidate, [TOPICS, STATE, SNAPSHOT]) == 1
+
+
+def test_overlay_accepts_previous_month_notice_with_verified_release_window():
+    old = topic("u1631e-sally", "2026-09")
+    added = topic("u2000e-new")
+    added["releaseEvidence"].update({
+        "publishedAt": "2026-09-30T01:00:00Z",
+        "windowStartAt": "2026-09-29T15:00:00Z",
+        "windowEndAt": "2026-10-30T15:00:00Z",
+    })
+    tmp_a, tmp_b, pinned, candidate = fixture([old], [deepcopy(old), added])
+    with tmp_a, tmp_b:
+        assert validate_overlay(pinned, candidate, [TOPICS, STATE, SNAPSHOT]) == 1

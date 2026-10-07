@@ -7,12 +7,15 @@ const DATA_RETRY_DELAYS_MS = [0, 500, 1500];
 const REQUEST_TIMEOUT_MS = 12_000;
 const CHARACTER_IMAGE_TIMEOUT_MS = 6_000;
 const RANGER_INFO_TIMEOUT_MS = 12_000;
+const MAX_RANGER_INFO_JSON_BYTES = 256 * 1024;
 const RANGER_INFO_RETRY_DELAYS_MS = [0, 700];
 const RANGER_INFO_DEFERRED_RETRY_MS = 4_000;
 const RANGER_INFO_RETRY_COOLDOWN_MS = 15_000;
 const RANGER_INFO_SCHEMA_VERSION = "4";
 const RANGER_INFO_WORKER_URL = "https://line-rangers-pvp-community-production.n-yu1791.workers.dev/api/ranger-info";
 const MAX_JSON_TEXT_CHARACTERS = 4 * 1024 * 1024;
+// Equipment rankings across 96 snapshots exceed the latest-data budget.
+const MAX_HISTORY_JSON_BYTES = 16 * 1024 * 1024;
 // Match the collector, freshness gate, and watchdog. A result that exceeded
 // this bound was never a valid complete snapshot, so the browser must reject
 // it too instead of showing it as current.
@@ -2012,7 +2015,42 @@ function wait(milliseconds) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
-async function fetchJsonWithLimits(path, failureMessage) {
+async function readJsonWithLimits(response, maximumBytes, failureMessage) {
+  const length = Number(response.headers.get("Content-Length"));
+  if (Number.isFinite(length) && length > maximumBytes) {
+    await response.body?.cancel();
+    throw new Error(failureMessage);
+  }
+  if (!response.body?.getReader) {
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > maximumBytes) {
+      throw new Error(failureMessage);
+    }
+    return JSON.parse(text);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const parts = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximumBytes) {
+        await reader.cancel();
+        throw new Error(failureMessage);
+      }
+      parts.push(decoder.decode(value, { stream: true }));
+    }
+    parts.push(decoder.decode());
+    return JSON.parse(parts.join(""));
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function fetchJsonWithLimits(path, failureMessage, maximumBytes = MAX_JSON_TEXT_CHARACTERS) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -2024,18 +2062,7 @@ async function fetchJsonWithLimits(path, failureMessage) {
     if (!response.ok) {
       throw new Error(failureMessage);
     }
-    const length = Number(response.headers.get("Content-Length"));
-    if (Number.isFinite(length) && length > MAX_JSON_TEXT_CHARACTERS) {
-      throw new Error(failureMessage);
-    }
-    const text = await response.text();
-    if (
-      text.length > MAX_JSON_TEXT_CHARACTERS ||
-      new TextEncoder().encode(text).byteLength > MAX_JSON_TEXT_CHARACTERS
-    ) {
-      throw new Error(failureMessage);
-    }
-    return JSON.parse(text);
+    return await readJsonWithLimits(response, maximumBytes, failureMessage);
   } catch (error) {
     if (error?.name === "AbortError") {
       throw new Error(failureMessage);
@@ -2163,7 +2190,7 @@ async function fetchVerifiedHistory() {
     if (delay > 0) await wait(delay);
     try {
       return validateHistory(
-        await fetchJsonWithLimits(HISTORY_PATH, "Could not retrieve history.")
+        await fetchJsonWithLimits(HISTORY_PATH, "Could not retrieve history.", MAX_HISTORY_JSON_BYTES)
       );
     } catch (error) {
       lastError = error;
@@ -2521,7 +2548,9 @@ async function fetchRangerInfoPayload(endpoint, unitCode, language) {
         error.retryable = rangerInfoRetryableStatus(response.status);
         throw error;
       }
-      const payload = await response.json();
+      const payload = await readJsonWithLimits(
+        response, MAX_RANGER_INFO_JSON_BYTES, "Invalid Ranger skill information."
+      );
       if (!isValidRangerInfo(payload, unitCode, language)) {
         const error = new Error("Invalid Ranger skill information.");
         error.retryable = false;
