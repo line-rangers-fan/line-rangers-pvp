@@ -1,22 +1,22 @@
 {
   "health_schema_version": 1,
   "source_schema_version": 11,
-  "updated_at": "2026-10-23T18:03:12.533964+00:00",
+  "updated_at": "2026-10-23T19:01:43.519035+00:00",
   "target_players": 200,
-  "sampled_players": 200,
-  "character_slots": 1996,
+  "sampled_players": 199,
+  "character_slots": 1986,
   "unique_characters": 63,
-  "complete_target": true,
-  "publication_mode": "complete",
-  "validated_full_sample": true,
+  "complete_target": false,
+  "publication_mode": "partial_after_stale",
+  "validated_full_sample": false,
   "validated_publishable_sample": true,
   "collection_quality": {
-    "sample_coverage": 100.0,
+    "sample_coverage": 99.5,
     "equipment_fill_rate": 99.5,
     "detail_fetch_failures": 0,
     "invalid_player_records": 0,
-    "collection_duration_seconds": 73.21,
-    "detail_fetch_duration_seconds": 72.74
+    "collection_duration_seconds": 25.65,
+    "detail_fetch_duration_seconds": 25.23
   },
   "comparison": {
     "reference_mode": "jst_calendar_close_v1",
@@ -24,7 +24,7 @@
     "periods": {
       "hour": {
         "comparable": true,
-        "updated_at": "2026-10-23T17:01:33.077645+00:00",
+        "updated_at": "2026-10-23T18:03:12.533964+00:00",
         "calendar_date": "2026-10-24"
       },
       "day": {
