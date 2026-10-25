@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "timezone": "Asia/Tokyo",
+  "policy": {
+    "minimum_valid_observations": 2,
+    "require_metadata_verification": true,
+    "require_release_or_registry_verification": true,
+    "publish_fail_closed": true,
+    "identity_key": "character_id",
+    "pvp_failure_isolation": true
+  },
+  "characters": [
+    {
+      "character_id": "u1631e-sally",
+      "display_name_ja": "かに座 サリー",
+      "board_month": "2026-09",
+      "approved": true,
+      "evolution_relation_verified": true,
+      "exclude_other_evolution": true,
+      "image": {
+        "status": "reviewed_local_fallback",
+        "repository_path": "./assets/characters/crab-sally-ultimate-fallback.jpg",
+        "canonical_source_first": true,
+        "allow_name_similarity_fallback": false,
+        "allow_other_evolution_fallback": false
+      }
+    }
+  ]
+}
