@@ -1,7 +1,7 @@
 {
   "health_schema_version": 1,
   "source_schema_version": 11,
-  "updated_at": "2026-10-30T05:46:31.550065+00:00",
+  "updated_at": "2026-10-30T05:59:40.147012+00:00",
   "target_players": 200,
   "sampled_players": 199,
   "character_slots": 1968,
@@ -15,17 +15,17 @@
     "equipment_fill_rate": 99.4,
     "detail_fetch_failures": 0,
     "invalid_player_records": 0,
-    "collection_duration_seconds": 17.18,
-    "detail_fetch_duration_seconds": 16.74
+    "collection_duration_seconds": 18.74,
+    "detail_fetch_duration_seconds": 18.33
   },
   "comparison": {
     "reference_mode": "jst_calendar_close_v1",
     "calendar_date": "2026-10-30",
     "periods": {
       "hour": {
-        "comparable": true,
-        "updated_at": "2026-10-30T04:46:30.008814+00:00",
-        "calendar_date": "2026-10-30"
+        "comparable": false,
+        "updated_at": null,
+        "calendar_date": null
       },
       "day": {
         "comparable": true,
@@ -45,9 +45,9 @@
     }
   },
   "source_freshness": {
-    "stale": false,
-    "unchanged_since": null,
-    "unchanged_minutes": 0.0
+    "stale": true,
+    "unchanged_since": "2026-10-30T02:51:59.301377+00:00",
+    "unchanged_minutes": 187.7
   },
   "character_metadata": {
     "source_names": 71,
