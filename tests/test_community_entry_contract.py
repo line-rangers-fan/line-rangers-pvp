@@ -179,6 +179,8 @@ def test_entry_survives_month_change_by_showing_latest_registered_month():
     assert 'url.searchParams.set("month", month)' in ENTRY_JS
     assert "renderCommunityFallback(await fetchPreviousMonthState(controller.signal))" in ENTRY_JS
     assert "COMMUNITY_LAST_STATE_KEY" in ENTRY_JS
+    # Cross-origin /api/board requests return 401 without the viewer token.
+    assert "const payload = await fetchCommunityJson(endpoint, signal, true);" in ENTRY_JS
     assert "fallbackNote" in ENTRY_JS
     assert ".community-board-entry-note" in ENTRY_CSS
     # New-month topics from the activity feed always take precedence.

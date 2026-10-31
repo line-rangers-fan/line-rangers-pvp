@@ -2,10 +2,10 @@
 
 :root {
   color-scheme: light;
-  --background: #ffffff;
-  --surface: #ffffff;
-  --surface-light: #f4f8fc;
-  --border: #e1e8f0;
+  --background: #e9edf2;
+  --surface: #f4f6f9;
+  --surface-light: #e8edf2;
+  --border: #d3dbe4;
   --text: #24303f;
   --muted: #6b7a8c;
   --accent: #1f9d68;
@@ -39,7 +39,7 @@ body {
   background:
     radial-gradient(
       circle at top right,
-      rgb(196 236 216 / 45%),
+      rgb(190 222 206 / 35%),
       transparent 30rem
     ),
     var(--background);
@@ -76,8 +76,8 @@ a:hover {
   background:
     linear-gradient(
       135deg,
-      rgb(240 250 245 / 100%),
-      rgb(236 245 253 / 100%)
+      rgb(224 236 230 / 100%),
+      rgb(222 231 240 / 100%)
     );
 }
 
@@ -631,7 +631,7 @@ thead th {
 
 /* 偶数行をうっすら塗って視線がブレないように */
 tbody tr:nth-child(even) {
-  background: #fafcfe;
+  background: #eef1f5;
 }
 
 @media (hover: hover) {
@@ -1332,7 +1332,7 @@ a.equipment-character-name:focus-visible {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .equipment-skill-image {
