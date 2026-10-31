@@ -6,7 +6,7 @@
   position: relative; overflow: hidden; padding: clamp(1rem, 4vw, 1.35rem);
   border: 1px solid #cdeedd; border-left: 4px solid #8fd8b5;
   border-radius: 1rem;
-  background: radial-gradient(circle at top right, rgba(196,236,216,.55), transparent 16rem), linear-gradient(145deg, #f3fbf7, #ffffff);
+  background: radial-gradient(circle at top right, rgba(190,222,206,.45), transparent 16rem), linear-gradient(145deg, #e7f1ec, #f2f5f8);
   box-shadow: 0 8px 22px rgba(31,52,79,.07);
 }
 .community-board-entry-heading { display:flex; align-items:flex-start; gap:.75rem; }
@@ -14,7 +14,7 @@
 .community-board-entry-heading-text { min-width:0; flex:1; }
 .community-board-entry-title-row { display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; }
 .community-board-entry-stats { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; }
-.community-board-entry-stat { display:inline-flex; align-items:center; padding:.18rem .42rem; border:1px solid #dbe5ee; border-radius:999px; color:#5f6f82; background:#f6f9fc; font-size:.68rem; font-weight:800; line-height:1.25; white-space:nowrap; }
+.community-board-entry-stat { display:inline-flex; align-items:center; padding:.18rem .42rem; border:1px solid #dbe5ee; border-radius:999px; color:#5f6f82; background:#eef2f6; font-size:.68rem; font-weight:800; line-height:1.25; white-space:nowrap; }
 .community-board-entry-stat-unread { border-color:#f2d58a; color:#9a6b00; background:#fff7dc; }
 .community-board-entry-title { margin:0; color:#24303f; font-size:clamp(1.08rem,4.6vw,1.28rem); line-height:1.35; }
 .community-board-entry-description { margin:.42rem 0 0; color:#5f6f82; font-size:.88rem; line-height:1.6; }
@@ -22,7 +22,7 @@
 .community-board-entry-character-list { display:grid; gap:.72rem; margin-top:1rem; }
 .community-board-entry-character {
   display:flex; align-items:center; gap:.9rem; padding:.72rem;
-  border:1px solid #d6efe2; border-radius:.85rem; background:#ffffff;
+  border:1px solid #d6efe2; border-radius:.85rem; background:#f4f6f9;
   color:inherit; text-decoration:none;
 }
 .community-board-entry-character-image {
@@ -36,7 +36,7 @@
 
 .community-board-entry-featured {
   display:block; margin-top:1rem; padding:.85rem .9rem; border:1px solid #e1e8f0; border-radius:.8rem;
-  background:#fbfdff; color:inherit; text-decoration:none;
+  background:#f4f6f9; color:inherit; text-decoration:none;
   transition:border-color 150ms ease,background 150ms ease,transform 150ms ease;
 }
 .community-board-entry-featured-heading { display:flex; align-items:center; justify-content:space-between; gap:.65rem; }

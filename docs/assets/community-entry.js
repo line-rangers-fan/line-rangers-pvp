@@ -433,7 +433,7 @@ async function fetchPreviousMonthState(signal) {
     month = shiftCommunityMonth(month, -1);
     const endpoint = communityBoardApiUrl(month);
     if (!endpoint) return null;
-    const payload = await fetchCommunityJson(endpoint, signal, false);
+    const payload = await fetchCommunityJson(endpoint, signal, true);
     if (!payload) continue;
     const topics = normalizeTopics((Array.isArray(payload.boards) ? payload.boards : []).filter((topic) => topic?.month === month));
     if (!topics.length) continue;
