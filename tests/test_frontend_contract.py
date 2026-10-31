@@ -358,7 +358,7 @@ def test_character_modal_shows_horizontal_skill_cards_icons_effects_and_blue_han
     assert 'description.textContent = et("dialogDescription")' not in app
     assert 'et("characterPlayers") +' not in app
     assert '.equipment-character-name' in style
-    assert 'color: #60a5fa;' in style
+    assert 'color: #2f74b5;' in style
     assert 'a.equipment-character-name:visited' in style
     assert '.equipment-skill-list {' in style
     assert 'grid-template-columns: repeat(2, minmax(0, 1fr));' in style
