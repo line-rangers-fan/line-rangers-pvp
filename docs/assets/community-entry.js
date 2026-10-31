@@ -12,13 +12,17 @@ const COMMUNITY_BOARD_ENTRY_CONFIG = Object.freeze({
 const COMMUNITY_ACTIVITY_TIMEOUT_MS = 5000;
 const COMMUNITY_ACTIVITY_MAX_BYTES = 256 * 1024;
 const COMMUNITY_ACTIVITY_MAX_TOPICS = 12;
+const COMMUNITY_MONTH_PATTERN = /^20\d{2}-(0[1-9]|1[0-2])$/;
+const COMMUNITY_PREVIOUS_MONTH_LOOKBACK = 3;
+const COMMUNITY_LAST_STATE_KEY = "line-rangers-community-last-topics-v1";
+const COMMUNITY_LAST_STATE_MAX_AGE_MS = 75 * 24 * 60 * 60 * 1000;
 const COMMUNITY_VIEWER_TOKEN_PATTERN = /^v1\.[a-f0-9-]{36}\.[0-9]{10,}\.[A-Za-z0-9_-]{43}$/;
 
 const COMMUNITY_ENTRY_I18N = Object.freeze({
-  ja: Object.freeze({title:"新キャラ情報掲示板",description:"投票・コメント・写真・動画で、今月の新キャラについて話そう。",newCharacter:"新キャラクター",imageAlt:"新キャラクターの画像",featuredLabel:"注目コメント",featuredEmpty:"まだ注目コメントはありません。掲示板で最初の感想を投稿できます。",helpful:"役に立った",viewBoard:"掲示板で見る →",openBoard:"掲示板を開く →",openBoardAria:"新キャラ情報掲示板を開く",featuredAria:"注目コメントの掲示板を開く",newCount:"NEW {count}件",videos:"動画 {count}本",comments:"コメント {count}件"}),
-  en: Object.freeze({title:"New Character Community Board",description:"Share thoughts about this month's new character through polls, comments, photos, and videos.",newCharacter:"NEW CHARACTER",imageAlt:"New character image",featuredLabel:"Featured comment",featuredEmpty:"No featured comments yet. Share your first thoughts on the board.",helpful:"Helpful",viewBoard:"View on board →",openBoard:"Open board →",openBoardAria:"Open the new character community board",featuredAria:"Open the featured comment board",newCount:"NEW {count}",videos:"Videos {count}",comments:"Comments {count}"}),
-  zh: Object.freeze({title:"新角色資訊討論區",description:"透過投票、留言、照片與影片，一起討論本月的新角色。",newCharacter:"新角色",imageAlt:"新角色圖片",featuredLabel:"精選留言",featuredEmpty:"目前還沒有精選留言。歡迎到討論區分享第一則感想。",helpful:"有幫助",viewBoard:"前往討論區 →",openBoard:"開啟討論區 →",openBoardAria:"開啟新角色資訊討論區",featuredAria:"開啟精選留言所在的討論區",newCount:"NEW {count}則",videos:"影片 {count}部",comments:"留言 {count}則"}),
-  th: Object.freeze({title:"กระดานข้อมูลตัวละครใหม่",description:"พูดคุยเกี่ยวกับตัวละครใหม่ประจำเดือนนี้ผ่านโพล ความคิดเห็น รูปภาพ และวิดีโอ",newCharacter:"ตัวละครใหม่",imageAlt:"รูปตัวละครใหม่",featuredLabel:"ความคิดเห็นเด่น",featuredEmpty:"ยังไม่มีความคิดเห็นเด่น คุณสามารถแชร์ความเห็นแรกบนกระดานได้",helpful:"มีประโยชน์",viewBoard:"ดูในกระดาน →",openBoard:"เปิดกระดาน →",openBoardAria:"เปิดกระดานข้อมูลตัวละครใหม่",featuredAria:"เปิดกระดานของความคิดเห็นเด่น",newCount:"NEW {count}",videos:"วิดีโอ {count}",comments:"ความคิดเห็น {count}"}),
+  ja: Object.freeze({title:"新キャラ情報掲示板",description:"投票・コメント・写真・動画で、今月の新キャラについて話そう。",newCharacter:"新キャラクター",imageAlt:"新キャラクターの画像",featuredLabel:"注目コメント",featuredEmpty:"まだ注目コメントはありません。掲示板で最初の感想を投稿できます。",helpful:"役に立った",viewBoard:"掲示板で見る →",openBoard:"掲示板を開く →",openBoardAria:"新キャラ情報掲示板を開く",featuredAria:"注目コメントの掲示板を開く",newCount:"NEW {count}件",videos:"動画 {count}本",comments:"コメント {count}件",fallbackNote:"今月の新キャラは公式公開後に自動で追加されます。追加までは{month}の掲示板を表示しています。"}),
+  en: Object.freeze({title:"New Character Community Board",description:"Share thoughts about this month's new character through polls, comments, photos, and videos.",newCharacter:"NEW CHARACTER",imageAlt:"New character image",featuredLabel:"Featured comment",featuredEmpty:"No featured comments yet. Share your first thoughts on the board.",helpful:"Helpful",viewBoard:"View on board →",openBoard:"Open board →",openBoardAria:"Open the new character community board",featuredAria:"Open the featured comment board",newCount:"NEW {count}",videos:"Videos {count}",comments:"Comments {count}",fallbackNote:"This month's new characters are added automatically after official release. Showing the {month} boards until then."}),
+  zh: Object.freeze({title:"新角色資訊討論區",description:"透過投票、留言、照片與影片，一起討論本月的新角色。",newCharacter:"新角色",imageAlt:"新角色圖片",featuredLabel:"精選留言",featuredEmpty:"目前還沒有精選留言。歡迎到討論區分享第一則感想。",helpful:"有幫助",viewBoard:"前往討論區 →",openBoard:"開啟討論區 →",openBoardAria:"開啟新角色資訊討論區",featuredAria:"開啟精選留言所在的討論區",newCount:"NEW {count}則",videos:"影片 {count}部",comments:"留言 {count}則",fallbackNote:"本月新角色將於官方公開後自動加入。在此之前顯示{month}的討論區。"}),
+  th: Object.freeze({title:"กระดานข้อมูลตัวละครใหม่",description:"พูดคุยเกี่ยวกับตัวละครใหม่ประจำเดือนนี้ผ่านโพล ความคิดเห็น รูปภาพ และวิดีโอ",newCharacter:"ตัวละครใหม่",imageAlt:"รูปตัวละครใหม่",featuredLabel:"ความคิดเห็นเด่น",featuredEmpty:"ยังไม่มีความคิดเห็นเด่น คุณสามารถแชร์ความเห็นแรกบนกระดานได้",helpful:"มีประโยชน์",viewBoard:"ดูในกระดาน →",openBoard:"เปิดกระดาน →",openBoardAria:"เปิดกระดานข้อมูลตัวละครใหม่",featuredAria:"เปิดกระดานของความคิดเห็นเด่น",newCount:"NEW {count}",videos:"วิดีโอ {count}",comments:"ความคิดเห็น {count}",fallbackNote:"ตัวละครใหม่ของเดือนนี้จะถูกเพิ่มอัตโนมัติหลังประกาศอย่างเป็นทางการ ระหว่างนี้แสดงกระดานของ {month}"}),
 });
 const COMMUNITY_ENTRY_LANGUAGES = Object.freeze(["ja", "en", "zh", "th"]);
 let communityEntryLanguage = "ja";
@@ -258,6 +262,11 @@ function buildCommunityBoardEntry(baseUrl, state) {
   title.id = "community-board-entry-title";
   titleRow.append(title, buildCommunityStats(state));
   headingText.append(titleRow, textElement("p", "community-board-entry-description", entryText("description"), "description"));
+  if (state.fallbackMonth) {
+    const note = textElement("p", "community-board-entry-note", "", "fallbackNote");
+    note.dataset.communityMonth = state.fallbackMonth;
+    headingText.append(note);
+  }
   headingRow.append(marker, headingText);
 
   const characterList = document.createElement("div");
@@ -282,7 +291,9 @@ function updateCommunityEntryLanguage() {
   for (const element of slot.querySelectorAll("[data-community-text]")) {
     const key = element.dataset.communityText;
     if (!key) continue;
-    if (key === "newCount" || key === "videos" || key === "comments") {
+    if (key === "fallbackNote") {
+      element.textContent = entryText(key).replace("{month}", formatCommunityMonth(element.dataset.communityMonth || ""));
+    } else if (key === "newCount" || key === "videos" || key === "comments") {
       element.textContent = metricText(key, element.dataset.communityMetricCount || 0);
     } else {
       element.textContent = entryText(key);
@@ -358,25 +369,126 @@ async function readBoundedJson(response) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+function formatCommunityMonth(month) {
+  if (!COMMUNITY_MONTH_PATTERN.test(month)) return "";
+  const [year, value] = month.split("-").map(Number);
+  if (communityEntryLanguage === "ja" || communityEntryLanguage === "zh") return `${year}年${value}月`;
+  try { return new Intl.DateTimeFormat(communityEntryLanguage === "th" ? "th-TH" : "en-US", {year:"numeric", month:"long", timeZone:"UTC"}).format(new Date(Date.UTC(year, value - 1, 1))); } catch { return month; }
+}
+
+function currentCommunityMonth(now = Date.now()) {
+  const jst = new Date(now + 9 * 60 * 60 * 1000);
+  return `${jst.getUTCFullYear()}-${String(jst.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function shiftCommunityMonth(month, delta) {
+  if (!COMMUNITY_MONTH_PATTERN.test(month)) return "";
+  const [year, value] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, value - 1 + delta, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function communityBoardApiUrl(month) {
+  const activity = getApprovedActivityUrl(COMMUNITY_BOARD_ENTRY_CONFIG.activityUrl, COMMUNITY_BOARD_ENTRY_CONFIG.activityAllowedHosts);
+  if (!activity || !COMMUNITY_MONTH_PATTERN.test(month)) return null;
+  const url = new URL(activity);
+  url.pathname = "/api/board";
+  url.search = "";
+  url.searchParams.set("month", month);
+  return url.href;
+}
+
+async function fetchCommunityJson(endpoint, signal, withViewer) {
+  const headers = {Accept:"application/json"};
+  if (withViewer && isValidCommunityViewerToken(communityViewerToken)) headers["X-LR-Viewer"] = communityViewerToken;
+  const response = await fetch(endpoint, {method:"GET", mode:"cors", credentials:"omit", cache:"no-store", headers, signal});
+  if (!response.ok) return null;
+  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  if (!contentType.includes("application/json")) return null;
+  const payload = await readBoundedJson(response);
+  return payload && typeof payload === "object" && !Array.isArray(payload) ? payload : null;
+}
+
+function featuredFromPosts(posts) {
+  if (!Array.isArray(posts)) return null;
+  let best = null;
+  for (const post of posts.slice(0, 200)) {
+    if (!post || typeof post !== "object" || post.parent) continue;
+    const candidate = normalizeFeatured(post);
+    if (!candidate) continue;
+    const score = candidate.helpful * 2 + candidate.likes;
+    if (!best || score > best.score) best = {...candidate, score};
+  }
+  if (!best || best.score <= 0) return null;
+  const {score, ...featured} = best;
+  return featured;
+}
+
+// When a new month starts, the worker registers that month's characters only
+// after the official release is confirmed. Until then, show the most recent
+// month that has boards so the entry never disappears at the month boundary.
+async function fetchPreviousMonthState(signal) {
+  let month = currentCommunityMonth();
+  for (let step = 0; step < COMMUNITY_PREVIOUS_MONTH_LOOKBACK; step += 1) {
+    month = shiftCommunityMonth(month, -1);
+    const endpoint = communityBoardApiUrl(month);
+    if (!endpoint) return null;
+    const payload = await fetchCommunityJson(endpoint, signal, false);
+    if (!payload) continue;
+    const topics = normalizeTopics((Array.isArray(payload.boards) ? payload.boards : []).filter((topic) => topic?.month === month));
+    if (!topics.length) continue;
+    const stats = payload.stats && typeof payload.stats === "object" ? payload.stats : {};
+    return {topics, featured:featuredFromPosts(payload.posts), unread:0, videos:normalizeMetric(stats.videos), comments:normalizeMetric(stats.comments), fallbackMonth:month};
+  }
+  return null;
+}
+
+function saveLastCommunityState(state) {
+  try { localStorage.setItem(COMMUNITY_LAST_STATE_KEY, JSON.stringify({savedAt:Date.now(), topics:state.topics, fallbackMonth:state.fallbackMonth || ""})); } catch {}
+}
+
+function readLastCommunityState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COMMUNITY_LAST_STATE_KEY) || "null");
+    if (!saved || typeof saved !== "object" || !Number.isFinite(saved.savedAt) || Date.now() - saved.savedAt > COMMUNITY_LAST_STATE_MAX_AGE_MS) return null;
+    const topics = normalizeTopics(saved.topics);
+    if (!topics.length) return null;
+    const current = currentCommunityMonth();
+    const fallbackMonth = topics[0].month === current ? "" : topics[0].month;
+    return {topics, featured:null, unread:0, videos:0, comments:0, fallbackMonth};
+  } catch { return null; }
+}
+
+function renderCommunityFallback(state) {
+  const usable = state && state.topics?.length ? state : readLastCommunityState();
+  if (!usable) return;
+  if (usable === state) saveLastCommunityState(state);
+  renderCommunityBoardEntry(usable);
+}
+
 async function fetchCommunityActivity() {
   const endpoint = getApprovedActivityUrl(COMMUNITY_BOARD_ENTRY_CONFIG.activityUrl, COMMUNITY_BOARD_ENTRY_CONFIG.activityAllowedHosts);
   if (!endpoint) return;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), COMMUNITY_ACTIVITY_TIMEOUT_MS);
   try {
-    const headers = {Accept:"application/json"};
-    if (isValidCommunityViewerToken(communityViewerToken)) headers["X-LR-Viewer"] = communityViewerToken;
-    const response = await fetch(endpoint, {method:"GET", mode:"cors", credentials:"omit", cache:"no-store", headers, signal:controller.signal});
-    if (!response.ok) return;
-    const contentType = (response.headers.get("content-type") || "").toLowerCase();
-    if (!contentType.includes("application/json")) return;
-    const payload = await readBoundedJson(response);
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
+    const payload = await fetchCommunityJson(endpoint, controller.signal, true);
+    if (!payload) {
+      renderCommunityFallback(null);
+      return;
+    }
     if (isValidCommunityViewerToken(payload.viewerToken)) saveCommunityViewerToken(payload.viewerToken);
     const state = {topics:normalizeTopics(payload.topics), featured:normalizeFeatured(payload.featured), unread:normalizeUnread(payload.unread), videos:normalizeMetric(payload.videos), comments:normalizeMetric(payload.comments)};
-    renderCommunityBoardEntry(state);
+    if (state.topics.length) {
+      saveLastCommunityState(state);
+      renderCommunityBoardEntry(state);
+      return;
+    }
+    renderCommunityFallback(await fetchPreviousMonthState(controller.signal));
   } catch {
-    // Keep ranking visible when community activity metadata is unavailable.
+    // Keep ranking visible when community activity metadata is unavailable,
+    // and keep showing the last known board entry instead of hiding it.
+    renderCommunityFallback(null);
   } finally {
     window.clearTimeout(timeout);
   }

@@ -131,7 +131,7 @@ def test_board_button_navigates_same_tab_without_intermediate_page():
 def test_entry_assets_remain_small_mobile_first_and_dedicated():
     # Security bounds add a small fixed cost, but keep this auxiliary script
     # tiny relative to the ranking JSON and independent from app.js.
-    assert len(ENTRY_JS.encode("utf-8")) < 22_000
+    assert len(ENTRY_JS.encode("utf-8")) < 30_000
     assert len(ENTRY_CSS.encode("utf-8")) < 8_000
     assert ".community-board-entry-card" in ENTRY_CSS
     assert ".community-board-entry-featured-reactions" in ENTRY_CSS
@@ -168,3 +168,22 @@ def test_viewer_new_refreshes_after_return_without_board_mutations():
     assert 'document.visibilityState === "visible"' in ENTRY_JS
     assert "void loadCommunityActivity()" in ENTRY_JS
     assert 'method:"GET"' in ENTRY_JS
+
+
+def test_entry_survives_month_change_by_showing_latest_registered_month():
+    # At a month boundary the worker registers the new month's characters only
+    # after the official release is confirmed. Until then the entry must keep
+    # showing the latest month that has boards instead of disappearing.
+    assert "async function fetchPreviousMonthState(signal)" in ENTRY_JS
+    assert 'url.pathname = "/api/board"' in ENTRY_JS
+    assert 'url.searchParams.set("month", month)' in ENTRY_JS
+    assert "renderCommunityFallback(await fetchPreviousMonthState(controller.signal))" in ENTRY_JS
+    assert "COMMUNITY_LAST_STATE_KEY" in ENTRY_JS
+    assert "fallbackNote" in ENTRY_JS
+    assert ".community-board-entry-note" in ENTRY_CSS
+    # New-month topics from the activity feed always take precedence.
+    assert ENTRY_JS.index("if (state.topics.length) {") < ENTRY_JS.index("fetchPreviousMonthState(controller.signal)")
+
+
+def test_chinese_language_button_has_flag():
+    assert '<button type="button" data-language="zh">🇨🇳 中文</button>' in INDEX

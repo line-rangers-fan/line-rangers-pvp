@@ -1,18 +1,22 @@
 /* File: docs/assets/style.css */
 
 :root {
-  color-scheme: dark;
-  --background: #07111f;
-  --surface: #101d2f;
-  --surface-light: #172840;
-  --border: #29405f;
-  --text: #f4f7fb;
-  --muted: #9fb0c6;
-  --accent: #32d583;
-  --accent-dark: #069454;
-  --danger: #ff6b6b;
-  --warning: #fdb022;
-  --shadow: 0 18px 45px rgb(0 0 0 / 28%);
+  color-scheme: light;
+  --background: #ffffff;
+  --surface: #ffffff;
+  --surface-light: #f4f8fc;
+  --border: #e1e8f0;
+  --text: #24303f;
+  --muted: #6b7a8c;
+  --accent: #1f9d68;
+  --accent-dark: #17855a;
+  --accent-soft: #dff5ea;
+  --accent-pale: #f0faf5;
+  --blue: #3b82c4;
+  --blue-soft: #e3f0fb;
+  --danger: #d9534f;
+  --warning: #b7791f;
+  --shadow: 0 10px 28px rgb(31 52 79 / 8%);
   --radius-sm: 0.65rem;
   --radius-md: 0.8rem;
   --radius-lg: 1rem;
@@ -35,7 +39,7 @@ body {
   background:
     radial-gradient(
       circle at top right,
-      rgb(50 213 131 / 12%),
+      rgb(196 236 216 / 45%),
       transparent 30rem
     ),
     var(--background);
@@ -72,8 +76,8 @@ a:hover {
   background:
     linear-gradient(
       135deg,
-      rgb(13 31 51 / 96%),
-      rgb(7 17 31 / 92%)
+      rgb(240 250 245 / 100%),
+      rgb(236 245 253 / 100%)
     );
 }
 
@@ -129,19 +133,17 @@ a:hover {
 }
 
 .language-switcher button:focus-visible {
-  outline: 3px solid rgb(50 213 131 / 35%);
+  outline: 3px solid rgb(31 157 104 / 30%);
   outline-offset: 2px;
 }
 
 /* 選択中の言語をハッキリ強調 */
 .language-switcher button.language-active {
-  border-color: var(--accent);
-  color: #06251a;
-  background: var(--accent);
+  border-color: #9fdcbf;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
   font-weight: 800;
-  box-shadow:
-    0 0 0 3px rgb(50 213 131 / 20%),
-    0 4px 14px rgb(50 213 131 / 35%);
+  box-shadow: 0 2px 8px rgb(31 157 104 / 14%);
 }
 
 /* =========================================
@@ -223,18 +225,17 @@ h1 {
   max-width: 48rem;
   margin: 1.35rem 0 0;
   padding: 1rem 1.1rem;
-  border: 1px solid #6f3544;
-  border-left: 4px solid #a64d5d;
+  border: 1px solid #f3c9cf;
+  border-left: 4px solid #e8a0aa;
   border-radius: var(--radius-md);
-  color: #edc2ca;
-  background:
-    linear-gradient(135deg, rgb(66 24 37 / 92%), rgb(39 20 29 / 96%));
-  box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
+  color: #7a3b45;
+  background: #fff3f5;
+  box-shadow: 0 6px 18px rgb(31 52 79 / 6%);
 }
 
 .source-status-notice h2 {
   margin: 0;
-  color: #ffd5db;
+  color: #9c3d4b;
   font-size: 0.95rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -363,9 +364,9 @@ h1 {
 }
 
 .freshness-healthy {
-  border-color: rgb(50 213 131 / 55%);
+  border-color: rgb(31 157 104 / 40%);
   color: var(--accent);
-  background: rgb(50 213 131 / 9%);
+  background: rgb(31 157 104 / 9%);
 }
 
 .freshness-delayed {
@@ -524,9 +525,9 @@ h1 {
 }
 
 .rank-period-options button.rank-period-selected {
-  border-color: var(--accent-dark);
-  color: #062417;
-  background: var(--accent);
+  border-color: #9fdcbf;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
 }
 
 /* =========================================
@@ -537,17 +538,17 @@ button {
   min-height: 2.8rem;
   padding: 0.65rem 1rem;
   cursor: pointer;
-  border: 1px solid var(--accent-dark);
+  border: 1px solid #9fdcbf;
   border-radius: var(--radius-sm);
-  color: var(--text);
-  background: var(--accent-dark);
+  color: var(--accent-dark);
+  background: var(--accent-soft);
   font-weight: 700;
   transition: background 0.15s ease, transform 0.1s ease;
 }
 
 @media (hover: hover) {
   button:hover {
-    background: #087b49;
+    background: #cdeedd;
   }
 }
 
@@ -556,7 +557,7 @@ button:active {
 }
 
 button:focus-visible {
-  outline: 3px solid rgb(50 213 131 / 35%);
+  outline: 3px solid rgb(31 157 104 / 30%);
   outline-offset: 2px;
 }
 
@@ -584,7 +585,7 @@ button:focus-visible {
   align-items: center;
   gap: 0.5rem;
   margin: 1.25rem 0 0;
-  color: #64b5ff;
+  color: var(--blue);
   font-size: clamp(0.95rem, 3.8vw, 1.1rem);
   font-weight: 700;
   line-height: 1.35;
@@ -596,10 +597,10 @@ button:focus-visible {
   align-items: center;
   min-height: 1.45rem;
   padding: 0.08rem 0.42rem;
-  border: 1px solid rgb(100 181 255 / 55%);
+  border: 1px solid #b9d8f2;
   border-radius: 999px;
-  color: #bfe0ff;
-  background: rgb(100 181 255 / 12%);
+  color: var(--blue);
+  background: var(--blue-soft);
   font-size: 0.66rem;
   font-weight: 900;
   line-height: 1;
@@ -622,7 +623,7 @@ td {
 thead th {
   position: static;
   color: var(--muted);
-  background: #0a1729;
+  background: var(--surface-light);
   box-shadow: 0 1px 0 var(--border);
   font-size: 0.78rem;
   letter-spacing: 0.04em;
@@ -630,7 +631,7 @@ thead th {
 
 /* 偶数行をうっすら塗って視線がブレないように */
 tbody tr:nth-child(even) {
-  background: rgb(255 255 255 / 2.5%);
+  background: #fafcfe;
 }
 
 @media (hover: hover) {
@@ -671,7 +672,7 @@ tbody tr:active {
 
 .rank-up {
   color: var(--accent);
-  background: rgb(50 213 131 / 12%);
+  background: rgb(31 157 104 / 10%);
 }
 
 .rank-down {
@@ -680,8 +681,8 @@ tbody tr:active {
 }
 
 .rank-change-new {
-  color: #64b5ff;
-  background: rgb(100 181 255 / 12%);
+  color: var(--blue);
+  background: var(--blue-soft);
 }
 
 /* Longer-period changes remain in the normal document flow below the rank.
@@ -714,7 +715,7 @@ tbody tr:active {
 
 .rank-period-up {
   color: var(--accent);
-  background: rgb(50 213 131 / 9%);
+  background: rgb(31 157 104 / 9%);
 }
 
 .rank-period-down {
@@ -734,15 +735,15 @@ tbody tr:active {
 }
 
 .rank-cell[data-rank="1"] {
-  color: #ffd166;
+  color: #c99a1e;
 }
 
 .rank-cell[data-rank="2"] {
-  color: #d8e1eb;
+  color: #8a97a8;
 }
 
 .rank-cell[data-rank="3"] {
-  color: #d69b64;
+  color: #b9783f;
 }
 
 /* 上位3位のランク数字の背後にメダル風の丸を追加 */
@@ -760,15 +761,15 @@ tbody tr:active {
 
 /* 上位3位の行全体もうっすら色付け */
 tbody tr:has(.rank-cell[data-rank="1"]) {
-  background: rgb(255 209 102 / 6%);
+  background: rgb(255 232 163 / 22%);
 }
 
 tbody tr:has(.rank-cell[data-rank="2"]) {
-  background: rgb(216 225 235 / 5%);
+  background: rgb(216 225 235 / 22%);
 }
 
 tbody tr:has(.rank-cell[data-rank="3"]) {
-  background: rgb(214 155 100 / 6%);
+  background: rgb(240 200 160 / 18%);
 }
 
 .character-cell {
@@ -1190,14 +1191,14 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 }
 
 .character-button:focus-visible {
-  outline: 3px solid rgb(50 213 131 / 55%);
+  outline: 3px solid rgb(31 157 104 / 40%);
   outline-offset: 3px;
 }
 
 @media (hover: hover) {
   .character-button:hover .character-image {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgb(50 213 131 / 18%);
+    box-shadow: 0 0 0 3px rgb(31 157 104 / 15%);
     transform: translateY(-2px);
   }
 }
@@ -1226,7 +1227,7 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
 }
 
 .equipment-dialog::backdrop {
-  background: rgb(0 0 0 / 72%);
+  background: rgb(36 48 63 / 35%);
   backdrop-filter: blur(2px);
 }
 
@@ -1253,7 +1254,7 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   padding: 0.9rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: rgb(255 255 255 / 2.5%);
+  background: var(--surface-light);
 }
 
 .equipment-character-details {
@@ -1265,29 +1266,29 @@ tbody tr:has(.rank-cell[data-rank="3"]) {
   display: inline-flex;
   max-width: 100%;
   align-items: center;
-  color: #60a5fa;
+  color: #2f74b5;
   font-size: 1rem;
   font-weight: 800;
   line-height: 1.35;
   text-decoration: underline;
-  text-decoration-color: rgb(96 165 250 / 72%);
+  text-decoration-color: rgb(47 116 181 / 72%);
   text-decoration-thickness: 2px;
   text-underline-offset: 0.22em;
   overflow-wrap: anywhere;
 }
 
 a.equipment-character-name:visited {
-  color: #60a5fa;
+  color: #2f74b5;
 }
 
 a.equipment-character-name:hover,
 a.equipment-character-name:focus-visible {
-  color: #93c5fd;
+  color: #1f5d96;
   text-decoration-color: currentColor;
 }
 
 a.equipment-character-name:focus-visible {
-  outline: 2px solid rgb(96 165 250 / 75%);
+  outline: 2px solid rgb(47 116 181 / 75%);
   outline-offset: 3px;
   border-radius: 0.2rem;
 }
@@ -1309,9 +1310,9 @@ a.equipment-character-name:focus-visible {
 .equipment-skill-item {
   min-width: 0;
   padding: 0.65rem;
-  border: 1px solid rgb(255 255 255 / 8%);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: rgb(255 255 255 / 3%);
+  background: var(--surface-light);
 }
 
 .equipment-skill-header {
@@ -1329,9 +1330,9 @@ a.equipment-character-name:focus-visible {
   height: 2.25rem;
   flex: 0 0 2.25rem;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 10%);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
-  background: rgb(0 0 0 / 18%);
+  background: #ffffff;
 }
 
 .equipment-skill-image {
@@ -1381,7 +1382,7 @@ a.equipment-character-name:focus-visible {
 .equipment-skill-effects {
   margin-top: 0.85rem;
   padding-top: 0.72rem;
-  border-top: 1px solid rgb(255 255 255 / 9%);
+  border-top: 1px solid var(--border);
 }
 
 .equipment-skill-effects-label {
@@ -1469,9 +1470,9 @@ a.equipment-character-name:focus-visible {
 }
 
 .equipment-tab[aria-selected="true"] {
-  border-color: var(--accent);
-  color: #06251a;
-  background: var(--accent);
+  border-color: #9fdcbf;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
 }
 
 .equipment-empty {
