@@ -1,0 +1,174 @@
+name: Inspect Cloudflare read only
+
+on:
+  push:
+    branches: ["codex/inspect-cloudflare-20261031"]
+    paths: [".github/workflows/inspect-cloudflare-readonly.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read production Worker metadata without changing Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOARD_API_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          """Print bounded, non-secret Cloudflare diagnostics using GET requests only."""
+          
+          import email.policy
+          import email.parser
+          import hashlib
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.request
+          
+          
+          BASE = "https://api.cloudflare.com/client/v4"
+          WORKERS = ("line-rangers-pvp-community-production", "line-rangers-pvp-watchdog")
+          MAX_BYTES = 40 * 1024 * 1024
+          TOKEN = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+          
+          
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, request, fp, code, message, headers, newurl):
+                  return None
+          
+          
+          OPENER = urllib.request.build_opener(NoRedirect())
+          
+          
+          def get(path, *, content=False):
+              request = urllib.request.Request(
+                  BASE + path,
+                  headers={"Authorization": "Bearer " + TOKEN, "Accept": "*/*" if content else "application/json"},
+                  method="GET",
+              )
+              try:
+                  with OPENER.open(request, timeout=30) as response:
+                      body = response.read(MAX_BYTES + 1)
+                      content_type = response.headers.get("Content-Type", "")
+              except urllib.error.HTTPError as error:
+                  return {"http_status": error.code}
+              except (urllib.error.URLError, TimeoutError):
+                  return {"transport_error": True}
+              if len(body) > MAX_BYTES:
+                  return {"response_too_large": True}
+              if content:
+                  return summarize_content(body, content_type)
+              try:
+                  result = json.loads(body)
+              except ValueError:
+                  return {"invalid_json": True}
+              if result.get("success") is not True:
+                  return {"api_error_codes": [row.get("code") for row in result.get("errors", []) if isinstance(row, dict)]}
+              return result.get("result")
+          
+          
+          def summarize_content(body, content_type):
+              modules = []
+              if content_type.lower().startswith("multipart/"):
+                  message = email.parser.BytesParser(policy=email.policy.default).parsebytes(
+                      b"Content-Type: " + content_type.encode() + b"\r\nMIME-Version: 1.0\r\n\r\n" + body
+                  )
+                  for part in message.iter_parts():
+                      name = part.get_filename() or part.get_param("name", header="content-disposition") or "unnamed"
+                      modules.append((name, part.get_payload(decode=True) or b""))
+              else:
+                  modules.append(("main", body))
+              reports = []
+              for index, (_name, source) in enumerate(modules):
+                  text = source.decode("utf-8", errors="replace")
+                  # Only report fixed diagnostic flags, counts, and recognized month strings.
+                  # Never print source snippets, environment bindings, or credentials.
+                  if "releaseMonth" in text or "u1646e-jessica" in text or "scheduled(" in text:
+                      reports.append({
+                          "module_index": index, "bytes": len(source),
+                          "sha256": hashlib.sha256(source).hexdigest(),
+                          "jessica_id_present": "u1646e-jessica" in text,
+                          "registry_field_present": "releaseMonth" in text,
+                          "known_october_ids_present": all(unit in text for unit in ("u1635e-su", "u1633e-le")),
+                          "registry_month_literals": sorted(set(re.findall(r'releaseMonth[\"\']?\s*:\s*[\"\'](20\d{2}-\d{2})[\"\']', text))),
+                      })
+              return {"module_count": len(modules), "total_bytes": len(body), "relevant_modules": reports[:15]}
+          
+          
+          def brief_versions(value):
+              rows = value.get("items") if isinstance(value, dict) else value
+              if not isinstance(rows, list):
+                  return diagnostic_error(value)
+              result = []
+              for row in rows[:5]:
+                  metadata = row.get("metadata", {})
+                  result.append({"id": row.get("id"), "number": row.get("number"),
+                                 "created_on": metadata.get("created_on")})
+              return result
+          
+          
+          def diagnostic_error(value):
+              if isinstance(value, dict):
+                  safe = {key: value[key] for key in ("http_status", "transport_error", "response_too_large", "invalid_json", "api_error_codes") if key in value}
+                  if safe:
+                      return safe
+              return {"unexpected_response": True}
+          
+          
+          def main():
+              if not TOKEN:
+                  print(json.dumps({"cloudflare_credential_configured": False}))
+                  return 1
+              accounts = get("/accounts?per_page=50")
+              if not isinstance(accounts, list) or len(accounts) != 1:
+                  print(json.dumps({"account_selection_failed": True, "account_count": len(accounts) if isinstance(accounts, list) else None}))
+                  return 1
+              account = accounts[0]["id"]
+              report = {"account_count": 1, "workers": {}}
+              for worker in WORKERS:
+                  prefix = "/accounts/" + account + "/workers/scripts/" + worker
+                  settings = get(prefix + "/settings")
+                  if isinstance(settings, dict) and isinstance(settings.get("bindings"), list):
+                      settings = {
+                          "compatibility_date": settings.get("compatibility_date"),
+                          "compatibility_flag_count": len(settings.get("compatibility_flags", [])),
+                          "bindings": [{"name": row.get("name"), "type": row.get("type")} for row in settings["bindings"]],
+                          "observability_enabled": settings.get("observability", {}).get("enabled"),
+                      }
+                  else:
+                      settings = diagnostic_error(settings)
+                  deployments = get(prefix + "/deployments")
+                  if isinstance(deployments, dict) and "deployments" in deployments:
+                      deployments = deployments["deployments"]
+                  if isinstance(deployments, list):
+                      deployments = [{"id": row.get("id"), "created_on": row.get("created_on"),
+                                      "versions": [{"version_id": v.get("version_id"), "percentage": v.get("percentage")} for v in row.get("versions", [])]}
+                                     for row in deployments[:5]]
+                  else:
+                      deployments = diagnostic_error(deployments)
+                  schedules = get(prefix + "/schedules")
+                  if isinstance(schedules, dict) and "schedules" in schedules:
+                      schedules = schedules["schedules"]
+                  if isinstance(schedules, list):
+                      schedules = [{"cron": row.get("cron"), "created_on": row.get("created_on"), "modified_on": row.get("modified_on")} for row in schedules]
+                  else:
+                      schedules = diagnostic_error(schedules)
+                  report["workers"][worker] = {
+                      "settings": settings, "deployments": deployments,
+                      "versions": brief_versions(get(prefix + "/versions?per_page=5")),
+                      "schedules": schedules,
+                      "deployed_code_summary": get(prefix, content=True),
+                  }
+              print("CLOUDFLARE_INSPECTION_BEGIN")
+              print(json.dumps(report, indent=2, ensure_ascii=False))
+              print("CLOUDFLARE_INSPECTION_END")
+              return 0
+          
+          
+          if __name__ == "__main__":
+              raise SystemExit(main())
+          PY
