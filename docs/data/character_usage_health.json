@@ -1,36 +1,36 @@
 {
   "health_schema_version": 1,
   "source_schema_version": 11,
-  "updated_at": "2026-11-14T14:01:28.247220+00:00",
+  "updated_at": "2026-11-14T15:01:32.654622+00:00",
   "target_players": 200,
-  "sampled_players": 200,
-  "character_slots": 2000,
-  "unique_characters": 67,
-  "complete_target": true,
-  "publication_mode": "complete",
-  "validated_full_sample": true,
+  "sampled_players": 199,
+  "character_slots": 1990,
+  "unique_characters": 65,
+  "complete_target": false,
+  "publication_mode": "partial_after_stale",
+  "validated_full_sample": false,
   "validated_publishable_sample": true,
   "collection_quality": {
-    "sample_coverage": 100.0,
+    "sample_coverage": 99.5,
     "equipment_fill_rate": 99.9,
     "detail_fetch_failures": 0,
     "invalid_player_records": 0,
-    "collection_duration_seconds": 15.4,
-    "detail_fetch_duration_seconds": 14.91
+    "collection_duration_seconds": 21.09,
+    "detail_fetch_duration_seconds": 20.61
   },
   "comparison": {
     "reference_mode": "jst_calendar_close_v1",
-    "calendar_date": "2026-11-14",
+    "calendar_date": "2026-11-15",
     "periods": {
       "hour": {
         "comparable": true,
-        "updated_at": "2026-11-14T13:01:28.186684+00:00",
+        "updated_at": "2026-11-14T14:01:28.247220+00:00",
         "calendar_date": "2026-11-14"
       },
       "day": {
         "comparable": true,
-        "updated_at": "2026-11-13T14:01:33.539920+00:00",
-        "calendar_date": "2026-11-13"
+        "updated_at": "2026-11-14T14:01:28.247220+00:00",
+        "calendar_date": "2026-11-14"
       },
       "week": {
         "comparable": true,
@@ -50,7 +50,7 @@
     "unchanged_minutes": 0.0
   },
   "character_metadata": {
-    "source_names": 67,
+    "source_names": 65,
     "preserved_names": 0,
     "pending_names": 0,
     "translation_fetch_failed": false
